@@ -1,8 +1,9 @@
 #include "work.h"
-#include "data_structures/priority_heap.h"
 
 // Standard library includes.
 #include <stdlib.h>
+#include <sys/random.h>
+#include <stdio.h>
 
 void work_cleanup_factors(Work_Factors *factors) {
   if (factors) {
@@ -13,6 +14,15 @@ void work_cleanup_factors(Work_Factors *factors) {
 }
 
 Work_Factors work_generate_target_factors(void) {
+  {
+    unsigned int seed;
+    ssize_t ret = getrandom(&seed, sizeof(unsigned int), 0);
+    if (ret != sizeof(unsigned int)) {
+      fprintf(stderr, "WARNING: Failed to set random seed!\n");
+    }
+    srand(seed);
+  }
+
   Work_Factors factors;
 
   factors.factors = simple_archiver_priority_heap_init();
@@ -20,12 +30,12 @@ Work_Factors work_generate_target_factors(void) {
   factors.value = 1;
   int r;
   uint64_t *temp_u64;
-  while (factors.value < 0xFF00000000000000) {
+  while (factors.value < 0xF000000000000000) {
     r = rand();
     if (r < 0) {
       r = -r;
     }
-    switch (r % 13) {
+    switch (r % 8) {
       case 0:
         factors.value *= 2;
         temp_u64 = malloc(8);
@@ -95,51 +105,6 @@ Work_Factors work_generate_target_factors(void) {
         *temp_u64 = 19;
         simple_archiver_priority_heap_insert(factors.factors,
                                              19,
-                                             temp_u64,
-                                             NULL);
-        break;
-      case 8:
-        factors.value *= 23;
-        temp_u64 = malloc(8);
-        *temp_u64 = 23;
-        simple_archiver_priority_heap_insert(factors.factors,
-                                             23,
-                                             temp_u64,
-                                             NULL);
-        break;
-      case 9:
-        factors.value *= 29;
-        temp_u64 = malloc(8);
-        *temp_u64 = 29;
-        simple_archiver_priority_heap_insert(factors.factors,
-                                             29,
-                                             temp_u64,
-                                             NULL);
-        break;
-      case 10:
-        factors.value *= 31;
-        temp_u64 = malloc(8);
-        *temp_u64 = 31;
-        simple_archiver_priority_heap_insert(factors.factors,
-                                             31,
-                                             temp_u64,
-                                             NULL);
-        break;
-      case 11:
-        factors.value *= 37;
-        temp_u64 = malloc(8);
-        *temp_u64 = 37;
-        simple_archiver_priority_heap_insert(factors.factors,
-                                             37,
-                                             temp_u64,
-                                             NULL);
-        break;
-      case 12:
-        factors.value *= 41;
-        temp_u64 = malloc(8);
-        *temp_u64 = 41;
-        simple_archiver_priority_heap_insert(factors.factors,
-                                             41,
                                              temp_u64,
                                              NULL);
         break;
