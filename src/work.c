@@ -30,12 +30,12 @@ Work_Factors work_generate_target_factors(void) {
   factors.value = 1;
   int r;
   uint64_t *temp_u64;
-  while (factors.value < 0xF000000000000000) {
+  while (factors.value < 0x000FFFFFFFFFFFFF) {
     r = rand();
     if (r < 0) {
       r = -r;
     }
-    switch (r % 8) {
+    switch (r % 7) {
       case 0:
         factors.value *= 2;
         temp_u64 = malloc(8);
@@ -96,15 +96,6 @@ Work_Factors work_generate_target_factors(void) {
         *temp_u64 = 17;
         simple_archiver_priority_heap_insert(factors.factors,
                                              17,
-                                             temp_u64,
-                                             NULL);
-        break;
-      case 7:
-        factors.value *= 19;
-        temp_u64 = malloc(8);
-        *temp_u64 = 19;
-        simple_archiver_priority_heap_insert(factors.factors,
-                                             19,
                                              temp_u64,
                                              NULL);
         break;
