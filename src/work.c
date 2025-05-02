@@ -30,7 +30,7 @@ Work_Factors work_generate_target_factors(void) {
   factors.value = 1;
   int r;
   uint64_t *temp_u64;
-  while (factors.value < 0x000FFFFFFFFFFFFF) {
+  while (factors.value < 0x00FFFFFFFFFFFFFF) {
     r = rand();
     if (r < 0) {
       r = -r;
