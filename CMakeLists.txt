@@ -5,6 +5,9 @@ set(PoorMansAnubis_VERSION 1.0)
 
 set(PoorMansAnubis_SOURCES
     src/main.c
+    src/work.c
+    third_party/SimpleArchiver/src/data_structures/chunked_array.c
+    third_party/SimpleArchiver/src/data_structures/priority_heap.c
 )
 
 add_compile_options(
@@ -72,3 +75,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
         )
     endif()
 endif()
+
+target_include_directories(PoorMansAnubis PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/SimpleArchiver/src"
+)
