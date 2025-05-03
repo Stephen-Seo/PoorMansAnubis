@@ -5,8 +5,6 @@
 #include <sys/random.h>
 #include <stdio.h>
 
-#define VALUE_MAX_DIGITS 1000
-
 void work_cleanup_factors(Work_Factors *factors) {
   if (factors) {
     simple_archiver_chunked_array_cleanup(&factors->value);
@@ -16,7 +14,7 @@ void work_cleanup_factors(Work_Factors *factors) {
   }
 }
 
-Work_Factors work_generate_target_factors(void) {
+Work_Factors work_generate_target_factors(uint64_t digits) {
   {
     unsigned int seed;
     ssize_t ret = getrandom(&seed, sizeof(unsigned int), 0);
@@ -39,8 +37,8 @@ Work_Factors work_generate_target_factors(void) {
   int r;
   simple_archiver_chunked_array_push(&temp, &c);
 
-  while ((first_temp && simple_archiver_chunked_array_size(&temp) < VALUE_MAX_DIGITS)
-         || (!first_temp && simple_archiver_chunked_array_size(&temp2) < VALUE_MAX_DIGITS)) {
+  while ((first_temp && simple_archiver_chunked_array_size(&temp) < digits)
+         || (!first_temp && simple_archiver_chunked_array_size(&temp2) < digits)) {
     simple_archiver_chunked_array_clear(first_temp ? &temp2 : &temp);
     r = rand();
     if (r < 0) {

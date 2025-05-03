@@ -14,6 +14,6 @@ typedef struct Work_Factors {
 
 void work_cleanup_factors(Work_Factors *factors);
 
-Work_Factors work_generate_target_factors(void);
+Work_Factors work_generate_target_factors(uint64_t digits);
 
 #endif
