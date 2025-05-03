@@ -8,7 +8,7 @@
 #include <data_structures/priority_heap.h>
 
 typedef struct Work_Factors {
-  uint64_t value;
+  SDArchiverChunkedArr value;
   SDArchiverPHeap *factors;
 } Work_Factors;
 
