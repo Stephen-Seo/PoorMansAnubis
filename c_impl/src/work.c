@@ -2,12 +2,40 @@
 
 // Standard library includes.
 #include <stdlib.h>
+#include <string.h>
 #include <sys/random.h>
 #include <stdio.h>
+#include <inttypes.h>
+
+// Third-party includes.
+#include "data_structures/linked_list.h"
+#include "data_structures/priority_heap.h"
+
+typedef struct SDPMAInternalStringPart {
+  uint64_t size;
+  char *c_str;
+} SDPMAInternalStringPart;
+
+void internal_string_part_free(SDPMAInternalStringPart *part) {
+  if (part) {
+    if (part->c_str) {
+      free(part->c_str);
+    }
+    free(part);
+  }
+}
+
+void internal_string_part_free_void(void *data) {
+  internal_string_part_free(data);
+}
 
 void work_cleanup_factors(Work_Factors *factors) {
   if (factors) {
-    simple_archiver_chunked_array_cleanup(&factors->value);
+    if (factors->value) {
+      simple_archiver_chunked_array_cleanup(factors->value);
+      free(factors->value);
+      factors->value = NULL;
+    }
     if (factors->factors) {
       simple_archiver_priority_heap_free(&factors->factors);
     }
@@ -142,8 +170,114 @@ Work_Factors work_generate_target_factors(uint64_t digits) {
     first_temp = first_temp ? 0 : 1;
   }
 
-  factors.value = first_temp ? temp : temp2;
+  factors.value = malloc(sizeof(SDArchiverChunkedArr));
+  *factors.value = first_temp ? temp : temp2;
   simple_archiver_chunked_array_cleanup(first_temp ? &temp2 : &temp);
 
   return factors;
+}
+
+char *work_factors_value_to_str(Work_Factors work_factors, uint64_t *len_out) {
+  if (len_out) {
+    *len_out = simple_archiver_chunked_array_size(work_factors.value);
+    char *out = malloc(*len_out);
+    for (uint64_t idx = *len_out; idx-- > 0;) {
+      out[*len_out - idx - 1] =
+        (char)(
+          *((uint16_t*)simple_archiver_chunked_array_at(work_factors.value, idx))
+          + 0x30
+        );
+    }
+    return out;
+  } else {
+    const uint64_t size =
+      simple_archiver_chunked_array_size(work_factors.value) + 1;
+    char *out = malloc(size);
+    for (uint64_t idx = size - 1; idx-- > 0;) {
+      out[size - idx - 2] =
+        (char)(
+          *((uint16_t*)simple_archiver_chunked_array_at(work_factors.value, idx))
+          + 0x30
+        );
+    }
+    out[size - 1] = 0;
+    return out;
+  }
+}
+
+char *work_factors_factors_to_str(Work_Factors work_factors, uint64_t *len_out)
+{
+  __attribute__((cleanup(simple_archiver_priority_heap_free)))
+  SDArchiverPHeap *factors_shallow_clone =
+    simple_archiver_priority_heap_clone(work_factors.factors, NULL);
+  __attribute__((cleanup(simple_archiver_list_free)))
+  SDArchiverLinkedList *string_parts = simple_archiver_list_init();
+  uint64_t digits;
+  uint16_t temp;
+  while (simple_archiver_priority_heap_size(factors_shallow_clone) != 0) {
+    const uint16_t *value =
+      simple_archiver_priority_heap_pop(factors_shallow_clone);
+    temp = *value;
+    digits = 0;
+    while (temp != 0) {
+      temp /= 10;
+      ++digits;
+    }
+    if (digits == 0) {
+      digits = 1;
+    }
+    char *c_str = malloc(digits + 1);
+    snprintf(c_str, digits + 1, "%" PRIu16, *value);
+    SDPMAInternalStringPart *part = malloc(sizeof(SDPMAInternalStringPart));
+    part->size = digits;
+    part->c_str = c_str;
+    simple_archiver_list_add(string_parts,
+                             part,
+                             internal_string_part_free_void);
+  }
+
+  uint64_t combined_size = 0;
+  for (SDArchiverLLNode *node = string_parts->head->next;
+       node != string_parts->tail;
+       node = node->next) {
+    const SDPMAInternalStringPart *part = node->data;
+    combined_size += part->size;
+    if (node->next != string_parts->tail) {
+      combined_size += 1;
+    }
+  }
+
+  if (len_out) {
+    *len_out = combined_size;
+    char *combined_buf = malloc(combined_size);
+    char *ptr = combined_buf;
+    for (SDArchiverLLNode *node = string_parts->head->next;
+         node != string_parts->tail;
+         node = node->next) {
+      const SDPMAInternalStringPart *part = node->data;
+      memcpy(ptr, part->c_str, part->size);
+      ptr += part->size;
+      if (node->next != string_parts->tail) {
+        *ptr = ' ';
+        ++ptr;
+      }
+    }
+    return combined_buf;
+  } else {
+    char *combined_buf = malloc(combined_size + 1);
+    char *ptr = combined_buf;
+    for (SDArchiverLLNode *node = string_parts->head->next;
+         node != string_parts->tail;
+         node = node->next) {
+      const SDPMAInternalStringPart *part = node->data;
+      memcpy(ptr, part->c_str, part->size);
+      ptr += part->size;
+      if (node->next != string_parts->tail) {
+        *ptr = ' ';
+        ++ptr;
+      }
+    }
+    combined_buf[combined_size] = 0;
+    return combined_buf;
+  }
 }

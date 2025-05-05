@@ -51,24 +51,27 @@ int main(int argc, char **argv) {
   }
 
   if (work_factors) {
-    for (size_t idx = simple_archiver_chunked_array_size(&work_factors->value);
-         idx-- > 0;) {
-      printf("%hu",
-             *((uint16_t*)simple_archiver_chunked_array_at(&work_factors->value,
-                                                           idx)));
+    {
+      char *c_str = work_factors_value_to_str(*work_factors, NULL);
+      printf("%s", c_str);
+      free(c_str);
+
+      // uint64_t out_size;
+      // char *buf = work_factors_value_to_str(*work_factors, &out_size);
+      // printf("%.*s", out_size, buf);
+      // free(buf);
     }
     printf("\n");
 
-    int_fast8_t first = 1;
-    while (simple_archiver_priority_heap_size(work_factors->factors) != 0) {
-      uint16_t *cptr = simple_archiver_priority_heap_pop(work_factors->factors);
-      if (first) {
-        printf("%hu", *cptr);
-        first = 0;
-      } else {
-        printf(" %hu", *cptr);
-      }
-      free(cptr);
+    {
+      char *c_str = work_factors_factors_to_str(*work_factors, NULL);
+      printf("%s", c_str);
+      free(c_str);
+
+      // uint64_t out_size;
+      // char *buf = work_factors_factors_to_str(*work_factors, &out_size);
+      // printf("%.*s", out_size, buf);
+      // free(buf);
     }
 
     printf("\n");
