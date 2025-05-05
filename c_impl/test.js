@@ -20,34 +20,7 @@ function str_to_value(s) {
     return value;
 }
 
-function long_modulus(value_str, factor_str) {
-    let factor = str_to_value(factor_str);
-    let modulus = 0;
-    for (let idx = 0; idx < value_str.length; ++idx) {
-        let v_value = str_to_value(value_str[idx]);
-        modulus = (modulus * 10 + v_value) % factor;
-    }
-    return modulus;
-}
-
-function long_div(value_str, factor_str) {
-    let factor = str_to_value(factor_str);
-    let div_str = "";
-    let mod = 0;
-    for (let idx = 0; idx < value_str.length; ++idx) {
-        let v_value = str_to_value(value_str[idx]);
-        let div = parseInt((mod * 10 + v_value) / factor);
-        mod = (mod * 10 + v_value) % factor;
-        if (div_str.length != 0 || div != 0) {
-            div_str += div;
-        }
-    }
-
-    return div_str;
-}
-
-function long_div_mod(value_str, factor_str) {
-    let factor = str_to_value(factor_str);
+function long_div_mod(value_str, factor) {
     let div_str = "";
     let modulus_str = "";
     let mod = 0;
@@ -70,7 +43,7 @@ function get_factors(value_str) {
     let first_print = 1;
     let factors = [];
     while (1) {
-        let m_d = long_div_mod(value_str, String(factor));
+        let m_d = long_div_mod(value_str, factor);
         if (m_d[0] === 0) {
             factors.push(factor);
 
