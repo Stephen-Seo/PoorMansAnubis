@@ -18,17 +18,17 @@ impl WorkFactorsWrapper {
         }
     }
 
-    pub fn get_value(&self) -> CString {
+    pub fn get_value(&self) -> String {
         let value: CString;
         unsafe {
             let value_ffi_cstr = work_factors_value_to_str(self.w_factors, std::ptr::null_mut());
             value = CStr::from_ptr(value_ffi_cstr).to_owned();
             libc::free(value_ffi_cstr as *mut c_void);
         }
-        value
+        value.into_string().unwrap()
     }
 
-    pub fn get_factors(&self) -> CString {
+    pub fn get_factors(&self) -> String {
         let factors: CString;
         unsafe {
             let factors_ffi_cstr =
@@ -36,7 +36,7 @@ impl WorkFactorsWrapper {
             factors = CStr::from_ptr(factors_ffi_cstr).to_owned();
             libc::free(factors_ffi_cstr as *mut c_void);
         }
-        factors
+        factors.into_string().unwrap()
     }
 }
 
@@ -48,7 +48,7 @@ impl Drop for WorkFactorsWrapper {
     }
 }
 
-pub fn generate_value_and_factors_strings(digits: u64) -> (CString, CString) {
+pub fn generate_value_and_factors_strings(digits: u64) -> (String, String) {
     let wf = WorkFactorsWrapper::new(digits);
     (wf.get_value(), wf.get_factors())
 }
