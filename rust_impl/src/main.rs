@@ -1,11 +1,16 @@
 mod args;
 mod ffi;
 
+const DEFAULT_FACTORS_DIGITS: u64 = 15000;
+
 fn main() {
     let mut parsed_args = args::parse_args();
     if parsed_args.factors == None {
-        parsed_args.factors = Some(10);
-        println!("\"--factors=<digits>\" not specified, defaulting to \"10\"");
+        parsed_args.factors = Some(DEFAULT_FACTORS_DIGITS);
+        println!(
+            "\"--factors=<digits>\" not specified, defaulting to \"{}\"",
+            DEFAULT_FACTORS_DIGITS
+        );
     }
     println!(
         "Generating value and factors of {} digits:",
