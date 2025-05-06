@@ -5,10 +5,13 @@ use salvo::{http::ResBody, prelude::*};
 
 const DEFAULT_FACTORS_DIGITS: u64 = 17000;
 
-async fn req_to_url(url: String) -> Result<(ResBody, u16), reqwest::Error> {
+async fn req_to_url(
+    url: String,
+) -> Result<(ResBody, u16, reqwest::header::HeaderMap), reqwest::Error> {
     let req = reqwest::get(url).await?;
     let status = req.status().as_u16();
-    Ok((ResBody::Once(req.bytes().await?), status))
+    let headers = req.headers().to_owned();
+    Ok((ResBody::Once(req.bytes().await?), status, headers))
 }
 
 #[handler]
@@ -18,9 +21,14 @@ async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) {
     let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
 
     let res_body_res = req_to_url(format!("{}{}", args.dest_url, &path_str)).await;
-    if let Ok((res_body, status)) = res_body_res {
+    if let Ok((res_body, status, headers)) = res_body_res {
         res.replace_body(res_body);
         res.status_code = Some(StatusCode::from_u16(status).unwrap());
+        for (k_opt, v) in headers {
+            if let Some(k) = k_opt {
+                res.headers.append(k, v);
+            }
+        }
     } else {
         res.render("Failed to query");
         res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
