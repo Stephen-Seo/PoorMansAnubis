@@ -1,7 +1,7 @@
 mod args;
 mod ffi;
 
-const DEFAULT_FACTORS_DIGITS: u64 = 15000;
+const DEFAULT_FACTORS_DIGITS: u64 = 17000;
 
 fn main() {
     let mut parsed_args = args::parse_args();
