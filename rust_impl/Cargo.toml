@@ -5,8 +5,9 @@ edition = "2024"
 
 [dependencies]
 libc = "0.2"
-salvo = "0.78"
+salvo = { version = "0.78", features = ["affix-state"] }
 tokio = "1"
+reqwest = "0.12"
 
 [build-dependencies]
 bindgen = "0.71"

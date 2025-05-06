@@ -1,13 +1,16 @@
 use std::env::args as args_fn;
 
+#[derive(Default, Clone, Debug)]
 pub struct Args {
     pub factors: Option<u64>,
+    pub dest_url: String,
     pub addr_port_str: String,
 }
 
 pub fn parse_args() -> Args {
     let mut args = Args {
         factors: None,
+        dest_url: "https://git.seodisparate.com".into(),
         addr_port_str: "127.0.0.1:8180".into(),
     };
 
@@ -17,7 +20,10 @@ pub fn parse_args() -> Args {
         if arg.starts_with("--factors=") {
             let end = arg.split_off(10);
             args.factors = end.parse().ok();
-        } else if arg.starts_with("--addr_port=") {
+        } else if arg.starts_with("--dest-url=") {
+            let end = arg.split_off(11);
+            args.dest_url = end.to_owned();
+        } else if arg.starts_with("--addr-port=") {
             let end = arg.split_off(12);
             args.addr_port_str = end.to_owned();
         }
