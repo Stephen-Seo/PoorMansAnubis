@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use std::ffi::{CStr, CString, c_void};
+use std::ffi::{CStr, c_void};
 
 include!(concat!(env!("OUT_DIR"), "/work_bindings.rs"));
 
@@ -19,24 +19,27 @@ impl WorkFactorsWrapper {
     }
 
     pub fn get_value(&self) -> String {
-        let value: CString;
+        let value;
         unsafe {
             let value_ffi_cstr = work_factors_value_to_str(self.w_factors, std::ptr::null_mut());
-            value = CStr::from_ptr(value_ffi_cstr).to_owned();
+            value = CStr::from_ptr(value_ffi_cstr).to_str().unwrap().to_owned();
             libc::free(value_ffi_cstr as *mut c_void);
         }
-        value.into_string().unwrap()
+        value
     }
 
     pub fn get_factors(&self) -> String {
-        let factors: CString;
+        let factors;
         unsafe {
             let factors_ffi_cstr =
                 work_factors_factors_to_str(self.w_factors, std::ptr::null_mut());
-            factors = CStr::from_ptr(factors_ffi_cstr).to_owned();
+            factors = CStr::from_ptr(factors_ffi_cstr)
+                .to_str()
+                .unwrap()
+                .to_owned();
             libc::free(factors_ffi_cstr as *mut c_void);
         }
-        factors.into_string().unwrap()
+        factors
     }
 }
 
