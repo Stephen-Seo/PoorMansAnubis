@@ -72,7 +72,7 @@ Work_Factors work_generate_target_factors(uint64_t digits) {
     if (r < 0) {
       r = -r;
     }
-    switch (r % 13) {
+    switch (r % 17) {
       case 0:
         r = 2;
         cptr = malloc(2);
@@ -150,6 +150,30 @@ Work_Factors work_generate_target_factors(uint64_t digits) {
         cptr = malloc(2);
         *cptr = 41;
         simple_archiver_priority_heap_insert(factors.factors, 41, cptr, NULL);
+        break;
+      case 13:
+        r = 43;
+        cptr = malloc(2);
+        *cptr = 43;
+        simple_archiver_priority_heap_insert(factors.factors, 43, cptr, NULL);
+        break;
+      case 14:
+        r = 47;
+        cptr = malloc(2);
+        *cptr = 47;
+        simple_archiver_priority_heap_insert(factors.factors, 47, cptr, NULL);
+        break;
+      case 15:
+        r = 53;
+        cptr = malloc(2);
+        *cptr = 53;
+        simple_archiver_priority_heap_insert(factors.factors, 53, cptr, NULL);
+        break;
+      case 16:
+        r = 59;
+        cptr = malloc(2);
+        *cptr = 59;
+        simple_archiver_priority_heap_insert(factors.factors, 59, cptr, NULL);
         break;
     }
     for (size_t idx = 0;
