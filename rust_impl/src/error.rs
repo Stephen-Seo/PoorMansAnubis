@@ -10,6 +10,7 @@ pub enum Error {
     TimeCRange(time::error::ComponentRange),
     TimeIOffset(time::error::IndeterminateOffset),
     AddrParse(std::net::AddrParseError),
+    ToStrE(reqwest::header::ToStrError),
 }
 
 impl error::Error for Error {
@@ -23,6 +24,7 @@ impl error::Error for Error {
             Error::AddrParse(error) => error.source(),
             Error::TimeCRange(error) => error.source(),
             Error::TimeIOffset(error) => error.source(),
+            Error::ToStrE(error) => error.source(),
         }
     }
 }
@@ -38,6 +40,7 @@ impl Display for Error {
             Error::AddrParse(error) => error.fmt(f),
             Error::TimeCRange(error) => error.fmt(f),
             Error::TimeIOffset(error) => error.fmt(f),
+            Error::ToStrE(error) => error.fmt(f),
         }
     }
 }
@@ -87,6 +90,12 @@ impl From<time::error::ComponentRange> for Error {
 impl From<time::error::IndeterminateOffset> for Error {
     fn from(value: time::error::IndeterminateOffset) -> Self {
         Error::TimeIOffset(value)
+    }
+}
+
+impl From<reqwest::header::ToStrError> for Error {
+    fn from(value: reqwest::header::ToStrError) -> Self {
+        Error::ToStrE(value)
     }
 }
 

@@ -117,16 +117,28 @@ async fn api_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) {
 
 #[handler]
 async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
-    eprintln!("GET from ip {}", req.remote_addr());
+    let real_ip_header = req.headers().get("x-real-ip");
     let addr_string: String;
-    if let Some(ipv4) = req.remote_addr().as_ipv4() {
-        eprintln!(" ipv4: {}", ipv4.ip());
-        addr_string = format!("{}", ipv4.ip());
-    } else if let Some(ipv6) = req.remote_addr().as_ipv6() {
-        eprintln!(" ipv6: {}", ipv6.ip());
-        addr_string = format!("{}", ipv6.ip());
+    if let Some(real_ip_h) = real_ip_header {
+        addr_string = real_ip_h.to_str().map_err(Error::from)?.to_owned();
+        if addr_string.is_empty() {
+            return Err(
+                Error::from("Failed to get client addr (invalid header)".to_owned()).into(),
+            );
+        } else {
+            eprintln!("GET from ip {}", &addr_string);
+        }
     } else {
-        return Err(Error::from("Failed to get client addr".to_owned()).into());
+        eprintln!("GET from ip {}", req.remote_addr());
+        if let Some(ipv4) = req.remote_addr().as_ipv4() {
+            eprintln!(" ipv4: {}", ipv4.ip());
+            addr_string = format!("{}", ipv4.ip());
+        } else if let Some(ipv6) = req.remote_addr().as_ipv6() {
+            eprintln!(" ipv6: {}", ipv6.ip());
+            addr_string = format!("{}", ipv6.ip());
+        } else {
+            return Err(Error::from("Failed to get client addr".to_owned()).into());
+        }
     }
 
     let args = depot.obtain::<args::Args>().unwrap();
