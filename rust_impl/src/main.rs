@@ -117,10 +117,17 @@ async fn api_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) {
 
 #[handler]
 async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
-    let real_ip_header = req.headers().get("x-real-ip");
+    let args = depot.obtain::<args::Args>().unwrap();
+
     let addr_string: String;
-    if let Some(real_ip_h) = real_ip_header {
-        addr_string = real_ip_h.to_str().map_err(Error::from)?.to_owned();
+
+    let real_ip_header = req.headers().get("x-real-ip");
+    if args.enable_x_real_ip_header && real_ip_header.is_some() {
+        addr_string = real_ip_header
+            .unwrap()
+            .to_str()
+            .map_err(Error::from)?
+            .to_owned();
         if addr_string.is_empty() {
             return Err(
                 Error::from("Failed to get client addr (invalid header)".to_owned()).into(),
@@ -140,8 +147,6 @@ async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) ->
             return Err(Error::from("Failed to get client addr".to_owned()).into());
         }
     }
-
-    let args = depot.obtain::<args::Args>().unwrap();
 
     {
         let pool = get_db_pool(args).await?;

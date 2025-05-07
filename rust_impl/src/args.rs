@@ -6,6 +6,7 @@ pub struct Args {
     pub dest_url: String,
     pub addr_port_str: String,
     pub mysql_config_file: PathBuf,
+    pub enable_x_real_ip_header: bool,
 }
 
 pub fn parse_args() -> Args {
@@ -14,6 +15,7 @@ pub fn parse_args() -> Args {
         dest_url: "https://git.seodisparate.com".into(),
         addr_port_str: "127.0.0.1:8180".into(),
         mysql_config_file: "mysql.conf".into(),
+        enable_x_real_ip_header: false,
     };
 
     let p_args = args_fn();
@@ -31,6 +33,8 @@ pub fn parse_args() -> Args {
         } else if arg.starts_with("--mysql-conf=") {
             let end = arg.split_off(13);
             args.mysql_config_file = end.into();
+        } else if arg == "--enable-x-real-ip-header" {
+            args.enable_x_real_ip_header = true;
         }
     }
 
