@@ -1,16 +1,23 @@
 mod args;
 mod error;
 mod ffi;
+mod sql_types;
 
 use std::{collections::HashMap, path::Path};
 
-use mysql_async::{Pool, prelude::Query};
+use mysql_async::{
+    Pool, Row, params,
+    prelude::{Query, WithParams},
+};
 use salvo::{http::ResBody, prelude::*};
+use sql_types::AllowedIPs;
+use time::OffsetDateTime;
 use tokio::{fs::File, io::AsyncReadExt};
 
 use error::Error;
 
 const DEFAULT_FACTORS_DIGITS: u64 = 17000;
+const ALLOWED_IP_TIMEOUT_MINUTES: i64 = 60;
 
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut file_contents: String = String::new();
@@ -38,7 +45,7 @@ async fn get_db_pool(args: &args::Args) -> Result<Pool, Error> {
         .await
         .expect("Parse config for mysql usage");
 
-    let pool = mysql_async::Pool::from_url(&format!(
+    let pool = mysql_async::Pool::from_url(format!(
         "mysql://{}:{}@{}:{}/{}",
         config_map
             .get("user")
@@ -109,8 +116,77 @@ async fn api_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) {
 }
 
 #[handler]
-async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) {
+async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
+    eprintln!("GET from ip {}", req.remote_addr());
+    let addr_string: String;
+    if let Some(ipv4) = req.remote_addr().as_ipv4() {
+        eprintln!(" ipv4: {}", ipv4.ip());
+        addr_string = format!("{}", ipv4.ip());
+    } else if let Some(ipv6) = req.remote_addr().as_ipv6() {
+        eprintln!(" ipv6: {}", ipv6.ip());
+        addr_string = format!("{}", ipv6.ip());
+    } else {
+        return Err(Error::from("Failed to get client addr".to_owned()).into());
+    }
+
     let args = depot.obtain::<args::Args>().unwrap();
+
+    {
+        let pool = get_db_pool(args).await?;
+        let mut conn = pool.get_conn().await.map_err(Error::from)?;
+
+        let mut ip_entry: Option<AllowedIPs> = None;
+
+        r"LOCK TABLE ALLOWED_IPS READ"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        let ip_entry_row: Option<Row> = r"SELECT IP, ON_TIME FROM ALLOWED_IPS WHERE IP = :ipaddr"
+            .with(params! {"ipaddr" => &addr_string})
+            .first(&mut conn)
+            .await
+            .map_err(Error::from)?;
+        if let Some(row) = ip_entry_row {
+            ip_entry = Some(AllowedIPs::try_from(row)?);
+        }
+
+        r"UNLOCK TABLES"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        if let Some(ip_ent) = &mut ip_entry {
+            let duration = OffsetDateTime::now_local().map_err(Error::from)? - ip_ent.time;
+            if duration.whole_minutes() >= ALLOWED_IP_TIMEOUT_MINUTES {
+                r"LOCK TABLE ALLOWED_IPS WRITE"
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from)?;
+                r"DELETE FROM ALLOWED_IPS WHERE IP = :ipaddr"
+                    .with(params! {"ipaddr" => ip_ent.ip.to_string()})
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from)?;
+                r"UNLOCK TABLES"
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from)?;
+                ip_entry = None;
+                eprintln!("ip timed out");
+            }
+        }
+
+        if let Some(ip_ent) = &mut ip_entry {
+            eprintln!("ip existed:");
+            eprintln!("{:?}", ip_ent);
+        } else {
+            eprintln!("ip did not exist or timed out");
+        }
+
+        drop(conn);
+        pool.disconnect().await.map_err(Error::from)?;
+    }
 
     let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
 
@@ -127,12 +203,14 @@ async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) {
         res.render("Failed to query");
         res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
     }
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() {
     let mut parsed_args = args::parse_args();
-    if parsed_args.factors == None {
+    if parsed_args.factors.is_none() {
         parsed_args.factors = Some(DEFAULT_FACTORS_DIGITS);
         println!(
             "\"--factors=<digits>\" not specified, defaulting to \"{}\"",
@@ -144,8 +222,26 @@ async fn main() {
         .await
         .expect("Should be able to init database");
 
-    println!("URL: {}", &parsed_args.dest_url);
-    println!("Listening: {}", &parsed_args.addr_port_str);
+    // {
+    //     let pool = get_db_pool(&parsed_args).await.unwrap();
+    //     let mut conn = pool.get_conn().await.map_err(Error::from).unwrap();
+    //     let ip_entry_row: Option<Row> = r"SELECT IP, ON_TIME FROM ALLOWED_IPS WHERE IP = :ipaddr"
+    //         .with(params! {"ipaddr" => "127.0.0.1"})
+    //         .first(&mut conn)
+    //         .await
+    //         .unwrap();
+    //     if let Some(row) = ip_entry_row {
+    //         let ip_entry_res = AllowedIPs::try_from(row);
+    //         eprintln!("{:?}", ip_entry_res);
+    //     } else {
+    //         eprintln!("No row with 127.0.0.1!");
+    //     }
+    //     drop(conn);
+    //     pool.disconnect().await.map_err(Error::from).unwrap();
+    // }
+
+    eprintln!("URL: {}", &parsed_args.dest_url);
+    eprintln!("Listening: {}", &parsed_args.addr_port_str);
 
     let router = Router::new()
         .hoop(affix_state::inject(parsed_args.clone()))
