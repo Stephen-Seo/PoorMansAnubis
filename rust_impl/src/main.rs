@@ -1,11 +1,11 @@
 // ISC License
-// 
+//
 // Copyright (c) 2025 Stephen Seo
-// 
+//
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
 // copyright notice and this permission notice appear in all copies.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
 // REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
 // AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -399,6 +399,8 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     res.headers.append(k, v);
                 }
             }
+            res.headers
+                .append("x-real-ip", addr_string.parse().unwrap());
         } else {
             res.render("Failed to query");
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
