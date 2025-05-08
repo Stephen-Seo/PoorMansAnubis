@@ -25,7 +25,7 @@ USAGE
 Build the Rust frontend.
 
 Set up a MySQL server with a database and a user with password with access to
-said database.
+said database. (It is recommended to use MariaDB in place of MySQL.)
 
 Check "rust_impl/src/args.rs" for flags you can pass to the program. Also check
 "rust_impl/mysql.conf" for how the config file should be set up for MySQL
