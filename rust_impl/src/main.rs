@@ -121,8 +121,19 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
     Ok(())
 }
 
-async fn req_to_url(url: String) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
-    let req = reqwest::get(url).await?;
+async fn req_to_url(
+    url: String,
+    real_ip: Option<&str>,
+) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
+    let req: reqwest::Response = if let Some(ip) = real_ip {
+        reqwest::Client::new()
+            .get(url)
+            .header("x-real-ip", ip)
+            .send()
+            .await?
+    } else {
+        reqwest::get(url).await?
+    };
     let status = req.status().as_u16();
     let headers = req.headers().to_owned();
     Ok((ResBody::Once(req.bytes().await?), status, headers))
@@ -390,7 +401,11 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     if is_allowed {
         let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
 
-        let res_body_res = req_to_url(format!("{}{}", args.dest_url, &path_str)).await;
+        let res_body_res = req_to_url(
+            format!("{}{}", args.dest_url, &path_str),
+            Some(&addr_string),
+        )
+        .await;
         if let Ok((res_body, status, headers)) = res_body_res {
             res.replace_body(res_body);
             res.status_code = Some(StatusCode::from_u16(status).unwrap());
@@ -399,8 +414,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     res.headers.append(k, v);
                 }
             }
-            res.headers
-                .append("x-real-ip", addr_string.parse().unwrap());
         } else {
             res.render("Failed to query");
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
