@@ -1,6 +1,8 @@
 mod args;
+mod constants;
 mod error;
 mod ffi;
+mod json_types;
 mod sql_types;
 
 use std::{collections::HashMap, path::Path};
@@ -11,13 +13,15 @@ use mysql_async::{
 };
 use salvo::{http::ResBody, prelude::*};
 use sql_types::AllowedIPs;
-use time::OffsetDateTime;
 use tokio::{fs::File, io::AsyncReadExt};
 
 use error::Error;
+use uuid::Uuid;
 
 const DEFAULT_FACTORS_DIGITS: u64 = 17000;
+const DEFAULT_JSON_MAX_SIZE: usize = 50000;
 const ALLOWED_IP_TIMEOUT_MINUTES: i64 = 60;
+const CHALLENGE_FACTORS_TIMEOUT_MINUTES: i64 = 60;
 
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut file_contents: String = String::new();
@@ -125,15 +129,15 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
                 "Failed to get client addr (invalid header)".to_owned(),
             ));
         } else {
-            eprintln!("GET from ip {}", &addr_string);
+            //eprintln!("GET from ip {}", &addr_string);
         }
     } else {
-        eprintln!("GET from ip {}", req.remote_addr());
+        //eprintln!("GET from ip {}", req.remote_addr());
         if let Some(ipv4) = req.remote_addr().as_ipv4() {
-            eprintln!(" ipv4: {}", ipv4.ip());
+            //eprintln!(" ipv4: {}", ipv4.ip());
             addr_string = format!("{}", ipv4.ip());
         } else if let Some(ipv6) = req.remote_addr().as_ipv6() {
-            eprintln!(" ipv6: {}", ipv6.ip());
+            //eprintln!(" ipv6: {}", ipv6.ip());
             addr_string = format!("{}", ipv6.ip());
         } else {
             return Err(Error::from("Failed to get client addr".to_owned()));
@@ -143,11 +147,167 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
     Ok(addr_string)
 }
 
+async fn set_up_factors_challenge(depot: &Depot) -> Result<String, Error> {
+    let args = depot.obtain::<args::Args>().unwrap();
+
+    let (value, factors) = ffi::generate_value_and_factors_strings(if args.factors.is_some() {
+        args.factors.unwrap()
+    } else {
+        DEFAULT_FACTORS_DIGITS
+    });
+
+    let seq: u32;
+
+    let pool = get_db_pool(args).await?;
+    {
+        let mut conn = pool.get_conn().await?;
+
+        r"LOCK TABLE SEQ_ID WRITE"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM SEQ_ID"
+            .with(())
+            .first(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        if let Some(seq_r) = seq_row {
+            let id: u32 = seq_r.get(0).expect("Row should have ID");
+            seq = seq_r.get(1).expect("Row should have SEQ_ID");
+            r"UPDATE SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+                .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+        } else {
+            seq = 1;
+            r"INSERT INTO SEQ_ID (SEQ_ID) VALUES (:seq_id)"
+                .with(params! {"seq_id" => (seq + 1)})
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+        }
+
+        r"UNLOCK TABLES"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+    }
+
+    let uuid = Uuid::new_v5(
+        &Uuid::NAMESPACE_URL,
+        format!("{}.pma.seodisparate.com", seq).as_bytes(),
+    )
+    .to_string();
+
+    {
+        let mut conn = pool.get_conn().await?;
+
+        r"LOCK TABLE CHALLENGE_FACTORS WRITE"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        r"INSERT INTO CHALLENGE_FACTORS (UUID, FACTORS) VALUES (:uuid, :factors)"
+            .with(params! {"uuid" => &uuid, "factors" => factors})
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        r"UNLOCK TABLES"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+    }
+
+    pool.disconnect().await?;
+
+    let html = constants::HTML_BODY_FACTORS;
+    let html: String = html
+        .replacen("{}", &value, 1)
+        .replacen("{}", "/pma_api", 1)
+        .replacen("{}", &uuid, 1);
+
+    Ok(html)
+}
+
 #[handler]
-async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) {
-    let _args = depot.obtain::<args::Args>().unwrap();
-    eprintln!("API: {}", req.uri().path_and_query().unwrap());
-    res.render("API");
+async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
+    let args = depot.obtain::<args::Args>().unwrap();
+    let addr_string = get_client_ip_addr(depot, req).await?;
+    eprintln!("API: {}", &addr_string);
+    let factors_response: json_types::FactorsResponse = req
+        .parse_json_with_max_size(DEFAULT_JSON_MAX_SIZE)
+        .await
+        .map_err(Error::from)?;
+
+    let pool = get_db_pool(args).await?;
+
+    let correct: bool;
+    {
+        let mut conn = pool.get_conn().await.map_err(Error::from)?;
+
+        r"LOCK TABLE CHALLENGE_FACTORS WRITE"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        let factors_row: Option<Row> = r"SELECT FACTORS FROM CHALLENGE_FACTORS WHERE UUID = :uuid"
+            .with(params! {"uuid" => &factors_response.id})
+            .first(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        if let Some(factors_r) = factors_row {
+            let factors: String = factors_r.get(0).expect("Row should have factors");
+            if factors == factors_response.factors {
+                correct = true;
+                r"DELETE FROM CHALLENGE_FACTORS WHERE UUID = :uuid"
+                    .with(params! {"uuid" => &factors_response.id})
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from)?;
+            } else {
+                correct = false;
+            }
+        } else {
+            correct = false;
+        }
+
+        r"DELETE FROM CHALLENGE_FACTORS WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) > :minutes"
+            .with(params! {"minutes" => CHALLENGE_FACTORS_TIMEOUT_MINUTES})
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        r"UNLOCK TABLES"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+    }
+
+    if correct {
+        let mut conn = pool.get_conn().await.map_err(Error::from)?;
+        r"INSERT INTO ALLOWED_IPS (IP) VALUES (:ip)"
+            .with(params! { "ip" => &addr_string })
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+    }
+
+    pool.disconnect().await.map_err(Error::from)?;
+
+    if correct {
+        eprintln!("Challenge response accepted from {}", &addr_string);
+        res.body("Correct").status_code(StatusCode::OK);
+    } else {
+        eprintln!("Challenge response DENIED from {}", &addr_string);
+        res.body("Incorrect").status_code(StatusCode::BAD_REQUEST);
+    }
+
+    Ok(())
 }
 
 #[handler]
@@ -156,11 +316,28 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
     let addr_string = get_client_ip_addr(depot, req).await?;
 
+    let is_allowed: bool;
     {
         let pool = get_db_pool(args).await?;
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
         let mut ip_entry: Option<AllowedIPs> = None;
+
+        r"LOCK TABLE ALLOWED_IPS WRITE"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        r"DELETE FROM ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) > :minutes"
+            .with(params! {"minutes" => ALLOWED_IP_TIMEOUT_MINUTES})
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        r"UNLOCK TABLES"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
 
         r"LOCK TABLE ALLOWED_IPS READ"
             .ignore(&mut conn)
@@ -182,51 +359,38 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .map_err(Error::from)?;
 
         if let Some(ip_ent) = &mut ip_entry {
-            let duration = OffsetDateTime::now_local().map_err(Error::from)? - ip_ent.time;
-            if duration.whole_minutes() >= ALLOWED_IP_TIMEOUT_MINUTES {
-                r"LOCK TABLE ALLOWED_IPS WRITE"
-                    .ignore(&mut conn)
-                    .await
-                    .map_err(Error::from)?;
-                r"DELETE FROM ALLOWED_IPS WHERE IP = :ipaddr"
-                    .with(params! {"ipaddr" => ip_ent.ip.to_string()})
-                    .ignore(&mut conn)
-                    .await
-                    .map_err(Error::from)?;
-                r"UNLOCK TABLES"
-                    .ignore(&mut conn)
-                    .await
-                    .map_err(Error::from)?;
-                ip_entry = None;
-                eprintln!("ip timed out");
-            }
-        }
-
-        if let Some(ip_ent) = &mut ip_entry {
-            eprintln!("ip existed:");
-            eprintln!("{:?}", ip_ent);
+            //eprintln!("ip existed:");
+            //eprintln!("{:?}", ip_ent);
+            is_allowed = true;
         } else {
-            eprintln!("ip did not exist or timed out");
+            //eprintln!("ip did not exist or timed out");
+            is_allowed = false;
         }
 
         drop(conn);
         pool.disconnect().await.map_err(Error::from)?;
     }
 
-    let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
+    if is_allowed {
+        let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
 
-    let res_body_res = req_to_url(format!("{}{}", args.dest_url, &path_str)).await;
-    if let Ok((res_body, status, headers)) = res_body_res {
-        res.replace_body(res_body);
-        res.status_code = Some(StatusCode::from_u16(status).unwrap());
-        for (k_opt, v) in headers {
-            if let Some(k) = k_opt {
-                res.headers.append(k, v);
+        let res_body_res = req_to_url(format!("{}{}", args.dest_url, &path_str)).await;
+        if let Ok((res_body, status, headers)) = res_body_res {
+            res.replace_body(res_body);
+            res.status_code = Some(StatusCode::from_u16(status).unwrap());
+            for (k_opt, v) in headers {
+                if let Some(k) = k_opt {
+                    res.headers.append(k, v);
+                }
             }
+        } else {
+            res.render("Failed to query");
+            res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
-        res.render("Failed to query");
-        res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
+        eprintln!("Requested challenge from {}", &addr_string);
+        let html = set_up_factors_challenge(depot).await?;
+        res.body(html).status_code(StatusCode::OK);
     }
 
     Ok(())
