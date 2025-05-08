@@ -80,3 +80,16 @@ server {
 
 This assumes PoorMan'sAnubis is listening on port 8888 and will forward requests
 to 127.0.0.1:9999 with the url passed verbatim. Check the args for details.
+
+
+================================================================================
+
+Other Info
+
+================================================================================
+
+Contact me at:
+
+sseo6@alumni.jh.edu
+seo.disparate@gmail.com
+stephen@seodisparate.com
