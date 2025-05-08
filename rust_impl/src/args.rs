@@ -7,6 +7,7 @@ pub struct Args {
     pub addr_port_str: String,
     pub mysql_config_file: PathBuf,
     pub enable_x_real_ip_header: bool,
+    pub api_url: String,
 }
 
 pub fn parse_args() -> Args {
@@ -16,6 +17,7 @@ pub fn parse_args() -> Args {
         addr_port_str: "127.0.0.1:8180".into(),
         mysql_config_file: "mysql.conf".into(),
         enable_x_real_ip_header: false,
+        api_url: "/pma_api".into(),
     };
 
     let p_args = args_fn();
@@ -35,6 +37,9 @@ pub fn parse_args() -> Args {
             args.mysql_config_file = end.into();
         } else if arg == "--enable-x-real-ip-header" {
             args.enable_x_real_ip_header = true;
+        } else if arg.starts_with("--api-url=") {
+            let end = arg.split_off(10);
+            args.api_url = end.into();
         }
     }
 

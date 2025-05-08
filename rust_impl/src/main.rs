@@ -434,7 +434,7 @@ async fn main() {
 
     let router = Router::new()
         .hoop(affix_state::inject(parsed_args.clone()))
-        .push(Router::new().path("/pma_api").post(api_fn))
+        .push(Router::new().path(&parsed_args.api_url).post(api_fn))
         .push(Router::new().path("{**}").get(handler_fn));
     let acceptor = TcpListener::new(&parsed_args.addr_port_str).bind().await;
     Server::new(acceptor).serve(router).await;
