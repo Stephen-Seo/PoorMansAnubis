@@ -36,8 +36,8 @@ use uuid::Uuid;
 
 const DEFAULT_FACTORS_DIGITS: u64 = 17000;
 const DEFAULT_JSON_MAX_SIZE: usize = 50000;
-const ALLOWED_IP_TIMEOUT_MINUTES: i64 = 60;
-const CHALLENGE_FACTORS_TIMEOUT_MINUTES: i64 = 7;
+const ALLOWED_IP_TIMEOUT_MINUTES: u64 = 60;
+const CHALLENGE_FACTORS_TIMEOUT_MINUTES: u64 = 7;
 
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut file_contents: String = String::new();
@@ -303,8 +303,8 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             correct = false;
         }
 
-        r"DELETE FROM CHALLENGE_FACTORS WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) > :minutes"
-            .with(params! {"minutes" => CHALLENGE_FACTORS_TIMEOUT_MINUTES})
+        r"DELETE FROM CHALLENGE_FACTORS WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
+            .with(params! {"minutes" => args.challenge_timeout_mins})
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
@@ -355,8 +355,8 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .await
             .map_err(Error::from)?;
 
-        r"DELETE FROM ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) > :minutes"
-            .with(params! {"minutes" => ALLOWED_IP_TIMEOUT_MINUTES})
+        r"DELETE FROM ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
+            .with(params! {"minutes" => args.allowed_timeout_mins})
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;

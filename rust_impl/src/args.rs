@@ -1,11 +1,11 @@
 // ISC License
-// 
+//
 // Copyright (c) 2025 Stephen Seo
-// 
+//
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
 // copyright notice and this permission notice appear in all copies.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
 // REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
 // AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -24,6 +24,8 @@ pub struct Args {
     pub mysql_config_file: PathBuf,
     pub enable_x_real_ip_header: bool,
     pub api_url: String,
+    pub challenge_timeout_mins: u64,
+    pub allowed_timeout_mins: u64,
 }
 
 pub fn parse_args() -> Args {
@@ -34,6 +36,8 @@ pub fn parse_args() -> Args {
         mysql_config_file: "mysql.conf".into(),
         enable_x_real_ip_header: false,
         api_url: "/pma_api".into(),
+        challenge_timeout_mins: crate::CHALLENGE_FACTORS_TIMEOUT_MINUTES,
+        allowed_timeout_mins: crate::ALLOWED_IP_TIMEOUT_MINUTES,
     };
 
     let p_args = args_fn();
@@ -56,6 +60,16 @@ pub fn parse_args() -> Args {
         } else if arg.starts_with("--api-url=") {
             let end = arg.split_off(10);
             args.api_url = end;
+        } else if arg.starts_with("--challenge-timeout=") {
+            let end = arg.split_off(20);
+            args.challenge_timeout_mins = end
+                .parse()
+                .expect("challenge timeout should be a valid integer");
+        } else if arg.starts_with("--allowed-timeout=") {
+            let end = arg.split_off(18);
+            args.allowed_timeout_mins = end
+                .parse()
+                .expect("allowed timeout should be a valid integer");
         }
     }
 
