@@ -37,7 +37,7 @@ use uuid::Uuid;
 const DEFAULT_FACTORS_DIGITS: u64 = 17000;
 const DEFAULT_JSON_MAX_SIZE: usize = 50000;
 const ALLOWED_IP_TIMEOUT_MINUTES: i64 = 60;
-const CHALLENGE_FACTORS_TIMEOUT_MINUTES: i64 = 60;
+const CHALLENGE_FACTORS_TIMEOUT_MINUTES: i64 = 7;
 
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut file_contents: String = String::new();
