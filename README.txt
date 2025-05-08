@@ -51,6 +51,9 @@ server {
     listen 9999;
     server_name localhost 127.0.0.1;
 
+    set_real_ip_from 127.0.0.1;
+    real_ip_header x-real-ip;
+
     location / {
         root /srv/http/mysite;
         autoindex on;
