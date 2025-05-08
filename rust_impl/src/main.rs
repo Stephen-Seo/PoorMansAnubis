@@ -358,7 +358,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .await
             .map_err(Error::from)?;
 
-        if let Some(ip_ent) = &mut ip_entry {
+        if let Some(_ip_ent) = &mut ip_entry {
             //eprintln!("ip existed:");
             //eprintln!("{:?}", ip_ent);
             is_allowed = true;

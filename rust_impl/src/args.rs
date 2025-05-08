@@ -28,10 +28,10 @@ pub fn parse_args() -> Args {
             args.factors = end.parse().ok();
         } else if arg.starts_with("--dest-url=") {
             let end = arg.split_off(11);
-            args.dest_url = end.to_owned();
+            args.dest_url = end;
         } else if arg.starts_with("--addr-port=") {
             let end = arg.split_off(12);
-            args.addr_port_str = end.to_owned();
+            args.addr_port_str = end;
         } else if arg.starts_with("--mysql-conf=") {
             let end = arg.split_off(13);
             args.mysql_config_file = end.into();
@@ -39,7 +39,7 @@ pub fn parse_args() -> Args {
             args.enable_x_real_ip_header = true;
         } else if arg.starts_with("--api-url=") {
             let end = arg.split_off(10);
-            args.api_url = end.into();
+            args.api_url = end;
         }
     }
 
