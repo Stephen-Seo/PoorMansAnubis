@@ -108,20 +108,12 @@ async fn req_to_url(url: String) -> Result<(ResBody, u16, reqwest::header::Heade
     Ok((ResBody::Once(req.bytes().await?), status, headers))
 }
 
-#[handler]
-async fn api_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) {
-    let _args = depot.obtain::<args::Args>().unwrap();
-    eprintln!("API: {}", req.uri().path_and_query().unwrap());
-    res.render("API");
-}
-
-#[handler]
-async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
+async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, Error> {
     let args = depot.obtain::<args::Args>().unwrap();
-
     let addr_string: String;
 
     let real_ip_header = req.headers().get("x-real-ip");
+
     if args.enable_x_real_ip_header && real_ip_header.is_some() {
         addr_string = real_ip_header
             .unwrap()
@@ -129,9 +121,9 @@ async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) ->
             .map_err(Error::from)?
             .to_owned();
         if addr_string.is_empty() {
-            return Err(
-                Error::from("Failed to get client addr (invalid header)".to_owned()).into(),
-            );
+            return Err(Error::from(
+                "Failed to get client addr (invalid header)".to_owned(),
+            ));
         } else {
             eprintln!("GET from ip {}", &addr_string);
         }
@@ -144,9 +136,25 @@ async fn handler_fn(depot: &mut Depot, req: &mut Request, res: &mut Response) ->
             eprintln!(" ipv6: {}", ipv6.ip());
             addr_string = format!("{}", ipv6.ip());
         } else {
-            return Err(Error::from("Failed to get client addr".to_owned()).into());
+            return Err(Error::from("Failed to get client addr".to_owned()));
         }
     }
+
+    Ok(addr_string)
+}
+
+#[handler]
+async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) {
+    let _args = depot.obtain::<args::Args>().unwrap();
+    eprintln!("API: {}", req.uri().path_and_query().unwrap());
+    res.render("API");
+}
+
+#[handler]
+async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
+    let args = depot.obtain::<args::Args>().unwrap();
+
+    let addr_string = get_client_ip_addr(depot, req).await?;
 
     {
         let pool = get_db_pool(args).await?;
