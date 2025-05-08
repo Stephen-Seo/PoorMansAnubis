@@ -22,7 +22,9 @@ USAGE
 
 ================================================================================
 
-Build the Rust frontend.
+Build the Rust frontend. You may need to do a
+`git submodule update --init --recursive` to pull in the dependency on
+SimpleArchiver.
 
 Set up a MySQL server with a database and a user with password with access to
 said database. (It is recommended to use MariaDB in place of MySQL.)
