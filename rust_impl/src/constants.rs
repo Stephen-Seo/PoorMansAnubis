@@ -37,10 +37,14 @@ pub const HTML_BODY_FACTORS: &str = "
                 margin-left: auto;
                 margin-right: auto;
             }
+            pre {
+                font-size: 32px;
+            }
         </style>
     </head>
     <body>
         <h2 class=\"center\">Checking Your Browser...</h2>
+        <pre id=\"progress\" class=\"center\">-</pre>
         <script>
             \"use strict\";
 
@@ -59,6 +63,28 @@ pub const HTML_BODY_FACTORS: &str = "
 
                 return value;
             }
+
+            const progress_values = [\"-\", \"\\\\\", \"|\", \"/\"];
+            let progress_idx = 0;
+            let progress_text = document.getElementById(\"progress\");
+            let time_start;
+            const millis = 500;
+            function update_anim(timestamp) {
+                if (time_start === undefined) {
+                    time_start = timestamp;
+                }
+                const elapsed = timestamp - time_start;
+
+                if (elapsed > millis) {
+                    time_start = timestamp;
+                    progress_idx = (progress_idx + 1) % progress_values.length;
+                    progress_text.innerText = progress_values[
+                        progress_idx
+                    ];
+                }
+                requestAnimationFrame(update_anim);
+            }
+            requestAnimationFrame(update_anim);
 
             addEventListener(\"load\", (event) => {
                 let factors = [];
