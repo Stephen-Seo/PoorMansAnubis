@@ -128,10 +128,15 @@ async fn req_to_url(
         reqwest::Client::new()
             .get(url)
             .header("x-real-ip", ip)
+            .header("accept", "text/html,application/xhtml+xml,*/*")
             .send()
             .await?
     } else {
-        reqwest::get(url).await?
+        reqwest::Client::new()
+            .get(url)
+            .header("accept", "text/html,application/xhtml+xml,*/*")
+            .send()
+            .await?
     };
     let status = req.status().as_u16();
     let headers = req.headers().to_owned();
