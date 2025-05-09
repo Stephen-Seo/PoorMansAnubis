@@ -99,9 +99,9 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
     .ignore(&mut conn)
     .await?;
 
-    r"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS (
-        UUID CHAR(36) NOT NULL PRIMARY KEY,
-        FACTORS MEDIUMTEXT CHARACTER SET ascii NOT NULL,
+    r"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS2 (
+        UUID CHAR(36) CHARACTER SET ascii NOT NULL PRIMARY KEY,
+        FACTORS CHAR(128) CHARACTER SET ascii NOT NULL,
         GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )"
     .ignore(&mut conn)
@@ -229,16 +229,18 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<String, Error> {
     )
     .to_string();
 
+    let factors_hash = blake3::hash(factors.as_bytes()).to_string();
+
     {
         let mut conn = pool.get_conn().await?;
 
-        r"LOCK TABLE CHALLENGE_FACTORS WRITE"
+        r"LOCK TABLE CHALLENGE_FACTORS2 WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        r"INSERT INTO CHALLENGE_FACTORS (UUID, FACTORS) VALUES (:uuid, :factors)"
-            .with(params! {"uuid" => &uuid, "factors" => factors})
+        r"INSERT INTO CHALLENGE_FACTORS2 (UUID, FACTORS) VALUES (:uuid, :factors)"
+            .with(params! {"uuid" => &uuid, "factors" => factors_hash})
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
@@ -276,12 +278,12 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     {
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-        r"LOCK TABLE CHALLENGE_FACTORS WRITE"
+        r"LOCK TABLE CHALLENGE_FACTORS2 WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        let factors_row: Option<Row> = r"SELECT FACTORS FROM CHALLENGE_FACTORS WHERE UUID = :uuid"
+        let factors_row: Option<Row> = r"SELECT FACTORS FROM CHALLENGE_FACTORS2 WHERE UUID = :uuid"
             .with(params! {"uuid" => &factors_response.id})
             .first(&mut conn)
             .await
@@ -289,9 +291,9 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 
         if let Some(factors_r) = factors_row {
             let factors: String = factors_r.get(0).expect("Row should have factors");
-            if factors == factors_response.factors {
+            if factors == blake3::hash(factors_response.factors.as_bytes()).to_string() {
                 correct = true;
-                r"DELETE FROM CHALLENGE_FACTORS WHERE UUID = :uuid"
+                r"DELETE FROM CHALLENGE_FACTORS2 WHERE UUID = :uuid"
                     .with(params! {"uuid" => &factors_response.id})
                     .ignore(&mut conn)
                     .await
@@ -303,7 +305,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             correct = false;
         }
 
-        r"DELETE FROM CHALLENGE_FACTORS WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
+        r"DELETE FROM CHALLENGE_FACTORS2 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.challenge_timeout_mins})
             .ignore(&mut conn)
             .await
