@@ -223,7 +223,7 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<String, Error> {
     }
 
     let uuid = Uuid::new_v5(
-        &Uuid::NAMESPACE_URL,
+        &Uuid::NAMESPACE_DNS,
         format!("{}.pma.seodisparate.com", seq).as_bytes(),
     )
     .to_string();
