@@ -178,7 +178,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
     Ok(addr_string)
 }
 
-async fn set_up_factors_challenge(depot: &Depot) -> Result<String, Error> {
+async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Error> {
     let args = depot.obtain::<args::Args>().unwrap();
 
     let (value, factors) = ffi::generate_value_and_factors_strings(if args.factors.is_some() {
@@ -257,13 +257,28 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<String, Error> {
 
     pool.disconnect().await?;
 
-    let html = constants::HTML_BODY_FACTORS;
-    let html: String = html
-        .replacen("{}", &value, 1)
-        .replacen("{}", "/pma_api", 1)
-        .replacen("{}", &uuid, 1);
+    Ok((value, uuid))
+}
 
-    Ok(html)
+#[handler]
+async fn factors_js_fn(
+    depot: &mut Depot,
+    req: &mut Request,
+    res: &mut Response,
+) -> salvo::Result<()> {
+    let addr_string = get_client_ip_addr(depot, req).await?;
+
+    eprintln!("Requested challenge from {}", &addr_string);
+
+    let (value, uuid) = set_up_factors_challenge(depot).await?;
+    let js = constants::JAVASCRIPT_FACTORS_WORKER;
+    let js = js
+        .replacen("{LARGE_NUMBER}", &value, 1)
+        .replacen("{UUID}", &uuid, 1);
+    res.add_header("content-type", "text/javascript", true)?
+        .write_body(js)?;
+
+    Ok(())
 }
 
 #[handler]
@@ -334,10 +349,14 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 
     if correct {
         eprintln!("Challenge response accepted from {}", &addr_string);
-        res.body("Correct").status_code(StatusCode::OK);
+        res.body("Correct")
+            .add_header("content-type", "text/plain", true)?
+            .status_code(StatusCode::OK);
     } else {
         eprintln!("Challenge response DENIED from {}", &addr_string);
-        res.body("Incorrect").status_code(StatusCode::BAD_REQUEST);
+        res.body("Incorrect")
+            .add_header("content-type", "text/plain", true)?
+            .status_code(StatusCode::BAD_REQUEST);
     }
 
     Ok(())
@@ -425,8 +444,12 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
-        eprintln!("Requested challenge from {}", &addr_string);
-        let html = set_up_factors_challenge(depot).await?;
+        let html = constants::HTML_BODY_FACTORS;
+        let html = html.replacen("{URL}", &args.api_url, 1).replacen(
+            "{JS_FACTORS_URL}",
+            &args.js_factors_url,
+            1,
+        );
         res.body(html).status_code(StatusCode::OK);
     }
 
@@ -448,30 +471,17 @@ async fn main() {
         .await
         .expect("Should be able to init database");
 
-    // {
-    //     let pool = get_db_pool(&parsed_args).await.unwrap();
-    //     let mut conn = pool.get_conn().await.map_err(Error::from).unwrap();
-    //     let ip_entry_row: Option<Row> = r"SELECT IP, ON_TIME FROM ALLOWED_IPS WHERE IP = :ipaddr"
-    //         .with(params! {"ipaddr" => "127.0.0.1"})
-    //         .first(&mut conn)
-    //         .await
-    //         .unwrap();
-    //     if let Some(row) = ip_entry_row {
-    //         let ip_entry_res = AllowedIPs::try_from(row);
-    //         eprintln!("{:?}", ip_entry_res);
-    //     } else {
-    //         eprintln!("No row with 127.0.0.1!");
-    //     }
-    //     drop(conn);
-    //     pool.disconnect().await.map_err(Error::from).unwrap();
-    // }
-
     eprintln!("URL: {}", &parsed_args.dest_url);
     eprintln!("Listening: {}", &parsed_args.addr_port_str);
 
     let router = Router::new()
         .hoop(affix_state::inject(parsed_args.clone()))
         .push(Router::new().path(&parsed_args.api_url).post(api_fn))
+        .push(
+            Router::new()
+                .path(&parsed_args.js_factors_url)
+                .get(factors_js_fn),
+        )
         .push(Router::new().path("{**}").get(handler_fn));
     let acceptor = TcpListener::new(&parsed_args.addr_port_str).bind().await;
     Server::new(acceptor).serve(router).await;
