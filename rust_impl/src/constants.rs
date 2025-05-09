@@ -67,24 +67,13 @@ pub const HTML_BODY_FACTORS: &str = "
             const progress_values = [\"-\", \"\\\\\", \"|\", \"/\"];
             let progress_idx = 0;
             let progress_text = document.getElementById(\"progress\");
-            let time_start;
-            const millis = 500;
-            function update_anim(timestamp) {
-                if (time_start === undefined) {
-                    time_start = timestamp;
-                }
-                const elapsed = timestamp - time_start;
-
-                if (elapsed > millis) {
-                    time_start = timestamp;
-                    progress_idx = (progress_idx + 1) % progress_values.length;
-                    progress_text.innerText = progress_values[
-                        progress_idx
-                    ];
-                }
-                requestAnimationFrame(update_anim);
+            function update_anim() {
+                progress_idx = (progress_idx + 1) % progress_values.length;
+                progress_text.innerText = progress_values[
+                    progress_idx
+                ];
             }
-            requestAnimationFrame(update_anim);
+            setInterval(update_anim, 500);
 
             addEventListener(\"load\", (event) => {
                 let factors = [];
