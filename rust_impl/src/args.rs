@@ -36,8 +36,8 @@ pub fn parse_args() -> Args {
         mysql_config_file: "mysql.conf".into(),
         enable_x_real_ip_header: false,
         api_url: "/pma_api".into(),
-        challenge_timeout_mins: crate::CHALLENGE_FACTORS_TIMEOUT_MINUTES,
-        allowed_timeout_mins: crate::ALLOWED_IP_TIMEOUT_MINUTES,
+        challenge_timeout_mins: crate::constants::CHALLENGE_FACTORS_TIMEOUT_MINUTES,
+        allowed_timeout_mins: crate::constants::ALLOWED_IP_TIMEOUT_MINUTES,
     };
 
     let p_args = args_fn();

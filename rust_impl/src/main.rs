@@ -34,11 +34,6 @@ use tokio::{fs::File, io::AsyncReadExt};
 use error::Error;
 use uuid::Uuid;
 
-const DEFAULT_FACTORS_DIGITS: u64 = 17000;
-const DEFAULT_JSON_MAX_SIZE: usize = 50000;
-const ALLOWED_IP_TIMEOUT_MINUTES: u64 = 60;
-const CHALLENGE_FACTORS_TIMEOUT_MINUTES: u64 = 7;
-
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut file_contents: String = String::new();
     File::open(config)
@@ -180,7 +175,7 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<String, Error> {
     let (value, factors) = ffi::generate_value_and_factors_strings(if args.factors.is_some() {
         args.factors.unwrap()
     } else {
-        DEFAULT_FACTORS_DIGITS
+        constants::DEFAULT_FACTORS_DIGITS
     });
 
     let seq: u32;
@@ -268,7 +263,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     let addr_string = get_client_ip_addr(depot, req).await?;
     eprintln!("API: {}", &addr_string);
     let factors_response: json_types::FactorsResponse = req
-        .parse_json_with_max_size(DEFAULT_JSON_MAX_SIZE)
+        .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
         .await
         .map_err(Error::from)?;
 
@@ -433,10 +428,10 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 async fn main() {
     let mut parsed_args = args::parse_args();
     if parsed_args.factors.is_none() {
-        parsed_args.factors = Some(DEFAULT_FACTORS_DIGITS);
+        parsed_args.factors = Some(constants::DEFAULT_FACTORS_DIGITS);
         println!(
             "\"--factors=<digits>\" not specified, defaulting to \"{}\"",
-            DEFAULT_FACTORS_DIGITS
+            constants::DEFAULT_FACTORS_DIGITS
         );
     }
 
