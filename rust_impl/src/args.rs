@@ -32,7 +32,7 @@ pub struct Args {
 pub fn parse_args() -> Args {
     let mut args = Args {
         factors: None,
-        dest_url: "https://git.seodisparate.com".into(),
+        dest_url: "https://seodisparate.com".into(),
         addr_port_str: "127.0.0.1:8180".into(),
         mysql_config_file: "mysql.conf".into(),
         enable_x_real_ip_header: false,
