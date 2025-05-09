@@ -77,6 +77,15 @@ server {
         proxy_pass http://127.0.0.1:8888;
     }
 
+    # Needed if would point to elsewhere otherwise.
+    # Check the args to customize this endpoint.
+    location /pma_factors.js {
+        proxy_set_header 'x-real-ip' $remote_addr;
+        proxy_pass http://127.0.0.1:8888;
+    }
+
+    # Needed if would point to elsewhere otherwise.
+    # Check the args to customize this endpoint.
     location /pma_api {
         proxy_set_header 'x-real-ip' $remote_addr;
         proxy_pass http://127.0.0.1:8888;
