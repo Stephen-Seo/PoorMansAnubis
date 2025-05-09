@@ -94,6 +94,10 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
     .ignore(&mut conn)
     .await?;
 
+    r"DROP TABLE IF EXISTS CHALLENGE_FACTORS"
+        .ignore(&mut conn)
+        .await?;
+
     r"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS2 (
         UUID CHAR(36) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         FACTORS CHAR(128) CHARACTER SET ascii NOT NULL,
