@@ -73,7 +73,10 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
                     progress_text.innerText = "Verified.";
                     window.location.reload(true);
                 } else if (message.data.status === "error_from_api") {
-                    clearInterval(interval_id);
+                    if (interval_id >= 0) {
+                        clearInterval(interval_id);
+                        interval_id = -1;
+                    }
                     setTimeout(() => {
                         progress_text.innerText = "Error, verification failed!";
                     }, 500);
