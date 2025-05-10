@@ -56,7 +56,7 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
                     progress_idx
                 ];
             }
-            setInterval(update_anim, 500);
+            const interval_id = setInterval(update_anim, 500);
 
             if (!window.Worker) {
                 console.warn("Workers are not available!?");
@@ -67,6 +67,11 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
             worker.addEventListener("message", (message) => {
                 if (message.data.status === "done") {
                     window.location.reload(true);
+                } else if (message.data.status === "error_from_api") {
+                    clearInterval(interval_id);
+                    setTimeout(() => {
+                        progress_text.innerText = "Error, verification failed!";
+                    }, 500);
                 } else {
                     console.log(message.data.status);
                 }
@@ -154,8 +159,12 @@ function getFactors() {
     xhr.open("POST", url, true);
     xhr.setRequestHeader("Content-Type", "application/json");
     xhr.onreadystatechange = function () {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-            postMessage({status: "done"});
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                postMessage({status: "done"});
+            } else {
+                postMessage({status: "error_from_api"});
+            }
         }
     };
     let data = JSON.stringify({"type": "factors", "id": "{UUID}", "factors": f_string});
