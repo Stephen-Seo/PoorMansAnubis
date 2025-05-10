@@ -66,17 +66,7 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
 
             worker.addEventListener("message", (message) => {
                 if (message.data.status === "done") {
-                    let xhr = new XMLHttpRequest();
-                    let url = "{URL}";
-                    xhr.open("POST", url, true);
-                    xhr.setRequestHeader("Content-Type", "application/json");
-                    xhr.onreadystatechange = function () {
-                        if (xhr.readyState === 4 && xhr.status === 200) {
-                            window.location.reload(true);
-                        }
-                    };
-                    let data = JSON.stringify({"type": "factors", "id": message.data.uuid, "factors": message.data.factors});
-                    xhr.send(data);
+                    window.location.reload(true);
                 } else {
                     console.log(message.data.status);
                 }
@@ -159,7 +149,17 @@ function getFactors() {
         }
     }
 
-    postMessage({status: "done", factors: f_string, uuid: "{UUID}"});
+    let xhr = new XMLHttpRequest();
+    let url = "{API_URL}";
+    xhr.open("POST", url, true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            postMessage({status: "done"});
+        }
+    };
+    let data = JSON.stringify({"type": "factors", "id": "{UUID}", "factors": f_string});
+    xhr.send(data);
 }
 
 addEventListener("message", (message) => {

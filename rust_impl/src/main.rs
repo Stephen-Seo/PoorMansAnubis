@@ -266,6 +266,7 @@ async fn factors_js_fn(
     req: &mut Request,
     res: &mut Response,
 ) -> salvo::Result<()> {
+    let args = depot.obtain::<args::Args>().unwrap();
     let addr_string = get_client_ip_addr(depot, req).await?;
 
     eprintln!("Requested challenge from {}", &addr_string);
@@ -273,6 +274,7 @@ async fn factors_js_fn(
     let (value, uuid) = set_up_factors_challenge(depot).await?;
     let js = constants::JAVASCRIPT_FACTORS_WORKER;
     let js = js
+        .replacen("{API_URL}", &args.api_url, 1)
         .replacen("{LARGE_NUMBER}", &value, 1)
         .replacen("{UUID}", &uuid, 1);
     res.add_header("content-type", "text/javascript", true)?
@@ -445,11 +447,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         }
     } else {
         let html = constants::HTML_BODY_FACTORS;
-        let html = html.replacen("{URL}", &args.api_url, 1).replacen(
-            "{JS_FACTORS_URL}",
-            &args.js_factors_url,
-            1,
-        );
+        let html = html.replacen("{JS_FACTORS_URL}", &args.js_factors_url, 1);
         res.body(html).status_code(StatusCode::OK);
     }
 
