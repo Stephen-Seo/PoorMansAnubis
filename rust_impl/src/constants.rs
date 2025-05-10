@@ -43,7 +43,7 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
     </head>
     <body>
         <h2 class="center">Checking Your Browser...</h2>
-        <pre id="progress" class="center">-</pre>
+        <pre id="progress" class="center">Waiting to start verification...</pre>
         <script>
             "use strict";
 
@@ -56,7 +56,7 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
                     progress_idx
                 ];
             }
-            const interval_id = setInterval(update_anim, 500);
+            var interval_id = -1;
 
             if (!window.Worker) {
                 console.warn("Workers are not available!?");
@@ -66,6 +66,11 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
 
             worker.addEventListener("message", (message) => {
                 if (message.data.status === "done") {
+                    if (interval_id >= 0) {
+                        clearInterval(interval_id);
+                        interval_id = -1;
+                    }
+                    progress_text.innerText = "Verified.";
                     window.location.reload(true);
                 } else if (message.data.status === "error_from_api") {
                     clearInterval(interval_id);
@@ -73,6 +78,12 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
                         progress_text.innerText = "Error, verification failed!";
                     }, 500);
                 } else {
+                    if (message.data.status === "Starting...") {
+                        if (interval_id >= 0) {
+                            clearInterval(interval_id);
+                        }
+                        interval_id = setInterval(update_anim, 500);
+                    }
                     console.log(message.data.status);
                 }
             });
@@ -85,7 +96,7 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
             addEventListener("load", (event) => {
                 setTimeout(() => {
                     worker.postMessage("start");
-                }, 500);
+                }, 50);
             });
         </script>
     </body>
