@@ -143,6 +143,9 @@ server {
     }
 
     location /other_site {
+        # "rewrite" may be needed if destination uses different "sub-urls".
+        rewrite /other_site(.*) $1 break;
+
         proxy_set_header 'x-real-ip' $remote_addr;
         proxy_set_header 'override-dest-url' 'http://127.0.0.1:12121';
         proxy_pass http://127.0.0.1:8888;
