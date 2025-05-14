@@ -53,6 +53,7 @@ Args:
   --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
   --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
   --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward; example header: "override-dest-url: http://127.0.0.1:8888"
+  WARNING: If --enable-override-dest-url is used, you must ensure that PoorMansAnubis always receives this header as set by your server. If you don't then anyone accessing your server may be able to set this header and direct PoorMansAnubis to load any website!
 
 
 ================================================================================
@@ -114,7 +115,7 @@ This assumes PoorMan'sAnubis is listening on port 8888 and will forward requests
 to 127.0.0.1:9999 with the url passed verbatim. Check the args for details.
 
 PoorMan'sAnubis can protect multiple endpoints by using
-"--enable-override-dest-url":
+"--enable-override-dest-url" (YOU MUST READ THE WARNING ABOUT THIS FLAG!):
 
 server {
     listen 443 ssl;
@@ -123,6 +124,9 @@ server {
     # other ssl cert stuff e.g. Let'sEncrypt
 
     server_name example.com;
+
+    # Prevent hijacking of 'override-dest-url' in case it isn't specified.
+    proxy_set_header 'override-dest-url' "";
 
     location / {
         proxy_set_header 'x-real-ip' $remote_addr;
@@ -150,6 +154,19 @@ server {
         proxy_pass http://127.0.0.1:8888;
     }
 }
+
+The warning about using 'override-dest-url' is repeated here:
+
+WARNING: If --enable-override-dest-url is used, you must ensure that
+PoorMansAnubis always receives this header as set by your server. If you don't
+then anyone accessing your server may be able to set this header and direct
+PoorMansAnubis to load any website!
+
+A nginx directive you can use to prevent this from happening is:
+
+proxy_set_header 'override-dest-url' "";
+
+https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_set_header
 
 
 ================================================================================
