@@ -107,7 +107,7 @@ server {
 }
 
  -------------      -----------------------------      --------------
-|nginx ...:443| -> |PoorMansAnubis 127.0.0.1:9999| -> |nginx ...:9999|
+|nginx ...:443| -> |PoorMansAnubis 127.0.0.1:8888| -> |nginx ...:9999|
  -------------      -----------------------------      --------------
 
 This assumes PoorMan'sAnubis is listening on port 8888 and will forward requests
