@@ -40,6 +40,20 @@ where PoorMan'sAnubis will load from on challenge success.
 You may use the "x-real-ip" header to ensure the frontend knows the correct
 ip address.
 
+Args are as follows:
+
+Args:
+  --factors=<digits> : Generate factors challenge with <digits> digits
+  --dest-url=<url> : Destination URL for verified clients
+  --addr-port=<addr>:<port> : Listening addr/port
+  --mysql-conf=<config_file> : Set path to config file for mysql settings
+  --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
+  --api-url=<url> : Set endpoint for client to POST to this software
+  --js-factors-url=<url> : Set endpoint for client to request factors.js from this software
+  --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
+  --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
+  --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward
+
 
 ================================================================================
 
@@ -92,8 +106,50 @@ server {
     }
 }
 
+ -------------      -----------------------------      --------------
+|nginx ...:443| -> |PoorMansAnubis 127.0.0.1:9999| -> |nginx ...:9999|
+ -------------      -----------------------------      --------------
+
 This assumes PoorMan'sAnubis is listening on port 8888 and will forward requests
 to 127.0.0.1:9999 with the url passed verbatim. Check the args for details.
+
+PoorMan'sAnubis can protect multiple endpoints by using
+"--enable-override-dest-url":
+
+server {
+    listen 443 ssl;
+    ssl_certificate ...;
+    ssl_certificate_key ...;
+    # other ssl cert stuff e.g. Let'sEncrypt
+
+    server_name example.com;
+
+    location / {
+        proxy_set_header 'x-real-ip' $remote_addr;
+        proxy_set_header 'override-url-dest' 'http://127.0.0.1:9999';
+        proxy_pass http://127.0.0.1:8888;
+    }
+
+    location /other_site {
+        proxy_set_header 'x-real-ip' $remote_addr;
+        proxy_set_header 'override-url-dest' 'http://127.0.0.1:12121';
+        proxy_pass http://127.0.0.1:8888;
+    }
+
+    # Needed if would point to elsewhere otherwise.
+    # Check the args to customize this endpoint.
+    location /pma_factors.js {
+        proxy_set_header 'x-real-ip' $remote_addr;
+        proxy_pass http://127.0.0.1:8888;
+    }
+
+    # Needed if would point to elsewhere otherwise.
+    # Check the args to customize this endpoint.
+    location /pma_api {
+        proxy_set_header 'x-real-ip' $remote_addr;
+        proxy_pass http://127.0.0.1:8888;
+    }
+}
 
 
 ================================================================================
