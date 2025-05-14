@@ -44,16 +44,24 @@ Args for the Rust-frontend are as follows:
 
 Args:
   --factors=<digits> : Generate factors challenge with <digits> digits
-  --dest-url=<url> : Destination URL for verified clients; example: "--dest-url=http://127.0.0.1:9999"
-  --addr-port=<addr>:<port> : Listening addr/port; example: "--addr-port=127.0.0.1:8080"
+  --dest-url=<url> : Destination URL for verified clients;
+    example: "--dest-url=http://127.0.0.1:9999"
+  --addr-port=<addr>:<port> : Listening addr/port;
+    example: "--addr-port=127.0.0.1:8080"
   --mysql-conf=<config_file> : Set path to config file for mysql settings
   --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
-  --api-url=<url> : Set endpoint for client to POST to this software; example: "--api-url=/pma_api"
-  --js-factors-url=<url> : Set endpoint for client to request factors.js from this software; example: "--js-factors-url=/pma_factors.js"
+  --api-url=<url> : Set endpoint for client to POST to this software;
+    example: "--api-url=/pma_api"
+  --js-factors-url=<url> : Set endpoint for client to request factors.js from this software;
+    example: "--js-factors-url=/pma_factors.js"
   --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
   --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
-  --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward; example header: "override-dest-url: http://127.0.0.1:8888"
-  WARNING: If --enable-override-dest-url is used, you must ensure that PoorMansAnubis always receives this header as set by your server. If you don't then anyone accessing your server may be able to set this header and direct PoorMansAnubis to load any website!
+  --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
+    example header: "override-dest-url: http://127.0.0.1:8888"
+  WARNING: If --enable-override-dest-url is used, you must ensure that
+    PoorMansAnubis always receives this header as set by your server. If you
+    don't then anyone accessing your server may be able to set this header and
+    direct PoorMansAnubis to load any website!
 
 
 ================================================================================
