@@ -428,11 +428,19 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     if is_allowed {
         let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
 
-        let res_body_res = req_to_url(
-            format!("{}{}", args.dest_url, &path_str),
-            Some(&addr_string),
-        )
-        .await;
+        let url = if args.enable_override_dest_url {
+            let override_url: Option<&str> = req.header("override-dest-url");
+            if let Some(dest_url) = override_url {
+                dest_url.to_owned()
+            } else {
+                args.dest_url.clone()
+            }
+        } else {
+            args.dest_url.clone()
+        };
+
+        let res_body_res = req_to_url(format!("{}{}", url, &path_str), Some(&addr_string)).await;
+
         if let Ok((res_body, status, headers)) = res_body_res {
             res.replace_body(res_body);
             res.status_code = Some(StatusCode::from_u16(status).unwrap());
@@ -456,7 +464,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
 #[tokio::main]
 async fn main() {
-    let mut parsed_args = args::parse_args();
+    let mut parsed_args = args::parse_args().unwrap();
     if parsed_args.factors.is_none() {
         parsed_args.factors = Some(constants::DEFAULT_FACTORS_DIGITS);
         println!(

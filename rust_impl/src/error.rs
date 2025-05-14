@@ -70,6 +70,12 @@ impl From<String> for Error {
     }
 }
 
+impl From<&str> for Error {
+    fn from(value: &str) -> Self {
+        Error::Generic(value.to_owned())
+    }
+}
+
 impl From<mysql_async::Error> for Error {
     fn from(value: mysql_async::Error) -> Self {
         Error::MySQL(value)
