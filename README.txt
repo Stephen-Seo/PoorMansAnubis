@@ -126,13 +126,13 @@ server {
 
     location / {
         proxy_set_header 'x-real-ip' $remote_addr;
-        proxy_set_header 'override-url-dest' 'http://127.0.0.1:9999';
+        proxy_set_header 'override-dest-url' 'http://127.0.0.1:9999';
         proxy_pass http://127.0.0.1:8888;
     }
 
     location /other_site {
         proxy_set_header 'x-real-ip' $remote_addr;
-        proxy_set_header 'override-url-dest' 'http://127.0.0.1:12121';
+        proxy_set_header 'override-dest-url' 'http://127.0.0.1:12121';
         proxy_pass http://127.0.0.1:8888;
     }
 
