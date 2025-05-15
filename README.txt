@@ -48,6 +48,11 @@ Args:
     example: "--dest-url=http://127.0.0.1:9999"
   --addr-port=<addr>:<port> : Listening addr/port;
     example: "--addr-port=127.0.0.1:8080"
+  NOTICE: Specify --addr-port=... multiple times to listen on multiple ports
+  ALSO: There is a hard limit on the number of ports one can listen to (about 32 for now)
+  --port-to-dest-url=<port>:<url> : Ensure requests from listening on <port> is forwarded to <url>
+  example: "--port-to-dest-url=9001:https://example.com"
+  NOTICE: Specify --port-to-dest-url=... multiple times to add more mappings
   --mysql-conf=<config_file> : Set path to config file for mysql settings
   --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
   --api-url=<url> : Set endpoint for client to POST to this software;
@@ -122,7 +127,21 @@ server {
 This assumes PoorMan'sAnubis is listening on port 8888 and will forward requests
 to 127.0.0.1:9999 with the url passed verbatim. Check the args for details.
 
-PoorMan'sAnubis can protect multiple endpoints by using
+
+PoorMan'sAnubis can listen on multiple ports by specifying
+"--addr-port=..." multiple times.
+
+For example, using:
+    --addr-port=127.0.0.1:9001
+    --addr-port=127.0.0.1:9002
+    --port-to-dest-url=9001:https://google.com
+    --port-to-dest-url=9002:https://microsoft.com
+
+Will work as expected. If there is no matching port mapping, the default dest
+url is used. The default can be set with "--dest-url=<url>".
+
+
+PoorMan'sAnubis can protect multiple endpoints by accepting a header by using
 "--enable-override-dest-url" (YOU MUST READ THE WARNING ABOUT THIS FLAG!):
 
 server {
@@ -178,6 +197,9 @@ A nginx directive you can use to prevent this from happening is:
 proxy_set_header 'override-dest-url' "";
 
 https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_set_header
+
+It may be safer to rely on multiple "--addr-port=..." and
+"--port-to-dest-url=..." instead of using "--enable-override-dest-url".
 
 
 ================================================================================
