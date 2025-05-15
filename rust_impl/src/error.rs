@@ -28,6 +28,7 @@ pub enum Error {
     AddrParse(std::net::AddrParseError),
     ToStrE(reqwest::header::ToStrError),
     ReqParse(salvo::http::ParseError),
+    IntParse(std::num::ParseIntError),
 }
 
 impl error::Error for Error {
@@ -43,6 +44,7 @@ impl error::Error for Error {
             Error::TimeIOffset(error) => error.source(),
             Error::ToStrE(error) => error.source(),
             Error::ReqParse(error) => error.source(),
+            Error::IntParse(error) => error.source(),
         }
     }
 }
@@ -60,6 +62,7 @@ impl Display for Error {
             Error::TimeIOffset(error) => error.fmt(f),
             Error::ToStrE(error) => error.fmt(f),
             Error::ReqParse(error) => error.fmt(f),
+            Error::IntParse(error) => error.fmt(f),
         }
     }
 }
@@ -127,6 +130,12 @@ impl From<reqwest::header::ToStrError> for Error {
 impl From<salvo::http::ParseError> for Error {
     fn from(value: salvo::http::ParseError) -> Self {
         Error::ReqParse(value)
+    }
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(value: std::num::ParseIntError) -> Self {
+        Error::IntParse(value)
     }
 }
 

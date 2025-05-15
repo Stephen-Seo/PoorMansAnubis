@@ -14,6 +14,8 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
+#![recursion_limit = "256"]
+
 mod args;
 mod constants;
 mod error;
@@ -21,6 +23,7 @@ mod ffi;
 mod json_types;
 mod sql_types;
 
+use pma_salvo_proc_macro::combine_tcplisteners;
 use std::{collections::HashMap, path::Path};
 
 use mysql_async::{
@@ -260,6 +263,28 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Err
     Ok((value, uuid))
 }
 
+fn get_local_port_from_req(req: &Request) -> Result<u16, Error> {
+    let local = req.local_addr();
+    if local.is_ipv4() {
+        Ok(local.as_ipv4().unwrap().port())
+    } else if local.is_ipv6() {
+        Ok(local.as_ipv6().unwrap().port())
+    } else {
+        Err("Failed to get local port, not ipv4 or ipv6!".into())
+    }
+}
+
+fn get_mapped_port_to_dest(args: &args::Args, req: &Request) -> Result<String, Error> {
+    let port = get_local_port_from_req(req)?;
+    args.port_to_dest_urls
+        .get(&port)
+        .ok_or(Error::from(format!(
+            "Failed to get dest-url from port {}",
+            port
+        )))
+        .map(|s| s.to_owned())
+}
+
 #[handler]
 async fn factors_js_fn(
     depot: &mut Depot,
@@ -287,7 +312,7 @@ async fn factors_js_fn(
 async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
     let addr_string = get_client_ip_addr(depot, req).await?;
-    eprintln!("API: {}", &addr_string);
+    //eprintln!("API: {}", &addr_string);
     let factors_response: json_types::FactorsResponse = req
         .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
         .await
@@ -432,9 +457,13 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             let override_url: Option<&str> = req.header("override-dest-url");
             if let Some(dest_url) = override_url {
                 dest_url.to_owned()
+            } else if let Ok(dest) = get_mapped_port_to_dest(args, req) {
+                dest
             } else {
                 args.dest_url.clone()
             }
+        } else if let Ok(dest) = get_mapped_port_to_dest(args, req) {
+            dest
         } else {
             args.dest_url.clone()
         };
@@ -477,8 +506,12 @@ async fn main() {
         .await
         .expect("Should be able to init database");
 
-    eprintln!("URL: {}", &parsed_args.dest_url);
-    eprintln!("Listening: {}", &parsed_args.addr_port_str);
+    eprintln!("Default Dest URL: {}", &parsed_args.dest_url);
+    eprintln!("Listening: {:?}", parsed_args.addr_port_strs.iter());
+    eprintln!("Port Mappings: {:?}", parsed_args.port_to_dest_urls.iter());
+    if parsed_args.enable_override_dest_url {
+        eprintln!("NOTICE: --enable-override-dest-url is active!");
+    }
 
     let router = Router::new()
         .hoop(affix_state::inject(parsed_args.clone()))
@@ -489,6 +522,24 @@ async fn main() {
                 .get(factors_js_fn),
         )
         .push(Router::new().path("{**}").get(handler_fn));
-    let acceptor = TcpListener::new(&parsed_args.addr_port_str).bind().await;
-    Server::new(acceptor).serve(router).await;
+    if parsed_args.addr_port_strs.len() == 1 {
+        let acceptor = TcpListener::new(&parsed_args.addr_port_strs[0])
+            .bind()
+            .await;
+        Server::new(acceptor).serve(router).await;
+    } else if parsed_args.addr_port_strs.len() == 2 {
+        let first = parsed_args.addr_port_strs[0].clone();
+        let second = parsed_args.addr_port_strs[1].clone();
+        let acceptor = TcpListener::new(first)
+            .join(TcpListener::new(second))
+            .bind()
+            .await;
+        Server::new(acceptor).serve(router).await;
+    } else {
+        let mut addrs_cloned = parsed_args.addr_port_strs.clone();
+        let last = addrs_cloned.split_off(addrs_cloned.len() - 1)[0].clone();
+        let listener = TcpListener::new(last);
+        let mut iter = addrs_cloned.into_iter();
+        pma_salvo_proc_macro::combine_tcplisteners!(iter listener router);
+    }
 }

@@ -14,6 +14,7 @@ uuid = { version = "1.16", features = ["v5"] }
 serde = "1"
 serde_json = "1"
 blake3 = "1.8"
+pma_salvo_proc_macro = { path = "pma_salvo_proc_macro" }
 
 [build-dependencies]
 bindgen = "0.71"
