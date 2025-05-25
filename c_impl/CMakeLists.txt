@@ -10,7 +10,6 @@ set(PoorMansAnubis_SOURCES
     third_party/SimpleArchiver/src/data_structures/linked_list.c
     third_party/SimpleArchiver/src/data_structures/chunked_array.c
     third_party/SimpleArchiver/src/data_structures/priority_heap.c
-    third_party/SimpleArchiver/src/helpers.c
 )
 
 add_compile_options(

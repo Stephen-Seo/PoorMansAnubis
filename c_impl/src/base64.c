@@ -21,10 +21,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Third party library includes.
-#include <data_structures/linked_list.h>
-#include <helpers.h>
-
 unsigned char base64_value_to_base64(unsigned char value) {
   if (value <= 25) {
     return value + 'A';
