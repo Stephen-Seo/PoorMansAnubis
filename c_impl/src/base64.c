@@ -67,6 +67,7 @@ char *base64_number_str_to_base64_str(const char *n_str) {
   size_t b64_idx = 0;
   for (const char *iter = n_str; *iter != 0; ++iter) {
     if (*iter < '0' || *iter > '9') {
+      fprintf(stderr, "ERROR: Got non-number-str character!\n");
       return NULL;
     }
     current = (current << 4) | (size_t)(*iter - '0');
