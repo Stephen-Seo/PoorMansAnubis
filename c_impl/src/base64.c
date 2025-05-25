@@ -64,6 +64,9 @@ char *base64_number_str_to_base64_str(const char *n_str) {
   size_t temp;
   size_t b64_length = 1;
   for (const char *iter = n_str; *iter != 0; ++iter) {
+    if (*iter < '0' || *iter > '9') {
+      return NULL;
+    }
     current = (current << 4) | (size_t)(*iter - '0');
     current_length += 4;
     if (current_length >= 6) {

@@ -103,8 +103,13 @@ int main(int argc, char **argv) {
     printf("\n");
   } else if (number) {
     char *b64_encoded = base64_number_str_to_base64_str(number);
-    printf("%s\n", b64_encoded);
-    free(b64_encoded);
+    if (b64_encoded) {
+      printf("%s\n", b64_encoded);
+      free(b64_encoded);
+    } else {
+      fprintf(stderr, "ERROR: Expected a number string, "
+                      "failed to encode to b64!\n");
+    }
   } else if (b64) {
     char *dec = base64_base64_str_to_number_str(b64);
     if (dec) {
