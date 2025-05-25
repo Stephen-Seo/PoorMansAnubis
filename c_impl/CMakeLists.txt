@@ -6,9 +6,11 @@ set(PoorMansAnubis_VERSION 1.0)
 set(PoorMansAnubis_SOURCES
     src/main.c
     src/work.c
+    src/base64.c
     third_party/SimpleArchiver/src/data_structures/linked_list.c
     third_party/SimpleArchiver/src/data_structures/chunked_array.c
     third_party/SimpleArchiver/src/data_structures/priority_heap.c
+    third_party/SimpleArchiver/src/helpers.c
 )
 
 add_compile_options(
