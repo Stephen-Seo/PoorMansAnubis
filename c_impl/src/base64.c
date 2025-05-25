@@ -19,6 +19,7 @@
 // Standard library includes.
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Third party library includes.
 #include <data_structures/linked_list.h>
@@ -112,12 +113,13 @@ char *base64_number_str_to_base64_str(const char *n_str) {
 }
 
 char *base64_base64_str_to_number_str(const char *b64_str) {
-  __attribute__((cleanup(simple_archiver_list_free)))
-  SDArchiverLinkedList *list = simple_archiver_list_init();
+  const unsigned long b64_str_len = strlen(b64_str);
+  const size_t dec_size = b64_str_len * 3 / 2 + 1;
+  char *dec = malloc(dec_size);
   size_t current = 0;
   size_t current_len = 0;
   size_t temp;
-  size_t dec_length = 1;
+  size_t dec_idx = 0;
   for (const char *iter = b64_str; *iter != 0; ++iter) {
     temp = base64_base64_to_value((unsigned char)*iter);
     if (temp == 0xFF) {
@@ -130,9 +132,11 @@ char *base64_base64_str_to_number_str(const char *b64_str) {
       temp = current_len - 4;
       temp = current >> temp;
       if (temp < 10) {
-        simple_archiver_list_add(
-          list, (void*)temp, simple_archiver_helper_datastructure_cleanup_nop);
-        ++dec_length;
+        if (dec_idx >= dec_size) {
+          free(dec);
+          return NULL;
+        }
+        dec[dec_idx++] = (char)temp + '0';
       }
       current_len -= 4;
       temp = 0;
@@ -147,14 +151,11 @@ char *base64_base64_str_to_number_str(const char *b64_str) {
     return NULL;
   }
 
-  char *dec = malloc(dec_length);
-  temp = 0;
-  for (SDArchiverLLNode *node = list->head->next;
-       node != list->tail;
-       node = node->next) {
-    dec[temp++] = (char)((size_t)node->data) + '0';
+  if (dec_idx >= dec_size) {
+    free(dec);
+    return NULL;
   }
-  dec[dec_length - 1] = 0;
+  dec[dec_idx++] = 0;
 
   return dec;
 }
