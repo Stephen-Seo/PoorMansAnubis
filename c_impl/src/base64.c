@@ -58,12 +58,13 @@ unsigned char base64_base64_to_value(unsigned char b64) {
 }
 
 char *base64_number_str_to_base64_str(const char *n_str) {
-  __attribute__((cleanup(simple_archiver_list_free)))
-  SDArchiverLinkedList *list = simple_archiver_list_init();
+  const unsigned long n_str_len = strlen(n_str);
+  const size_t enc_size = n_str_len * 2 / 3 + 2;
+  char *encoded = malloc(enc_size);
   size_t current = 0;
   size_t current_length = 0;
   size_t temp;
-  size_t b64_length = 1;
+  size_t b64_idx = 0;
   for (const char *iter = n_str; *iter != 0; ++iter) {
     if (*iter < '0' || *iter > '9') {
       return NULL;
@@ -74,10 +75,11 @@ char *base64_number_str_to_base64_str(const char *n_str) {
       temp = current >> (current_length - 6);
       // fprintf(stderr, "DEBUG: Converting 0x%zX\n", temp);
       temp = base64_value_to_base64((unsigned char)temp);
-      simple_archiver_list_add(list,
-                               (void*)temp,
-                               simple_archiver_helper_datastructure_cleanup_nop);
-      ++b64_length;
+      if (b64_idx >= enc_size) {
+        free(encoded);
+        return NULL;
+      }
+      encoded[b64_idx++] = (char)temp;
       current_length -= 6;
       temp = 0;
       for (size_t temp2 = 0; temp2 < current_length; ++temp2) {
@@ -88,26 +90,25 @@ char *base64_number_str_to_base64_str(const char *n_str) {
   }
   if (current_length == 4) {
     temp = base64_value_to_base64((unsigned char)(current << 2) | 0x3);
-    simple_archiver_list_add(list,
-                             (void*)temp,
-                             simple_archiver_helper_datastructure_cleanup_nop);
-    ++b64_length;
+    if (b64_idx >= enc_size) {
+      free(encoded);
+      return NULL;
+    }
+    encoded[b64_idx++] = (char)temp;
   } else if (current_length == 2) {
     temp = base64_value_to_base64((unsigned char)(current << 4) | 0xF);
-    simple_archiver_list_add(list,
-                             (void*)temp,
-                             simple_archiver_helper_datastructure_cleanup_nop);
-    ++b64_length;
+    if (b64_idx >= enc_size) {
+      free(encoded);
+      return NULL;
+    }
+    encoded[b64_idx++] = (char)temp;
   }
 
-  char *encoded = malloc(b64_length);
-  temp = 0;
-  for (SDArchiverLLNode *node = list->head->next;
-       node != list->tail;
-       node = node->next) {
-    encoded[temp++] = (char)((size_t)node->data);
+  if (b64_idx >= enc_size) {
+    free(encoded);
+    return NULL;
   }
-  encoded[b64_length - 1] = 0;
+  encoded[b64_idx++] = 0;
 
   return encoded;
 }
