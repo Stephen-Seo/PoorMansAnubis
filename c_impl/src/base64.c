@@ -64,6 +64,7 @@ char *base64_number_str_to_base64_str(const char *n_str) {
   for (const char *iter = n_str; *iter != 0; ++iter) {
     if (*iter < '0' || *iter > '9') {
       fprintf(stderr, "ERROR: Got non-number-str character!\n");
+      free(encoded);
       return NULL;
     }
     current = (current << 4) | (size_t)(*iter - '0');
@@ -122,6 +123,7 @@ char *base64_base64_str_to_number_str(const char *b64_str) {
     temp = base64_base64_to_value((unsigned char)*iter);
     if (temp == 0xFF) {
       fprintf(stderr, "ERROR: Invalid conversion of b64 to value!\n");
+      free(dec);
       return NULL;
     }
     current = (current << 6) + temp;
@@ -146,6 +148,7 @@ char *base64_base64_str_to_number_str(const char *b64_str) {
   }
   if (current_len == 2 && current != 3) {
     fprintf(stderr, "ERROR: Invalid end-state converting b64 to value!\n");
+    free(dec);
     return NULL;
   }
 
