@@ -184,7 +184,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
 async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Error> {
     let args = depot.obtain::<args::Args>().unwrap();
 
-    let (value, factors) = ffi::generate_value_and_factors_strings(if args.factors.is_some() {
+    let (value, factors) = ffi::generate_value_and_factors_strings2(if args.factors.is_some() {
         args.factors.unwrap()
     } else {
         constants::DEFAULT_FACTORS_DIGITS

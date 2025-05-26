@@ -42,7 +42,9 @@ pub fn print_args() {
         "  --addr-port=<addr>:<port> : Listening addr/port;\n    example: \"--addr-port=127.0.0.1:8080\""
     );
     println!("  NOTICE: Specify --addr-port=... multiple times to listen on multiple ports");
-    println!("  ALSO: There is a hard limit on the number of ports one can listen to (about 32 for now)");
+    println!(
+        "  ALSO: There is a hard limit on the number of ports one can listen to (about 32 for now)"
+    );
     println!(
         "  --port-to-dest-url=<port>:<url> : Ensure requests from listening on <port> is forwarded to <url>"
     );
