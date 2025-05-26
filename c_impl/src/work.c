@@ -24,9 +24,11 @@
 #include <inttypes.h>
 
 // Third-party includes.
-#include "base64.h"
 #include "data_structures/linked_list.h"
 #include "data_structures/priority_heap.h"
+
+// Local includes.
+#include "base64.h"
 
 typedef struct SDPMAInternalStringPart {
   uint64_t size;
