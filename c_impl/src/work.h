@@ -40,6 +40,9 @@ Work_Factors work_generate_target_factors(uint64_t digits);
 // The returned buffer must be free'd after use.
 char *work_factors_value_to_str(Work_Factors work_factors, uint64_t *len_out);
 
+// Same as previous fn, but number string is base64 encoded.
+char *work_factors_value_to_str2(Work_Factors work_factors, uint64_t *len_out);
+
 // Returns a string representing the factors. If "len_out" is NULL, then the
 // returned string is a C-string. If "len_out" is not NULL, then the length
 // of the string will be put in "len_out" and the returned string will NOT be
@@ -47,5 +50,9 @@ char *work_factors_value_to_str(Work_Factors work_factors, uint64_t *len_out);
 // 
 // The returned buffer must be free'd after use.
 char *work_factors_factors_to_str(Work_Factors work_factors, uint64_t *len_out);
+
+// Same as previous fn, but format is "2x5 3x9 5x4..." instead of "2 2 2 2...".
+char *work_factors_factors_to_str2(Work_Factors work_factors,
+                                   uint64_t *len_out);
 
 #endif

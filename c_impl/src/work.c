@@ -24,6 +24,7 @@
 #include <inttypes.h>
 
 // Third-party includes.
+#include "base64.h"
 #include "data_structures/linked_list.h"
 #include "data_structures/priority_heap.h"
 
@@ -218,30 +219,31 @@ Work_Factors work_generate_target_factors(uint64_t digits) {
 }
 
 char *work_factors_value_to_str(Work_Factors work_factors, uint64_t *len_out) {
+  const uint64_t size =
+    simple_archiver_chunked_array_size(work_factors.value) + 1;
   if (len_out) {
-    *len_out = simple_archiver_chunked_array_size(work_factors.value);
-    char *out = malloc(*len_out);
-    for (uint64_t idx = *len_out; idx-- > 0;) {
-      out[*len_out - idx - 1] =
-        (char)(
-          *((uint16_t*)simple_archiver_chunked_array_at(work_factors.value, idx))
-          + 0x30
-        );
-    }
-    return out;
+    *len_out = size;
+  }
+  char *out = malloc(size);
+  for (uint64_t idx = size - 1; idx-- > 0;) {
+    out[size - idx - 2] =
+      (char)(
+        *((uint16_t*)simple_archiver_chunked_array_at(work_factors.value, idx))
+        + 0x30
+      );
+  }
+  out[size - 1] = 0;
+  return out;
+}
+
+char *work_factors_value_to_str2(Work_Factors factors, uint64_t *len_out) {
+  char *num_str = work_factors_value_to_str(factors, len_out);
+  char *b64_str = base64_number_str_to_base64_str(num_str);
+  free(num_str);
+  if (b64_str) {
+    return b64_str;
   } else {
-    const uint64_t size =
-      simple_archiver_chunked_array_size(work_factors.value) + 1;
-    char *out = malloc(size);
-    for (uint64_t idx = size - 1; idx-- > 0;) {
-      out[size - idx - 2] =
-        (char)(
-          *((uint16_t*)simple_archiver_chunked_array_at(work_factors.value, idx))
-          + 0x30
-        );
-    }
-    out[size - 1] = 0;
-    return out;
+    return NULL;
   }
 }
 
@@ -320,4 +322,93 @@ char *work_factors_factors_to_str(Work_Factors work_factors, uint64_t *len_out)
     combined_buf[combined_size] = 0;
     return combined_buf;
   }
+}
+
+char *work_factors_factors_to_str2(Work_Factors factors, uint64_t *len_out) {
+  __attribute__((cleanup(simple_archiver_priority_heap_free)))
+  SDArchiverPHeap *factors_shallow_clone =
+    simple_archiver_priority_heap_clone(factors.factors, NULL);
+  __attribute__((cleanup(simple_archiver_list_free)))
+  SDArchiverLinkedList *string_parts = simple_archiver_list_init();
+  uint64_t current = 0;
+  uint64_t count = 0;
+  while (simple_archiver_priority_heap_size(factors_shallow_clone) != 0) {
+    const uint16_t *value =
+      simple_archiver_priority_heap_pop(factors_shallow_clone);
+    if (current != *value) {
+      if (current != 0) {
+        size_t digits = 0;
+        for (uint64_t temp = current; temp != 0; temp /= 10) {
+          ++digits;
+        }
+        for (uint64_t temp = count; temp != 0; temp /= 10) {
+          ++digits;
+        }
+        // 1 for "x", 1 for NULL terminator.
+        digits += 2;
+        char *c_str = malloc(digits);
+        snprintf(c_str, digits, "%" PRIu64 "x%" PRIu64, current, count);
+        c_str[digits - 1] = 0;
+        simple_archiver_list_add(string_parts, c_str, NULL);
+      }
+      current = *value;
+      count = 1;
+    } else {
+      ++count;
+    }
+  }
+  if (current != 0 && count != 0) {
+    size_t digits = 0;
+    for (uint64_t temp = current; temp != 0; temp /= 10) {
+      ++digits;
+    }
+    for (uint64_t temp = count; temp != 0; temp /= 10) {
+      ++digits;
+    }
+    // 1 for "x", 1 for NULL terminator.
+    digits += 2;
+    char *c_str = malloc(digits);
+    snprintf(c_str, digits, "%" PRIu64 "x%" PRIu64, current, count);
+    c_str[digits - 1] = 0;
+      simple_archiver_list_add(string_parts, c_str, NULL);
+  }
+
+  count = 0;
+  current = 1;
+  for (SDArchiverLLNode *node = string_parts->head->next;
+       node != string_parts->tail;
+       node = node->next) {
+    count += strlen(node->data);
+    if (current) {
+      current = 0;
+    } else {
+      ++count;
+    }
+  }
+  ++count;
+
+  const uint64_t out_count = count;
+  char *out = malloc(out_count);
+  if (len_out) {
+    *len_out = out_count;
+  }
+  char *temp = out;
+  current = 1;
+  for (SDArchiverLLNode *node = string_parts->head->next;
+       node != string_parts->tail;
+       node = node->next) {
+    if (current) {
+      current = 0;
+    } else {
+      *temp = ' ';
+      temp += 1;
+    }
+    count = strlen(node->data);
+    memcpy(temp, node->data, count);
+    temp += count;
+  }
+
+  out[out_count - 1] = 0;
+
+  return out;
 }
