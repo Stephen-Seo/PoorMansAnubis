@@ -80,6 +80,14 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
                     setTimeout(() => {
                         progress_text.innerText = "Error, verification failed!";
                     }, 500);
+                } else if (message.data.status === "error_decoding") {
+                    if (interval_id >= 0) {
+                        clearInterval(interval_id);
+                        interval_id = -1;
+                    }
+                    setTimeout(() => {
+                        progress_text.innerText = "Error, failed to decode challenge!";
+                    }, 500);
                 } else {
                     if (message.data.status === "Starting...") {
                         if (interval_id >= 0) {
@@ -124,10 +132,68 @@ function str_to_value(s) {
     return value;
 }
 
+function b64_to_val(c) {
+    c = c.charCodeAt(0);
+    if (c >= 'A'.charCodeAt(0) && c <= 'Z'.charCodeAt(0)) {
+        return c - 'A'.charCodeAt(0);
+    } else if (c >= 'a'.charCodeAt(0) && c <= 'z'.charCodeAt(0)) {
+        return c - 'a'.charCodeAt(0) + 26;
+    } else if (c >= '0'.charCodeAt(0) && c <= '9'.charCodeAt(0)) {
+        return c - '0'.charCodeAt(0) + 52;
+    } else if (c === '+'.charCodeAt(0)) {
+        return 62;
+    } else if (c === '/'.charCodeAt(0)) {
+        return 63;
+    } else {
+        return 0xFF;
+    }
+}
+
+function b64_to_str(b64) {
+    let out = "";
+
+    let current = 0;
+    let current_len = 0;
+    let temp = 0;
+
+    for (let idx = 0; idx < b64.length; ++idx) {
+        temp = b64_to_val(b64[idx]);
+        if (temp === 0xFF) {
+            return undefined;
+        }
+        current = (current << 6) + temp;
+        current_len += 6;
+        while (current_len >= 4) {
+            temp = current_len - 4;
+            temp = current >> temp;
+            if (temp < 10) {
+                out += new String(temp);
+            }
+            current_len -= 4;
+            temp = 0;
+            for (let temp2 = 0; temp2 < current_len; ++temp2) {
+                temp = (temp << 1) | 1;
+            }
+            current = current & temp;
+        }
+    }
+    if (current_len == 2 && current != 3) {
+        return undefined;
+    }
+
+    return out;
+}
+
 function getFactors() {
     let value = "{LARGE_NUMBER}";
-    let factors = [];
+    value = b64_to_str(value);
+    if (value === undefined) {
+        postMessage({status: "error_decoding"});
+        return;
+    }
     let factor = 2;
+    let factor_count = 0;
+    let f_str = "";
     let iter = 0;
 
     while (1) {
@@ -145,26 +211,26 @@ function getFactors() {
         }
 
         if (mod === 0) {
-            factors.push(factor);
+            ++factor_count;
 
             if (div_str === "1") {
+                if (f_str.length !== 0) {
+                    f_str += " ";
+                }
+                f_str += new String(factor) + "x" + new String(factor_count);
                 break;
             } else {
                 value = div_str;
             }
         } else {
+            if (factor_count !== 0) {
+                if (f_str.length !== 0) {
+                    f_str += " ";
+                }
+                f_str += new String(factor) + "x" + new String(factor_count);
+            }
             factor += 1;
-        }
-    }
-
-    let f_string = "";
-    let first = 1;
-    for (let idx = 0; idx < factors.length; ++idx) {
-        if (first === 1) {
-            f_string += factors[idx];
-            first = 0;
-        } else {
-            f_string += " " + factors[idx];
+            factor_count = 0;
         }
     }
 
@@ -181,7 +247,9 @@ function getFactors() {
             }
         }
     };
-    let data = JSON.stringify({"type": "factors", "id": "{UUID}", "factors": f_string});
+    let data = JSON.stringify({"type": "factors",
+                               "id": "{UUID}",
+                               "factors": f_str});
     xhr.send(data);
 }
 

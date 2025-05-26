@@ -4,6 +4,7 @@ use std::path::PathBuf;
 fn main() {
     cc::Build::new()
         .file("../c_impl/src/work.c")
+        .file("../c_impl/src/base64.c")
         .file("../c_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c")
         .file("../c_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c")
         .file("../c_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c")

@@ -23,11 +23,17 @@
 
 // Local includes.
 #include "work.h"
+#include "base64.h"
 
 void print_help(void) {
   puts("Usage:");
   puts("  --factors=<digits> : Generate work for factors of a large number "
        "with <digits> digits.");
+  puts("  --factors2=<digits> : Generate work for factors of a large number "
+       "with <digits> digits.\n    Generates number in base64 and factors in "
+       "a compact way.");
+  puts("  --n-to-b64=<number> : Convert number to b64 string.");
+  puts("  --b64-to-n=<number> : Convert b64 to number string.");
 }
 
 void free_work_factors(Work_Factors **factors) {
@@ -40,6 +46,10 @@ void free_work_factors(Work_Factors **factors) {
 int main(int argc, char **argv) {
   __attribute__((cleanup(free_work_factors)))
   Work_Factors *work_factors = NULL;
+  int_fast8_t factors_2 = 0;
+
+  char *number = NULL;
+  char *b64 = NULL;
 
   --argc;
   ++argv;
@@ -47,17 +57,34 @@ int main(int argc, char **argv) {
     if (strncmp("--factors=", argv[0], 10) == 0) {
       unsigned long digits = strtoul(argv[0] + 10, NULL, 10);
       if (digits == 0) {
-        fprintf(stderr, "ERROR: Could not convert arg \"%s\" digits!", argv[0]);
+        fprintf(stderr, "ERROR: Could not convert arg \"%s\" digits!\n", argv[0]);
         return 2;
       } else if (digits == ULONG_MAX) {
-        fprintf(stderr, "ERROR: \"%s\" is out of range!", argv[0]);
+        fprintf(stderr, "ERROR: \"%s\" is out of range!\n", argv[0]);
         return 3;
       } else {
         work_factors = malloc(sizeof(Work_Factors));
         *work_factors = work_generate_target_factors((uint64_t)digits);
       }
+    } else if (strncmp("--factors2=", argv[0], 11) == 0) {
+      unsigned long digits = strtoul(argv[0] + 11, NULL, 10);
+      if (digits == 0) {
+        fprintf(stderr, "ERROR: Could not convert arg \"%s\" digits!\n", argv[0]);
+        return 2;
+      } else if (digits == ULONG_MAX) {
+        fprintf(stderr, "ERROR: \"%s\" is out of range!\n", argv[0]);
+        return 3;
+      } else {
+        work_factors = malloc(sizeof(Work_Factors));
+        *work_factors = work_generate_target_factors((uint64_t)digits);
+        factors_2 = 1;
+      }
+    } else if (strncmp("--n-to-b64=", argv[0], 11) == 0) {
+      number = argv[0] + 11;
+    } else if (strncmp("--b64-to-n=", argv[0], 11) == 0) {
+      b64 = argv[0] + 11;
     } else {
-      fprintf(stderr, "ERROR: Invalid arg \"%s\"!", argv[0]);
+      fprintf(stderr, "ERROR: Invalid arg \"%s\"!\n", argv[0]);
       print_help();
       return 1;
     }
@@ -67,7 +94,12 @@ int main(int argc, char **argv) {
   }
 
   if (work_factors) {
-    {
+    if (factors_2) {
+      char *c_str = work_factors_value_to_str2(*work_factors, NULL);
+      printf("%s", c_str);
+      free(c_str);
+
+    } else {
       char *c_str = work_factors_value_to_str(*work_factors, NULL);
       printf("%s", c_str);
       free(c_str);
@@ -79,7 +111,11 @@ int main(int argc, char **argv) {
     }
     printf("\n");
 
-    {
+    if (factors_2) {
+      char *c_str = work_factors_factors_to_str2(*work_factors, NULL);
+      printf("%s", c_str);
+      free(c_str);
+    } else {
       char *c_str = work_factors_factors_to_str(*work_factors, NULL);
       printf("%s", c_str);
       free(c_str);
@@ -91,6 +127,23 @@ int main(int argc, char **argv) {
     }
 
     printf("\n");
+  } else if (number) {
+    char *b64_encoded = base64_number_str_to_base64_str(number);
+    if (b64_encoded) {
+      printf("%s\n", b64_encoded);
+      free(b64_encoded);
+    } else {
+      fprintf(stderr, "ERROR: Expected a number string, "
+                      "failed to encode to b64!\n");
+    }
+  } else if (b64) {
+    char *dec = base64_base64_str_to_number_str(b64);
+    if (dec) {
+      printf("%s\n", dec);
+      free(dec);
+    } else {
+      fprintf(stderr, "ERROR: Got invalid base64 value!\n");
+    }
   } else {
     print_help();
     return 1;
