@@ -132,8 +132,10 @@ PoorMan'sAnubis can listen on multiple ports by specifying
 "--addr-port=..." multiple times.
 
 For example, using:
+    --addr-port=127.0.0.1:8888
     --addr-port=127.0.0.1:9001
     --addr-port=127.0.0.1:9002
+    --port-to-dest-url=8888:http://127.0.0.1:9999
     --port-to-dest-url=9001:https://google.com
     --port-to-dest-url=9002:https://microsoft.com
 
