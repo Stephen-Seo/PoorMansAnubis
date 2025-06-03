@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 libc = "0.2"
-salvo = { version = "0.78", features = ["affix-state"] }
+salvo = { version = "0.79", features = ["affix-state"] }
 tokio = { version = "1", features = ["fs"] }
 reqwest = { version = "0.12", features = ["native-tls-vendored"] }
 mysql_async = "0.36"
