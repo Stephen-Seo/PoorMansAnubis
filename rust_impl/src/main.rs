@@ -510,7 +510,9 @@ async fn main() {
     eprintln!("Listening: {:?}", parsed_args.addr_port_strs.iter());
     eprintln!("Port Mappings: {:?}", parsed_args.port_to_dest_urls.iter());
     if parsed_args.enable_override_dest_url {
-        eprintln!("NOTICE: --enable-override-dest-url is active!");
+        eprintln!(
+            "NOTICE: --enable-override-dest-url is active! A well set-up firewall is highly recommended!"
+        );
     }
 
     let router = Router::new()

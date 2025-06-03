@@ -67,6 +67,8 @@ Args:
     PoorMansAnubis always receives this header as set by your server. If you
     don't then anyone accessing your server may be able to set this header and
     direct PoorMansAnubis to load any website!
+    If you are going to use this anyway, you must ensure that a proper firewall is configured!
+  --important-warning-has-been-read : Use this option to enable potentially dangerous options
 
 
 ================================================================================

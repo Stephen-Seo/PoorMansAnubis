@@ -70,7 +70,10 @@ pub fn print_args() {
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
     println!(
-        "  WARNING: If --enable-override-dest-url is used, you must ensure that\n    PoorMansAnubis always receives this header as set by your server. If you\n    don't then anyone accessing your server may be able to set this header and\n    direct PoorMansAnubis to load any website!"
+        "  WARNING: If --enable-override-dest-url is used, you must ensure that\n    PoorMansAnubis always receives this header as set by your server. If you\n    don't then anyone accessing your server may be able to set this header and\n    direct PoorMansAnubis to load any website!\n    If you are going to use this anyway, you must ensure that a proper firewall is configured!"
+    );
+    println!(
+        "  --important-warning-has-been-read : Use this option to enable potentially dangerous options"
     );
 }
 
@@ -92,6 +95,7 @@ pub fn parse_args() -> Result<Args, Error> {
     let p_args = args_fn();
 
     let mut is_default_addr_port_strs = true;
+    let mut override_dest_url_warning_read = false;
 
     for mut arg in p_args.skip(1) {
         if arg == "-h" || arg == "--help" {
@@ -146,7 +150,15 @@ pub fn parse_args() -> Result<Args, Error> {
                 .expect("allowed timeout should be a valid integer");
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;
+        } else if arg == "--important-warning-has-been-read" {
+            override_dest_url_warning_read = true;
         }
+    }
+
+    if args.enable_override_dest_url && !override_dest_url_warning_read {
+        return Err(
+            "--enable-override-dest-url Requires --important-warning-has-been-read , it is highly recommended to have a firewall configured if you insist on using this feature! Maybe consider using \"--addr-port=\" and \"--port-to-dest-url=\" instead?".into(),
+        );
     }
 
     Ok(args)
