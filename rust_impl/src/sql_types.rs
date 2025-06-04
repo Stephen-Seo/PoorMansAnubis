@@ -47,7 +47,7 @@ impl TryFrom<Row> for AllowedIPs {
             date = Date::from_calendar_date(year as i32, month, day)?;
             time = Time::from_hms(hour, minute, second)?;
         } else {
-            return Err("Failed to parse datetime from sql query".to_owned().into());
+            return Err("Failed to parse datetime from sql query".into());
         }
 
         let offset_time: OffsetDateTime = OffsetDateTime::new_in_offset(date, time, time_offset);

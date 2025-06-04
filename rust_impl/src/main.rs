@@ -159,9 +159,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
             .map_err(Error::from)?
             .to_owned();
         if addr_string.is_empty() {
-            return Err(Error::from(
-                "Failed to get client addr (invalid header)".to_owned(),
-            ));
+            return Err("Failed to get client addr (invalid header)".into());
         } else {
             //eprintln!("GET from ip {}", &addr_string);
         }
@@ -174,7 +172,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
             //eprintln!(" ipv6: {}", ipv6.ip());
             addr_string = format!("{}", ipv6.ip());
         } else {
-            return Err(Error::from("Failed to get client addr".to_owned()));
+            return Err("Failed to get client addr".into());
         }
     }
 

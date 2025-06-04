@@ -100,7 +100,7 @@ pub fn parse_args() -> Result<Args, Error> {
     for mut arg in p_args.skip(1) {
         if arg == "-h" || arg == "--help" {
             print_args();
-            return Err(Error::from("Printed help text"));
+            return Err("Printed help text".into());
         } else if arg.starts_with("--factors=") {
             let end = arg.split_off(10);
             args.factors = end.parse().ok();
