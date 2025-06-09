@@ -17,5 +17,5 @@ blake3 = "1.8"
 pma_salvo_proc_macro = { path = "pma_salvo_proc_macro" }
 
 [build-dependencies]
-bindgen = "0.71"
+bindgen = "0.72"
 cc = "1.2"
