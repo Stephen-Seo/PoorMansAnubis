@@ -14,16 +14,14 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-#![recursion_limit = "256"]
-
 mod args;
 mod constants;
 mod error;
 mod ffi;
 mod json_types;
+mod salvo_compat;
 mod sql_types;
 
-use pma_salvo_proc_macro::combine_tcplisteners;
 use std::{collections::HashMap, path::Path};
 
 use mysql_async::{
@@ -536,10 +534,13 @@ async fn main() {
             .await;
         Server::new(acceptor).serve(router).await;
     } else {
-        let mut addrs_cloned = parsed_args.addr_port_strs.clone();
-        let last = addrs_cloned.split_off(addrs_cloned.len() - 1)[0].clone();
-        let listener = TcpListener::new(last);
-        let mut iter = addrs_cloned.into_iter();
-        pma_salvo_proc_macro::combine_tcplisteners!(iter listener router);
+        let mut tcp_vector_listener = salvo_compat::TcpVectorListener::new();
+        for addr_port_str in &parsed_args.addr_port_strs {
+            tcp_vector_listener.push(TcpListener::new(addr_port_str));
+        }
+
+        Server::new(tcp_vector_listener.bind().await)
+            .serve(router)
+            .await;
     }
 }

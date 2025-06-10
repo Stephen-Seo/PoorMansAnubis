@@ -7,6 +7,7 @@ edition = "2024"
 libc = "0.2"
 salvo = { version = "0.79", features = ["affix-state"] }
 tokio = { version = "1", features = ["fs"] }
+futures = "0.3"
 reqwest = { version = "0.12", features = ["native-tls-vendored"] }
 mysql_async = "0.36"
 time = { version = "0.3", features = ["parsing", "local-offset", "formatting", "macros"] }
@@ -14,7 +15,6 @@ uuid = { version = "1.16", features = ["v5"] }
 serde = "1"
 serde_json = "1"
 blake3 = "1.8"
-pma_salvo_proc_macro = { path = "pma_salvo_proc_macro" }
 
 [build-dependencies]
 bindgen = "0.72"
