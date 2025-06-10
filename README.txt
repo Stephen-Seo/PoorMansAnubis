@@ -49,7 +49,7 @@ Args:
   --addr-port=<addr>:<port> : Listening addr/port;
     example: "--addr-port=127.0.0.1:8080"
   NOTICE: Specify --addr-port=... multiple times to listen on multiple ports
-  ALSO: There is a hard limit on the number of ports one can listen to (about 32 for now)
+  NOTE: There is no longer a hard limit on the number of ports one can listen to
   --port-to-dest-url=<port>:<url> : Ensure requests from listening on <port> is forwarded to <url>
   example: "--port-to-dest-url=9001:https://example.com"
   NOTICE: Specify --port-to-dest-url=... multiple times to add more mappings
