@@ -38,7 +38,7 @@ url as if it were the endpoint, and use a flag on the frontend to determine
 where PoorMan'sAnubis will load from on challenge success.
 
 You may use the "x-real-ip" header to ensure the frontend knows the correct
-ip address.
+ip address. (The "--enable-x-real-ip-header" flag enables this.)
 
 Args for the Rust-frontend are as follows:
 
