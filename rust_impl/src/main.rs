@@ -18,6 +18,7 @@ mod args;
 mod constants;
 mod error;
 mod ffi;
+mod helpers;
 mod json_types;
 mod salvo_compat;
 mod sql_types;
@@ -313,6 +314,8 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
         .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
         .await
         .map_err(Error::from)?;
+
+    helpers::validate_client_response(&factors_response.factors)?;
 
     let pool = get_db_pool(args).await?;
 
