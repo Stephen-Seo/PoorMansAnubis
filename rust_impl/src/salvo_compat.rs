@@ -19,10 +19,10 @@ use std::sync::Arc;
 use futures::{StreamExt, TryStreamExt, stream::FuturesUnordered};
 use salvo::{
     Listener,
-    conn::{Acceptor, Holding, StraightStream, TcpListener, tcp::TcpAcceptor},
+    conn::{Acceptor, Holding, TcpListener, tcp::TcpAcceptor},
     fuse::FuseFactory,
 };
-use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::net::ToSocketAddrs;
 
 pub struct TcpVectorAcceptor {
     acceptors: Vec<TcpAcceptor>,
@@ -48,7 +48,8 @@ impl TcpVectorAcceptor {
 }
 
 impl Acceptor for TcpVectorAcceptor {
-    type Conn = StraightStream<TcpStream>;
+    type Coupler = <TcpAcceptor as Acceptor>::Coupler;
+    type Stream = <TcpAcceptor as Acceptor>::Stream;
 
     fn holdings(&self) -> &[Holding] {
         &self.holdings
@@ -57,7 +58,7 @@ impl Acceptor for TcpVectorAcceptor {
     async fn accept(
         &mut self,
         fuse_factory: Option<Arc<dyn FuseFactory + Sync + Send + 'static>>,
-    ) -> std::io::Result<salvo::conn::Accepted<Self::Conn>> {
+    ) -> std::io::Result<salvo::conn::Accepted<Self::Coupler, Self::Stream>> {
         let iter = self.acceptors.iter_mut();
         let futures = FuturesUnordered::from_iter(iter.map(|a| a.accept(fuse_factory.clone())));
 
@@ -94,14 +95,14 @@ where
 
 impl<T> Listener for TcpVectorListener<T>
 where
-    T: ToSocketAddrs + Send,
+    T: ToSocketAddrs + Send + 'static,
 {
     type Acceptor = TcpVectorAcceptor;
 
     async fn try_bind(self) -> salvo::core::Result<Self::Acceptor> {
         let mut v_acceptor = TcpVectorAcceptor::new();
 
-        for listener in self.listeners {
+        for listener in self.listeners.into_iter() {
             v_acceptor.acceptors.push(listener.try_bind().await?);
         }
 
