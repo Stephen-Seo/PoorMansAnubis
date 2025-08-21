@@ -524,9 +524,8 @@ async fn main() {
         )
         .push(Router::new().path("{**}").get(handler_fn));
     if parsed_args.addr_port_strs.len() == 1 {
-        let acceptor = TcpListener::new(&parsed_args.addr_port_strs[0])
-            .bind()
-            .await;
+        let addr_port_str = parsed_args.addr_port_strs[0].clone();
+        let acceptor = TcpListener::new(addr_port_str).bind().await;
         Server::new(acceptor).serve(router).await;
     } else if parsed_args.addr_port_strs.len() == 2 {
         let first = parsed_args.addr_port_strs[0].clone();
@@ -538,7 +537,7 @@ async fn main() {
         Server::new(acceptor).serve(router).await;
     } else {
         let mut tcp_vector_listener = salvo_compat::TcpVectorListener::new();
-        for addr_port_str in &parsed_args.addr_port_strs {
+        for addr_port_str in parsed_args.addr_port_strs.clone().into_iter() {
             tcp_vector_listener.push(TcpListener::new(addr_port_str));
         }
 

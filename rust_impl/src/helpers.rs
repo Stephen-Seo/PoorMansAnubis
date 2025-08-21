@@ -19,19 +19,19 @@ use crate::error::Error;
 pub fn validate_client_response(resp: &str) -> Result<(), Error> {
     #[derive(PartialEq, Debug)]
     enum State {
-        GetNum,
-        GetAmt,
-        GetWhitespace,
+        Num,
+        Amt,
+        Whitespace,
     }
 
-    let mut state = State::GetNum;
+    let mut state = State::Num;
     let mut num: u64 = 0;
     let mut max_num: u64 = 0;
 
     for c in resp.chars() {
         match &state {
-            State::GetNum => {
-                if c.is_digit(10) {
+            State::Num => {
+                if c.is_ascii_digit() {
                     num = num * 10
                         + c.to_digit(10).ok_or(Error::Generic(
                             "Failed to parse digit in client response".into(),
@@ -44,29 +44,29 @@ pub fn validate_client_response(resp: &str) -> Result<(), Error> {
                     }
                     max_num = num;
                     num = 0;
-                    state = State::GetAmt;
+                    state = State::Amt;
                 } else {
                     return Err(Error::Generic(
                         "Invalid state parsing client response".into(),
                     ));
                 }
             }
-            State::GetAmt => {
-                if c.is_digit(10) {
+            State::Amt => {
+                if c.is_ascii_digit() {
                     // Intentionally left blank.
                 } else if c.is_whitespace() {
-                    state = State::GetWhitespace;
+                    state = State::Whitespace;
                 } else {
                     return Err(Error::Generic(
                         "Invalid state parsing client response".into(),
                     ));
                 }
             }
-            State::GetWhitespace => {
+            State::Whitespace => {
                 if c.is_whitespace() {
                     // Intentionally left blank.
-                } else if c.is_digit(10) {
-                    state = State::GetNum;
+                } else if c.is_ascii_digit() {
+                    state = State::Num;
                     num = c.to_digit(10).ok_or(Error::Generic(
                         "Failed to parse digit in client response".into(),
                     ))? as u64;
@@ -78,7 +78,7 @@ pub fn validate_client_response(resp: &str) -> Result<(), Error> {
             }
         }
     }
-    if state != State::GetAmt {
+    if state != State::Amt {
         return Err(Error::Generic(
             "Invalid end state parsing client response".into(),
         ));
