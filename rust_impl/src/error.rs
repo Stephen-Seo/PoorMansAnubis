@@ -20,7 +20,6 @@ use std::{error, fmt::Display};
 pub enum Error {
     Generic(String),
     MySQL(mysql_async::Error),
-    MySQLFromValue(mysql_async::FromValueError),
     IO(std::io::Error),
     Reqwest(reqwest::Error),
     Time(time::Error),
@@ -37,7 +36,6 @@ impl error::Error for Error {
         match self {
             Error::Generic(_) => None,
             Error::MySQL(error) => error.source(),
-            Error::MySQLFromValue(error) => error.source(),
             Error::IO(error) => error.source(),
             Error::Reqwest(error) => error.source(),
             Error::Time(error) => error.source(),
@@ -56,7 +54,6 @@ impl Display for Error {
         match self {
             Error::Generic(s) => f.write_str(s),
             Error::MySQL(error) => error.fmt(f),
-            Error::MySQLFromValue(error) => error.fmt(f),
             Error::IO(error) => error.fmt(f),
             Error::Reqwest(error) => error.fmt(f),
             Error::Time(error) => error.fmt(f),
@@ -85,12 +82,6 @@ impl From<&str> for Error {
 impl From<mysql_async::Error> for Error {
     fn from(value: mysql_async::Error) -> Self {
         Error::MySQL(value)
-    }
-}
-
-impl From<mysql_async::FromValueError> for Error {
-    fn from(value: mysql_async::FromValueError) -> Self {
-        Error::MySQLFromValue(value)
     }
 }
 

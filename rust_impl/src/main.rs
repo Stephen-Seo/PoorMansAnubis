@@ -108,17 +108,9 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
     .ignore(&mut conn)
     .await?;
 
-    r"DROP TABLE IF EXISTS ALLOWED_IPS"
-        .ignore(&mut conn)
-        .await?;
-
-    r"CREATE TABLE IF NOT EXISTS ALLOWED_IPS2 (
-        ID INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-        IP VARCHAR(45) NOT NULL,
-        PORT INT2 UNSIGNED NOT NULL,
-        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX ip_index USING HASH (IP),
-        INDEX port_index USING HASH (PORT)
+    r"CREATE TABLE IF NOT EXISTS ALLOWED_IPS (
+        IP VARCHAR(45) NOT NULL PRIMARY KEY,
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )"
     .ignore(&mut conn)
     .await?;
@@ -251,7 +243,6 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Err
             .await
             .map_err(Error::from)?;
 
-        eprintln!("Inserting {} into CHALLENGE_FACTORS2", uuid.clone());
         r"INSERT INTO CHALLENGE_FACTORS2 (UUID, FACTORS) VALUES (:uuid, :factors)"
             .with(params! {"uuid" => &uuid, "factors" => factors_hash})
             .ignore(&mut conn)
@@ -372,19 +363,9 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     }
 
     if correct {
-        let local_port: u16 = match req.local_addr() {
-            salvo::conn::SocketAddr::IPv4(sv4) => sv4.port(),
-            salvo::conn::SocketAddr::IPv6(sv6) => sv6.port(),
-            _ => {
-                return Err(salvo::Error::Other(Box::new(Into::<Error>::into(
-                    "Failed to get local port matching request",
-                ))));
-            }
-        };
-
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
-        r"INSERT INTO ALLOWED_IPS2 (IP, PORT) VALUES (:ip, :port)"
-            .with(params! { "ip" => &addr_string, "port" => local_port})
+        r"INSERT INTO ALLOWED_IPS (IP) VALUES (:ip)"
+            .with(params! { "ip" => &addr_string })
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
@@ -420,12 +401,12 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
         let mut ip_entry: Option<AllowedIPs> = None;
 
-        r"LOCK TABLE ALLOWED_IPS2 WRITE"
+        r"LOCK TABLE ALLOWED_IPS WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        r"DELETE FROM ALLOWED_IPS2 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
+        r"DELETE FROM ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.allowed_timeout_mins})
             .ignore(&mut conn)
             .await
@@ -436,27 +417,16 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .await
             .map_err(Error::from)?;
 
-        r"LOCK TABLE ALLOWED_IPS2 READ"
+        r"LOCK TABLE ALLOWED_IPS READ"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        let local_port: u16 = match req.local_addr() {
-            salvo::conn::SocketAddr::IPv4(sv4) => sv4.port(),
-            salvo::conn::SocketAddr::IPv6(sv6) => sv6.port(),
-            _ => {
-                return Err(salvo::Error::Other(Box::new(Into::<Error>::into(
-                    "Failed to get local port matching request",
-                ))));
-            }
-        };
-
-        let ip_entry_row: Option<Row> =
-            r"SELECT IP, PORT, ON_TIME FROM ALLOWED_IPS2 WHERE IP = :ipaddr AND PORT = :port"
-                .with(params! {"ipaddr" => &addr_string, "port" => local_port})
-                .first(&mut conn)
-                .await
-                .map_err(Error::from)?;
+        let ip_entry_row: Option<Row> = r"SELECT IP, ON_TIME FROM ALLOWED_IPS WHERE IP = :ipaddr"
+            .with(params! {"ipaddr" => &addr_string})
+            .first(&mut conn)
+            .await
+            .map_err(Error::from)?;
         if let Some(row) = ip_entry_row {
             ip_entry = Some(AllowedIPs::try_from(row)?);
         }
