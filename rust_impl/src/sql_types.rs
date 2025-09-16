@@ -18,12 +18,13 @@ use crate::error::Error;
 
 use std::{net::IpAddr, str::FromStr};
 
-use mysql_async::{Row, Value};
+use mysql_async::{Row, Value, from_value_opt};
 use time::{Date, Month, OffsetDateTime, Time, UtcOffset};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AllowedIPs {
     pub ip: IpAddr,
+    pub port: u16,
     pub time: OffsetDateTime,
 }
 
@@ -37,7 +38,13 @@ impl TryFrom<Row> for AllowedIPs {
         let time_offset =
             UtcOffset::current_local_offset().map_err(|e| Error::from(time::Error::from(e)))?;
 
-        let time_value: Value = value.get(1).ok_or("Failed to get time string".to_owned())?;
+        let port_value: u16 = from_value_opt(
+            value
+                .get(1)
+                .ok_or::<Error>("Failed to get local port".into())?,
+        )?;
+
+        let time_value: Value = value.get(2).ok_or("Failed to get time string".to_owned())?;
 
         let date: Date;
         let time: Time;
@@ -54,6 +61,7 @@ impl TryFrom<Row> for AllowedIPs {
 
         Ok(Self {
             ip: ip_addr,
+            port: port_value,
             time: offset_time,
         })
     }
