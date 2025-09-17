@@ -3,6 +3,10 @@ project(CXX_HTTP2 CXX)
 
 set(CXX_HTTP2_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/http2.cc
+)
+set(CXX_HTTP2_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/http2.h
 )
 
 add_executable(cxx_http2 ${CXX_HTTP2_SOURCES})
@@ -32,3 +36,8 @@ target_compile_options(cxx_http2 PUBLIC
 $<$<STREQUAL:${CMAKE_BUILD_TYPE},Release>:-fno-delete-null-pointer-checks -fno-strict-overflow -fno-strict-aliasing -ftrivial-auto-var-init=zero -O2 -DNDEBUG>
 $<$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>:-Og -g>
 )
+
+if(IS_EXECUTABLE /usr/bin/clang-format)
+    add_custom_target(clang-format /usr/bin/clang-format -i --style=Google ${CXX_HTTP2_SOURCES} ${CXX_HTTP2_HEADERS})
+    add_dependencies(cxx_http2 clang-format)
+endif()
