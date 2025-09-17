@@ -1,2 +1,4 @@
 /buildDebug/
 /buildRelease/
+/compile_commands.json
+/.cache/
