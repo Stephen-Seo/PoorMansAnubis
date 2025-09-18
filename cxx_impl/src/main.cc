@@ -14,6 +14,4 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-int main(int argc, char **argv) {
-    return 0;
-}
+int main(int argc, char **argv) { return 0; }

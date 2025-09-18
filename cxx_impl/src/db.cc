@@ -18,32 +18,32 @@
 
 #include <sqlite3.h>
 
-std::tuple<void*, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(std::string filepath) {
-    sqlite3 *db = nullptr;
+std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
+    std::string filepath) {
+  sqlite3 *db = nullptr;
 
-    int ret = sqlite3_open(filepath.c_str(), &db);
+  int ret = sqlite3_open(filepath.c_str(), &db);
 
-    if (ret || !db) {
-        return {nullptr, ErrorT::FAILED_TO_OPEN_DB, {}};
+  if (ret || !db) {
+    return {nullptr, ErrorT::FAILED_TO_OPEN_DB, {}};
+  }
+
+  // Initialize tables.
+  // Buf apparently will point to data owned by sqlite3 instance.
+  char *buf = nullptr;
+  ret = sqlite3_exec(db,
+                     "CREATE TABLE IF NOT EXISTS SEQ_ID (ID INTEGER PRIMARY "
+                     "KEY AUTOINCREMENT)",
+                     nullptr, nullptr, &buf);
+  if (ret) {
+    std::string err_msg("No Error Message");
+    if (buf) {
+      err_msg = std::string(buf);
     }
+    sqlite3_free(buf);
+    sqlite3_close(db);
+    return {db, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg)};
+  }
 
-    // Initialize tables.
-    // Buf apparently will point to data owned by sqlite3 instance.
-    char *buf = nullptr;
-    ret = sqlite3_exec(db,
-                       "CREATE TABLE IF NOT EXISTS SEQ_ID (ID INTEGER PRIMARY KEY AUTOINCREMENT)",
-                       nullptr,
-                       nullptr,
-                       &buf);
-    if (ret) {
-        std::string err_msg("No Error Message");
-        if (buf) {
-            err_msg = std::string(buf);
-        }
-        sqlite3_free(buf);
-        sqlite3_close(db);
-        return {db, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg)};
-    }
-
-    return {db, ErrorT::SUCCESS, {}};
+  return {db, ErrorT::SUCCESS, {}};
 }

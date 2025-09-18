@@ -21,15 +21,15 @@
 #include <tuple>
 
 namespace PMA_SQL {
-    enum class ErrorT {
-        SUCCESS,
-        GENERIC_ERROR,
-        FAILED_TO_OPEN_DB,
-        FAILED_TO_INIT_DB
-    };
+enum class ErrorT {
+  SUCCESS,
+  GENERIC_ERROR,
+  FAILED_TO_OPEN_DB,
+  FAILED_TO_INIT_DB
+};
 
-    // First ptr is sqlite3 ptr. string is err message.
-    std::tuple<void*, ErrorT, std::string> init_sqlite(std::string filepath);
-}
+// First ptr is sqlite3 ptr. string is err message.
+std::tuple<void*, ErrorT, std::string> init_sqlite(std::string filepath);
+}  // namespace PMA_SQL
 
 #endif
