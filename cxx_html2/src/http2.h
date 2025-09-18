@@ -17,10 +17,47 @@
 #ifndef SEODISPARATE_COM_PMA_CXX_HTTP2_H_
 #define SEODISPARATE_COM_PMA_CXX_HTTP2_H_
 
+// standard library includes
+#include <array>
 #include <bitset>
 #include <cstdint>
-#include <optional>
+#include <deque>
+#include <list>
 #include <string>
+#include <tuple>
+
+// Unix includes
+#include <netinet/in.h>
+
+// Local includes
+#include "constants.h"
+
+enum class Http2Error {
+  SUCCESS = 0,
+  REACHED_EOF = 1,
+  ERROR_READING = 2,
+  VALID_HTTP2_UPGRADE_REQ = 4
+};
+
+struct ReceivingBuf {
+  std::array<std::array<char, RECV_BUF_SIZE>, 2> buf;
+  size_t buf0_idx;
+  size_t buf1_idx;
+  size_t buf0_pending;
+  size_t buf1_pending;
+  size_t current_buf;
+
+  void reset();
+};
+
+struct ClientInfo {
+  struct sockaddr_in6 addr_info;
+  // 0 - client initiated
+  // 1 - marked for deletion
+  // 2 - EOF
+  std::bitset<32> flags;
+  int fd;
+};
 
 class Http2Server {
  public:
@@ -29,13 +66,22 @@ class Http2Server {
 
   void update();
 
-  std::optional<std::string> get_error();
+  std::deque<std::string> get_error();
 
  private:
+  std::deque<ClientInfo> connected_fds;
+  std::deque<std::string> errors;
   // 0 - is invalid
+  // 1 - failed to accept a connection
   std::bitset<32> flags;
-  std::optional<int> errno_cached;
   int socket_fd;
+
+  void update_connected();
 };
+
+namespace Http2ServerHelpers {
+std::tuple<std::list<std::string>, Http2Error> parse_headers(
+    int fd, ReceivingBuf &recv_buf);
+}
 
 #endif

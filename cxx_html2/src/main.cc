@@ -22,9 +22,13 @@ int main(int argc, char **argv) {
   // TODO set up arg parsing to specify server port.
   Http2Server c(19191);
 
-  if (auto err = c.get_error(); err.has_value()) {
+  if (auto err_container = c.get_error(); !err_container.empty()) {
     std::cerr << "Error in Http2Server:\n";
-    std::cerr << err.value() << std::endl;
+    for (auto iter = err_container.begin(); iter != err_container.end();
+         ++iter) {
+      std::cerr << *iter << '\n';
+    }
+    std::cerr << std::endl;
   }
 
   return 0;

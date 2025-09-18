@@ -18,5 +18,6 @@
 #define SEODISPARATE_COM_PMA_CXX_CONSTANTS_H_
 
 constexpr int LISTEN_SOCKET_BACKLOG_AMT = 64;
+constexpr unsigned int RECV_BUF_SIZE = 4096;
 
 #endif
