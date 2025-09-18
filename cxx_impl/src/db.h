@@ -14,6 +14,22 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-int main(int argc, char **argv) {
-    return 0;
+#ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_SQL_DB_H_
+#define SEODISPARATE_COM_POOR_MANS_ANUBIS_SQL_DB_H_
+
+#include <string>
+#include <tuple>
+
+namespace PMA_SQL {
+    enum class ErrorT {
+        SUCCESS,
+        GENERIC_ERROR,
+        FAILED_TO_OPEN_DB,
+        FAILED_TO_INIT_DB
+    };
+
+    // First ptr is sqlite3 ptr. string is err message.
+    std::tuple<void*, ErrorT, std::string> init_sqlite(std::string filepath);
 }
+
+#endif
