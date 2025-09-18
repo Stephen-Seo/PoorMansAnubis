@@ -55,11 +55,12 @@ std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
   ret = sqlite3_exec(db,
                      "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS ("
                      "  UUID TEXT PRIMARY KEY,"
-                      // FACTORS is a hash of the expected challenge response.
+                     // FACTORS is a hash of the expected challenge response.
                      "  FACTORS TEXT NOT NULL,"
-                      // GEN_TIME is used to cleanup CHALLENGE_FACTORS entries.
+                     // GEN_TIME is used to cleanup CHALLENGE_FACTORS entries.
                      "  GEN_TIME TEXT DEFAULT ( datetime() )"
-                     ")", nullptr, nullptr, &buf);
+                     ")",
+                     nullptr, nullptr, &buf);
   if (ret) {
     std::string err_msg("No Error Message");
     if (buf) {
@@ -77,11 +78,12 @@ std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
 
   ret = sqlite3_exec(db,
                      "CREATE TABLE IF NOT EXISTS ALLOWED_IPS ("
-                      // IP is the ip address of an allowed client.
+                     // IP is the ip address of an allowed client.
                      "  IP TEXT PRIMARY KEY,"
-                      // Used to expire ALLOWED_IPS entries as a timeout.
+                     // Used to expire ALLOWED_IPS entries as a timeout.
                      "  ON_TIME TEXT NOT NULL DEFAULT ( datetime() )"
-                     ")", nullptr, nullptr, &buf);
+                     ")",
+                     nullptr, nullptr, &buf);
   if (ret) {
     std::string err_msg("No Error Message");
     if (buf) {
