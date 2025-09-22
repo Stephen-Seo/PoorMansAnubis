@@ -17,9 +17,28 @@
 // Local includes.
 #include "db.h"
 
+// Standard library includes.
+#include <print>
+
 int main(int argc, char **argv) {
   // Test init sqlite3.
   const auto [ctx, error, cxx_string] = PMA_SQL::init_sqlite("./sqlite_db");
+
+  {
+    const auto [cleanup_error, error_str] = PMA_SQL::cleanup_stale_entries(ctx);
+    if (cleanup_error != PMA_SQL::ErrorT::SUCCESS) {
+      std::println(stderr, "Cleanup Stale Entries ERROR: {}", error_str);
+      return 1;
+    }
+  }
+  {
+    const auto [cleanup_error, error_str] =
+        PMA_SQL::cleanup_stale_challenges(ctx);
+    if (cleanup_error != PMA_SQL::ErrorT::SUCCESS) {
+      std::println(stderr, "Cleanup Stale Challenges ERROR: {}", error_str);
+      return 1;
+    }
+  }
 
   return 0;
 }

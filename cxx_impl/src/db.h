@@ -20,8 +20,16 @@
 #include <string>
 #include <tuple>
 
+constexpr int ALLOWED_IP_TIMEOUT_MINUTES = 30;
+constexpr int CHALLENGE_TIMEOUT_MINUTES = 3;
+
 namespace PMA_SQL {
-enum class ErrorT { SUCCESS, FAILED_TO_OPEN_DB, FAILED_TO_INIT_DB };
+enum class ErrorT {
+  SUCCESS,
+  FAILED_TO_OPEN_DB,
+  FAILED_TO_INIT_DB,
+  DB_ALREADY_FAILED_TO_INIT
+};
 
 class SQLITECtx {
  public:
@@ -44,10 +52,14 @@ class SQLITECtx {
   void *ctx;
 };
 
-// First ptr is sqlite3 ptr. string is err message.
+// string is err message.
 std::tuple<SQLITECtx, ErrorT, std::string> init_sqlite(std::string filepath);
 
-void cleanup_stale_entries(void *sqlite_ctx);
+// string is err message.
+std::tuple<ErrorT, std::string> cleanup_stale_challenges(const SQLITECtx &ctx);
+
+// string is err message.
+std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
 
 }  // namespace PMA_SQL
 

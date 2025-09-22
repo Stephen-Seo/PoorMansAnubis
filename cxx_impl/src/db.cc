@@ -16,7 +16,38 @@
 
 #include "db.h"
 
+// Third party includes.
 #include <sqlite3.h>
+
+// Standard Library includes.
+#include <format>
+#include <optional>
+
+// Internal Functions.
+std::optional<std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string> >
+internal_create_sqlite_statement(const PMA_SQL::SQLITECtx &ctx,
+                                 std::string stmt) {
+  char *buf = nullptr;
+  int ret = sqlite3_exec(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(), nullptr,
+                         nullptr, &buf);
+  if (ret) {
+    std::string err_msg("No Error Message");
+    if (buf) {
+      err_msg = std::string(buf);
+      sqlite3_free(buf);
+    }
+    return std::make_tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string>(
+        {}, PMA_SQL::ErrorT::FAILED_TO_INIT_DB, std::move(err_msg));
+  } else {
+    if (buf) {
+      sqlite3_free(buf);
+    }
+  }
+
+  return std::nullopt;
+}
+
+// Non-Internal Functions.
 
 PMA_SQL::SQLITECtx::SQLITECtx() : ctx(nullptr) {}
 
@@ -60,88 +91,79 @@ PMA_SQL::init_sqlite(std::string filepath) {
         {}, ErrorT::FAILED_TO_OPEN_DB, {});
   }
 
-  sqlite3 *db = ctx.get_sqlite_ctx<sqlite3>();
-
-  // Initialize tables.
-  // Buf apparently will point to data owned by sqlite3 instance.
-  char *buf = nullptr;
-  // SEQ_ID.ID used to incrementally generate a unique UUID as an indentifier
-  // for CHALLENGE_FACTORS.
-  int ret =
-      sqlite3_exec(db,
-                   "CREATE TABLE IF NOT EXISTS SEQ_ID (ID INTEGER PRIMARY "
-                   "KEY AUTOINCREMENT)",
-                   nullptr, nullptr, &buf);
-  if (ret) {
-    std::string err_msg("No Error Message");
-    if (buf) {
-      err_msg = std::string(buf);
-      sqlite3_free(buf);
-    }
-    return std::make_tuple<SQLITECtx, ErrorT, std::string>(
-        {}, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg));
-  } else {
-    if (buf) {
-      sqlite3_free(buf);
-      buf = nullptr;
-    }
+  auto sql_ret =
+      internal_create_sqlite_statement(ctx,
+                                       "CREATE TABLE IF NOT EXISTS SEQ_ID (ID "
+                                       "INTEGER PRIMARY KEY AUTOINCREMENT)");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
   }
 
-  ret = sqlite3_exec(db,
-                     "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS ("
-                     "  UUID TEXT PRIMARY KEY,"
-                     // FACTORS is a hash of the expected challenge response.
-                     "  FACTORS TEXT NOT NULL,"
-                     // PORT is the port number of the initial received request.
-                     "  PORT INT NOT NULL,"
-                     // GEN_TIME is used to cleanup CHALLENGE_FACTORS entries.
-                     "  GEN_TIME TEXT DEFAULT ( datetime() )"
-                     ")",
-                     nullptr, nullptr, &buf);
-  if (ret) {
-    std::string err_msg("No Error Message");
-    if (buf) {
-      err_msg = std::string(buf);
-      sqlite3_free(buf);
-    }
-    return std::make_tuple<SQLITECtx, ErrorT, std::string>(
-        {}, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg));
-  } else {
-    if (buf) {
-      sqlite3_free(buf);
-      buf = nullptr;
-    }
+  sql_ret = internal_create_sqlite_statement(
+      ctx,
+      "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS (  UUID TEXT PRIMARY KEY,  "
+      "FACTORS TEXT NOT NULL,  PORT INT NOT NULL,  GEN_TIME TEXT DEFAULT ( "
+      "datetime() ) )");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
   }
 
-  ret = sqlite3_exec(db,
-                     "CREATE TABLE IF NOT EXISTS ALLOWED_IPS ("
-                     // IP is the ip address of an allowed client.
-                     "  IP TEXT PRIMARY KEY,"
-                     // Used to expire ALLOWED_IPS entries as a timeout.
-                     "  ON_TIME TEXT NOT NULL DEFAULT ( datetime() )"
-                     ")",
-                     nullptr, nullptr, &buf);
-  if (ret) {
-    std::string err_msg("No Error Message");
-    if (buf) {
-      err_msg = std::string(buf);
-      sqlite3_free(buf);
-    }
-    return std::make_tuple<SQLITECtx, ErrorT, std::string>(
-        {}, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg));
-  } else {
-    if (buf) {
-      sqlite3_free(buf);
-      buf = nullptr;
-    }
+  sql_ret = internal_create_sqlite_statement(
+      ctx,
+      "CREATE TABLE IF NOT EXISTS ALLOWED_IPS (  IP TEXT PRIMARY KEY,  ON_TIME "
+      "TEXT NOT NULL DEFAULT ( datetime() ) )");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
   }
 
   return std::make_tuple<SQLITECtx, ErrorT, std::string>(std::move(ctx),
                                                          ErrorT::SUCCESS, {});
 }
 
-void PMA_SQL::cleanup_stale_entries(void *sqlite_ctx) {
-  if (!sqlite_ctx) {
-    return;
+std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
+    const PMA_SQL::SQLITECtx &ctx) {
+  sqlite3 *db = ctx.get_sqlite_ctx<sqlite3>();
+  if (!db) {
+    return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
   }
+
+  std::string stmt = std::format(
+      "DELETE FROM CHALLENGE_FACTORS WHERE timediff(datetime(), GEN_TIME) > "
+      "'+0000-00-00 00:{:02}:00.000'",
+      CHALLENGE_TIMEOUT_MINUTES);
+  char *err_msg = nullptr;
+  std::string ret_err_msg;
+  int ret = sqlite3_exec(db, stmt.c_str(), nullptr, nullptr, &err_msg);
+  if (ret) {
+    if (err_msg) {
+      ret_err_msg = err_msg;
+      sqlite3_free(err_msg);
+    }
+  }
+
+  return {ErrorT::SUCCESS, ret_err_msg};
+}
+
+std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
+    const PMA_SQL::SQLITECtx &ctx) {
+  sqlite3 *db = ctx.get_sqlite_ctx<sqlite3>();
+  if (!db) {
+    return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
+  }
+
+  std::string stmt = std::format(
+      "DELETE FROM ALLOWED_IPS WHERE timediff(datetime(), ON_TIME) > "
+      "'+0000-00-00 00:{:02}:00.000'",
+      ALLOWED_IP_TIMEOUT_MINUTES);
+  char *err_msg = nullptr;
+  std::string ret_err_msg;
+  int ret = sqlite3_exec(db, stmt.c_str(), nullptr, nullptr, &err_msg);
+  if (ret) {
+    if (err_msg) {
+      ret_err_msg = err_msg;
+      sqlite3_free(err_msg);
+    }
+  }
+
+  return {ErrorT::SUCCESS, ret_err_msg};
 }
