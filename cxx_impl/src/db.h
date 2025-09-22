@@ -17,6 +17,7 @@
 #ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_SQL_DB_H_
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_SQL_DB_H_
 
+#include <cstdint>
 #include <string>
 #include <tuple>
 
@@ -60,6 +61,11 @@ std::tuple<ErrorT, std::string> cleanup_stale_challenges(const SQLITECtx &ctx);
 
 // string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
+
+// On error, first string is err message. On SUCCESS, first string is challenge
+// in base64 and second string is hashed answer.
+std::tuple<ErrorT, std::string, std::string> generate_challenge(
+    const SQLITECtx &ctx, uint64_t digits, uint16_t port);
 
 }  // namespace PMA_SQL
 

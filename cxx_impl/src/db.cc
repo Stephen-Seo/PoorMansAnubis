@@ -20,8 +20,12 @@
 #include <sqlite3.h>
 
 // Standard Library includes.
+#include <cstdlib>
 #include <format>
 #include <optional>
+
+// Local includes.
+#include "work.h"
 
 // Internal Functions.
 std::optional<std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string> >
@@ -181,4 +185,23 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
   }
 
   return {ErrorT::SUCCESS, ret_err_msg};
+}
+
+std::tuple<PMA_SQL::ErrorT, std::string, std::string>
+PMA_SQL::generate_challenge(const SQLITECtx &ctx, uint64_t digits,
+                            uint16_t port) {
+  Work_Factors factors = work_generate_target_factors(digits);
+
+  char *challenge = work_factors_value_to_str2(factors, nullptr);
+  std::string challenge_str = challenge;
+  std::free(challenge);
+
+  char *answer = work_factors_factors_to_str2(factors, nullptr);
+  std::string answer_str = answer;
+  std::free(answer);
+
+  // TODO store hash of answer and port number in database.
+
+  work_cleanup_factors(&factors);
+  return {ErrorT::SUCCESS, challenge_str, answer_str};
 }
