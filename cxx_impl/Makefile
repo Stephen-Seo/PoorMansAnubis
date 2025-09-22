@@ -2,11 +2,14 @@ CWD != pwd
 
 LINKER_FLAGS := -lsqlite3
 COMMON_FLAGS := -std=c++23 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
+COMMON_CFLAGS := -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
 
 ifdef RELEASE
 FINAL_COMMON_FLAGS := -DNDEBUG -O2 ${COMMON_FLAGS}
+FINAL_COMMON_CFLAGS := -DNDEBUG -O2 ${COMMON_CFLAGS}
 else
 FINAL_COMMON_FLAGS := -Og -g ${COMMON_FLAGS}
+FINAL_COMMON_CFLAGS := -Og -g ${COMMON_CFLAGS}
 endif
 
 OBJDIR := objdir
@@ -39,7 +42,7 @@ ${OBJDIR_ABS}/src/%.cc.o: ${CWD}/src/%.cc | clang-format
 
 ${OBJDIR}/dotdot/%.c.o: ../c_impl/%.c
 	@mkdir -p $(dir $@)
-	${CC} -o $@ -c ${FINAL_COMMON_FLAGS} $<
+	${CC} -o $@ -c ${FINAL_COMMON_CFLAGS} $<
 
 .PHONY: clean clang-format
 
