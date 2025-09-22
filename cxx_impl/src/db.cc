@@ -150,17 +150,16 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
       "DELETE FROM CHALLENGE_FACTORS WHERE timediff(datetime(), GEN_TIME) > "
       "'+0000-00-00 00:{:02}:00.000'",
       CHALLENGE_TIMEOUT_MINUTES);
-  char *err_msg = nullptr;
-  std::string ret_err_msg;
-  int ret = sqlite3_exec(db, stmt.c_str(), nullptr, nullptr, &err_msg);
-  if (ret) {
-    if (err_msg) {
-      ret_err_msg = err_msg;
-      sqlite3_free(err_msg);
+
+  {
+    auto opt_tuple = internal_create_sqlite_statement(ctx, stmt);
+    if (opt_tuple.has_value()) {
+      const auto [unused, error_enum, msg] = std::move(opt_tuple.value());
+      return {error_enum, msg};
     }
   }
 
-  return {ErrorT::SUCCESS, ret_err_msg};
+  return {ErrorT::SUCCESS, {}};
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
@@ -174,17 +173,16 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
       "DELETE FROM ALLOWED_IPS WHERE timediff(datetime(), ON_TIME) > "
       "'+0000-00-00 00:{:02}:00.000'",
       ALLOWED_IP_TIMEOUT_MINUTES);
-  char *err_msg = nullptr;
-  std::string ret_err_msg;
-  int ret = sqlite3_exec(db, stmt.c_str(), nullptr, nullptr, &err_msg);
-  if (ret) {
-    if (err_msg) {
-      ret_err_msg = err_msg;
-      sqlite3_free(err_msg);
+
+  {
+    auto opt_tuple = internal_create_sqlite_statement(ctx, stmt);
+    if (opt_tuple.has_value()) {
+      const auto [unused, error_enum, msg] = std::move(opt_tuple.value());
+      return {error_enum, msg};
     }
   }
 
-  return {ErrorT::SUCCESS, ret_err_msg};
+  return {ErrorT::SUCCESS, {}};
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string>
