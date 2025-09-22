@@ -17,6 +17,10 @@
 #ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_BASE64_H_
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_BASE64_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 unsigned char base64_value_to_base64(unsigned char value);
 
 unsigned char base64_base64_to_value(unsigned char b64);
@@ -26,5 +30,9 @@ char *base64_number_str_to_base64_str(const char *);
 
 // Returned ptr must be free'd.
 char *base64_base64_str_to_number_str(const char *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
