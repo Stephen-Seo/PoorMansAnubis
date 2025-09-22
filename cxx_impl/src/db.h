@@ -23,8 +23,37 @@
 namespace PMA_SQL {
 enum class ErrorT { SUCCESS, FAILED_TO_OPEN_DB, FAILED_TO_INIT_DB };
 
+class SQLITECtx {
+ public:
+  SQLITECtx();
+  SQLITECtx(std::string sqlite_path);
+  ~SQLITECtx();
+
+  SQLITECtx(const SQLITECtx &) = delete;
+  SQLITECtx *operator=(const SQLITECtx &) = delete;
+
+  SQLITECtx(SQLITECtx &&);
+  SQLITECtx *operator=(SQLITECtx &&);
+
+  void *get_ctx() const;
+
+  template <typename SqliteT>
+  SqliteT *get_sqlite_ctx() const;
+
+ private:
+  void *ctx;
+};
+
 // First ptr is sqlite3 ptr. string is err message.
-std::tuple<void*, ErrorT, std::string> init_sqlite(std::string filepath);
+std::tuple<SQLITECtx, ErrorT, std::string> init_sqlite(std::string filepath);
+
+void cleanup_stale_entries(void *sqlite_ctx);
+
 }  // namespace PMA_SQL
+
+template <typename SqliteT>
+SqliteT *PMA_SQL::SQLITECtx::get_sqlite_ctx() const {
+  return reinterpret_cast<SqliteT *>(ctx);
+}
 
 #endif

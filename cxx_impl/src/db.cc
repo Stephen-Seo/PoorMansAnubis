@@ -18,33 +18,68 @@
 
 #include <sqlite3.h>
 
-std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
-    std::string filepath) {
+PMA_SQL::SQLITECtx::SQLITECtx() : ctx(nullptr) {}
+
+PMA_SQL::SQLITECtx::SQLITECtx(std::string sqlite_path) : ctx(nullptr) {
   sqlite3 *db = nullptr;
+  int ret = sqlite3_open(sqlite_path.c_str(), &db);
 
-  int ret = sqlite3_open(filepath.c_str(), &db);
-
-  if (ret || !db) {
-    return {nullptr, ErrorT::FAILED_TO_OPEN_DB, {}};
+  if (db && !ret) {
+    ctx = reinterpret_cast<void *>(db);
   }
+}
+
+PMA_SQL::SQLITECtx::~SQLITECtx() {
+  if (ctx) {
+    sqlite3 *db = reinterpret_cast<sqlite3 *>(ctx);
+    sqlite3_close(db);
+  }
+}
+
+PMA_SQL::SQLITECtx::SQLITECtx(SQLITECtx &&other) {
+  this->ctx = other.ctx;
+  other.ctx = nullptr;
+}
+
+PMA_SQL::SQLITECtx *PMA_SQL::SQLITECtx::operator=(SQLITECtx &&other) {
+  this->~SQLITECtx();
+  this->ctx = other.ctx;
+  other.ctx = nullptr;
+
+  return this;
+}
+
+void *PMA_SQL::SQLITECtx::get_ctx() const { return ctx; }
+
+std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string>
+PMA_SQL::init_sqlite(std::string filepath) {
+  SQLITECtx ctx(filepath);
+
+  if (ctx.get_ctx() == nullptr) {
+    return std::make_tuple<SQLITECtx, ErrorT, std::string>(
+        {}, ErrorT::FAILED_TO_OPEN_DB, {});
+  }
+
+  sqlite3 *db = ctx.get_sqlite_ctx<sqlite3>();
 
   // Initialize tables.
   // Buf apparently will point to data owned by sqlite3 instance.
   char *buf = nullptr;
   // SEQ_ID.ID used to incrementally generate a unique UUID as an indentifier
   // for CHALLENGE_FACTORS.
-  ret = sqlite3_exec(db,
-                     "CREATE TABLE IF NOT EXISTS SEQ_ID (ID INTEGER PRIMARY "
-                     "KEY AUTOINCREMENT)",
-                     nullptr, nullptr, &buf);
+  int ret =
+      sqlite3_exec(db,
+                   "CREATE TABLE IF NOT EXISTS SEQ_ID (ID INTEGER PRIMARY "
+                   "KEY AUTOINCREMENT)",
+                   nullptr, nullptr, &buf);
   if (ret) {
     std::string err_msg("No Error Message");
     if (buf) {
       err_msg = std::string(buf);
       sqlite3_free(buf);
     }
-    sqlite3_close(db);
-    return {db, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg)};
+    return std::make_tuple<SQLITECtx, ErrorT, std::string>(
+        {}, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg));
   } else {
     if (buf) {
       sqlite3_free(buf);
@@ -69,8 +104,8 @@ std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
       err_msg = std::string(buf);
       sqlite3_free(buf);
     }
-    sqlite3_close(db);
-    return {db, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg)};
+    return std::make_tuple<SQLITECtx, ErrorT, std::string>(
+        {}, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg));
   } else {
     if (buf) {
       sqlite3_free(buf);
@@ -92,8 +127,8 @@ std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
       err_msg = std::string(buf);
       sqlite3_free(buf);
     }
-    sqlite3_close(db);
-    return {db, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg)};
+    return std::make_tuple<SQLITECtx, ErrorT, std::string>(
+        {}, ErrorT::FAILED_TO_INIT_DB, std::move(err_msg));
   } else {
     if (buf) {
       sqlite3_free(buf);
@@ -101,5 +136,12 @@ std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
     }
   }
 
-  return {db, ErrorT::SUCCESS, {}};
+  return std::make_tuple<SQLITECtx, ErrorT, std::string>(std::move(ctx),
+                                                         ErrorT::SUCCESS, {});
+}
+
+void PMA_SQL::cleanup_stale_entries(void *sqlite_ctx) {
+  if (!sqlite_ctx) {
+    return;
+  }
 }

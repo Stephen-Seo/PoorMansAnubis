@@ -14,4 +14,12 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-int main(int argc, char **argv) { return 0; }
+// Local includes.
+#include "db.h"
+
+int main(int argc, char **argv) {
+  // Test init sqlite3.
+  const auto [ctx, error, cxx_string] = PMA_SQL::init_sqlite("./sqlite_db");
+
+  return 0;
+}
