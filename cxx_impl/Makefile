@@ -17,9 +17,11 @@ OBJDIR_ABS := ${CWD}/${OBJDIR}
 
 SOURCES := \
 	src/main.cc \
-	src/db.cc
+	src/db.cc \
+	src/constants.cc
 HEADERS := \
-	src/db.h
+	src/db.h \
+	src/constants.h
 
 C_IMPL_SOURCES := \
 	../c_impl/src/work.c \
