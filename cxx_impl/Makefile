@@ -1,7 +1,7 @@
 CWD != pwd
 
 LINKER_FLAGS := -lsqlite3
-COMMON_FLAGS := -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
+COMMON_FLAGS := -std=c++23 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
 
 ifdef RELEASE
 FINAL_COMMON_FLAGS := -DNDEBUG -O2 ${COMMON_FLAGS}
