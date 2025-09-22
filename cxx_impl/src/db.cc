@@ -57,6 +57,8 @@ std::tuple<void *, PMA_SQL::ErrorT, std::string> PMA_SQL::init_sqlite(
                      "  UUID TEXT PRIMARY KEY,"
                      // FACTORS is a hash of the expected challenge response.
                      "  FACTORS TEXT NOT NULL,"
+                     // PORT is the port number of the initial received request.
+                     "  PORT INT NOT NULL,"
                      // GEN_TIME is used to cleanup CHALLENGE_FACTORS entries.
                      "  GEN_TIME TEXT DEFAULT ( datetime() )"
                      ")",
