@@ -165,7 +165,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
         int ret = sqlite3_bind_int(sqli3_stmt.value(), IDX, arg);
         if (ret != SQLITE_OK) {
           return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
-                  "Bind int64 failed"};
+                  "Bind int failed"};
         }
         return exec_sqlite_statement<IDX + 1, Args...>(ctx, stmt, sqli3_stmt,
                                                        args...);
