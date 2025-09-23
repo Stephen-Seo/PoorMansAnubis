@@ -18,6 +18,7 @@
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_HELPERS_H_
 
 #include <functional>
+#include <optional>
 
 template <typename T>
 class GenericCleanup {
@@ -25,9 +26,15 @@ class GenericCleanup {
     GenericCleanup(T value, std::function<void(T*)> cleanup_fn);
     ~GenericCleanup();
 
+    GenericCleanup(const GenericCleanup<T> &) = delete;
+    GenericCleanup *operator=(const GenericCleanup<T> &) = delete;
+
+    GenericCleanup(GenericCleanup<T> &&);
+    GenericCleanup *operator=(GenericCleanup<T> &&);
+
   private:
-    std::function<void(T*)> cleanup_fn;
-    T value;
+    std::optional<std::function<void(T*)>> cleanup_fn;
+    std::optional<T> value;
 };
 
 template <typename T>
@@ -37,7 +44,32 @@ value(value) {}
 
 template <typename T>
 GenericCleanup<T>::~GenericCleanup() {
-  cleanup_fn(&value);
+  if (cleanup_fn.has_value() && value.has_value()) {
+    cleanup_fn.value()(&value.value());
+  }
+}
+
+template <typename T>
+GenericCleanup<T>::GenericCleanup(GenericCleanup<T> &&other) {
+  cleanup_fn = other.cleanup_fn;
+  value = other.value;
+
+  other.cleanup_fn = std::nullopt;
+  other.value = std::nullopt;
+}
+
+template <typename T>
+GenericCleanup<T> *GenericCleanup<T>::operator=(GenericCleanup<T> &&other) {
+  if (cleanup_fn.has_value() && value.has_value()) {
+    cleanup_fn.value()(&value.value());
+  }
+  cleanup_fn = other.cleanup_fn;
+  value = other.value;
+
+  other.cleanup_fn = std::nullopt;
+  other.value = std::nullopt;
+
+  return this;
 }
 
 #endif
