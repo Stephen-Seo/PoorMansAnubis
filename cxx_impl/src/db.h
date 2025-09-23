@@ -108,6 +108,8 @@ std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
 std::tuple<ErrorT, std::string, std::string, uint64_t> generate_challenge(
     SQLITECtx &ctx, uint64_t digits, uint16_t port);
 
+// string is error msg, uint16_t is destination port of initial challenge
+// generation request.
 std::tuple<ErrorT, std::string, uint16_t> verify_answer(SQLITECtx &ctx,
                                                         std::string answer,
                                                         uint64_t id);
