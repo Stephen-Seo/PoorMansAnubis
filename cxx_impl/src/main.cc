@@ -18,7 +18,9 @@
 #include "db.h"
 
 // Standard library includes.
+#include <chrono>
 #include <print>
+#include <thread>
 
 int main(int argc, char **argv) {
   // Test init sqlite3.
@@ -41,7 +43,7 @@ int main(int argc, char **argv) {
   }
 
   {
-    const auto [error, challenge_str, answer_str] =
+    const auto [error, challenge_str, answer_str, id] =
         PMA_SQL::generate_challenge(ctx, 1000, 10000);
     if (error == PMA_SQL::ErrorT::SUCCESS) {
       std::println("Challenge str: {}", challenge_str);
@@ -50,6 +52,14 @@ int main(int argc, char **argv) {
       std::println(stderr, "ERROR: ErrorT: {}, message: {}",
                    PMA_SQL::error_t_to_string(error), challenge_str);
       return 1;
+    }
+
+    if (argc == 2) {
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+      const auto [error_enum, err_str, port] =
+          PMA_SQL::verify_answer(ctx, answer_str, id);
+      std::println(stderr, "Got error_enum {}, err_str {}, port {}",
+                   PMA_SQL::error_t_to_string(error_enum), err_str, port);
     }
   }
 
