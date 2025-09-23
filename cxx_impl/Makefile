@@ -1,6 +1,6 @@
 CWD != pwd
 
-LINKER_FLAGS := -lsqlite3
+LINKER_FLAGS := -lsqlite3 -lblake3
 COMMON_FLAGS := -std=c++23 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
 COMMON_CFLAGS := -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
 

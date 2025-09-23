@@ -17,6 +17,7 @@
 #include "db.h"
 
 // Third party includes.
+#include <blake3.h>
 #include <sqlite3.h>
 
 // Standard Library includes.
@@ -395,9 +396,21 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
             {}};
   }
 
-  // TODO hash the answer
-  ret = sqlite3_bind_text(stmt, 2, answer_str.c_str(), answer_str.size(),
-                          SQLITE_STATIC);
+  // hash the answer prior to storing
+  std::string hash;
+  {
+    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    blake3_hasher_update(&hasher, answer_str.c_str(), answer_str.size());
+
+    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
+
+    hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
+  }
+
+  ret = sqlite3_bind_text(stmt, 2, hash.c_str(), hash.size(), SQLITE_STATIC);
   if (ret != SQLITE_OK) {
     return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
             "Failed to bind string factors",

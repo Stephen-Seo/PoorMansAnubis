@@ -37,6 +37,15 @@ class GenericCleanup {
     std::optional<T> value;
 };
 
+namespace PMA_HELPER {
+
+template <unsigned long long SIZE>
+extern std::string raw_to_hexadecimal(const std::array<uint8_t, SIZE> &data);
+
+}
+
+// Implementations.
+
 template <typename T>
 GenericCleanup<T>::GenericCleanup(T value, std::function<void(T*)> cleanup_fn) :
 cleanup_fn(cleanup_fn),
@@ -72,4 +81,30 @@ GenericCleanup<T> *GenericCleanup<T>::operator=(GenericCleanup<T> &&other) {
   return this;
 }
 
+template <unsigned long long SIZE>
+std::string PMA_HELPER::raw_to_hexadecimal(const std::array<uint8_t, SIZE> &data) {
+  std::string hexadecimal;
+
+  for (unsigned long long idx = 0; idx < SIZE; ++idx) {
+    uint8_t c;
+
+    c = (data.at(idx) & 0xF0) >> 4;
+    if (c >= 0 && c <= 9) {
+      c = '0' + c;
+    } else {
+      c = 'A' + c - 10;
+    }
+    hexadecimal.push_back(c);
+
+    c = (data.at(idx) & 0xF);
+    if (c >= 0 && c <= 9) {
+      c = '0' + c;
+    } else {
+      c = 'A' + c - 10;
+    }
+    hexadecimal.push_back(c);
+  }
+
+  return hexadecimal;
+}
 #endif
