@@ -19,6 +19,7 @@
 
 // standard library includes
 #include <cstdint>
+#include <cstring>
 #include <format>
 #include <mutex>
 #include <optional>
@@ -172,6 +173,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
       }
     } else if constexpr (std::is_same_v<Arg, std::string>) {
       char *buf = new char[arg.size() + 1];
+      std::memcpy(buf, arg.c_str(), arg.size() + 1);
       int ret = sqlite3_bind_text(sqli3_stmt.value(), IDX, buf, arg.size(),
                                   exec_sqlite_stmt_str_cleanup);
       if (ret != SQLITE_OK) {
