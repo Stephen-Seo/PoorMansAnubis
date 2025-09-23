@@ -44,7 +44,9 @@ extern std::string raw_to_hexadecimal(const std::array<uint8_t, SIZE> &data);
 
 }
 
-// Implementations.
+////////////////////////////////////////////////////////////////////////////////
+// Templated Implementations.
+////////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
 GenericCleanup<T>::GenericCleanup(T value, std::function<void(T*)> cleanup_fn) :

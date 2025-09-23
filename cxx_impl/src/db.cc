@@ -32,7 +32,10 @@
 #include "helpers.h"
 #include "work.h"
 
+////////////////////////////////////////////////////////////////////////////////
 // Internal Functions.
+////////////////////////////////////////////////////////////////////////////////
+
 std::optional<std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string> >
 internal_exec_sqlite_statement(const PMA_SQL::SQLITECtx &ctx,
                                std::string stmt) {
@@ -132,7 +135,9 @@ internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
   return {optv, PMA_SQL::ErrorT::SUCCESS, {}};
 }
 
+////////////////////////////////////////////////////////////////////////////////
 // Non-Internal Functions.
+////////////////////////////////////////////////////////////////////////////////
 
 std::string PMA_SQL::error_t_to_string(PMA_SQL::ErrorT err) {
   switch (err) {
