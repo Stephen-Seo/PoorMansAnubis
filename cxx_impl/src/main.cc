@@ -22,7 +22,7 @@
 
 int main(int argc, char **argv) {
   // Test init sqlite3.
-  const auto [ctx, error, cxx_string] = PMA_SQL::init_sqlite("./sqlite_db");
+  auto [ctx, error, cxx_string] = PMA_SQL::init_sqlite("./sqlite_db");
 
   {
     const auto [cleanup_error, error_str] = PMA_SQL::cleanup_stale_entries(ctx);
@@ -47,7 +47,8 @@ int main(int argc, char **argv) {
       std::println("Challenge str: {}", challenge_str);
       std::println("Answer str: {}", answer_str);
     } else {
-      std::println(stderr, "ERROR: {}", challenge_str);
+      std::println(stderr, "ERROR: ErrorT: {}, message: {}",
+                   PMA_SQL::error_t_to_string(error), challenge_str);
       return 1;
     }
   }

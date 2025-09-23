@@ -18,6 +18,7 @@
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_SQL_DB_H_
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <tuple>
 
@@ -36,8 +37,13 @@ enum class ErrorT {
   FAILED_TO_BIND_TO_SEQ_ID,
   FAILED_TO_STEP_STMT_SEQ_ID,
   ERROR_ON_FINALIZE_SEQ_ID,
-  FAILED_TO_CHECK_CHALLENGE_FACTORS_ID
+  FAILED_TO_CHECK_CHALLENGE_FACTORS_ID,
+  FAILED_INSERT_CHALLENGE_FACTORS,
+  FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
+  FAILED_TO_STEP_STMT_CHALLENGE_FACTORS
 };
+
+std::string error_t_to_string(ErrorT err);
 
 class SQLITECtx {
  public:
@@ -56,7 +62,10 @@ class SQLITECtx {
   template <typename SqliteT>
   SqliteT *get_sqlite_ctx() const;
 
+  std::mutex &get_mutex();
+
  private:
+  std::mutex mutex;
   void *ctx;
 };
 
@@ -71,8 +80,9 @@ std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
 
 // On error, first string is err message. On SUCCESS, first string is challenge
 // in base64 and second string is hashed answer.
-std::tuple<ErrorT, std::string, std::string> generate_challenge(
-    const SQLITECtx &ctx, uint64_t digits, uint16_t port);
+std::tuple<ErrorT, std::string, std::string> generate_challenge(SQLITECtx &ctx,
+                                                                uint64_t digits,
+                                                                uint16_t port);
 
 }  // namespace PMA_SQL
 

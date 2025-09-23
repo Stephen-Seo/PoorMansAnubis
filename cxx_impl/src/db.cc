@@ -38,7 +38,7 @@ internal_create_sqlite_statement(const PMA_SQL::SQLITECtx &ctx,
   char *buf = nullptr;
   int ret = sqlite3_exec(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(), nullptr,
                          nullptr, &buf);
-  if (ret) {
+  if (ret != SQLITE_OK) {
     std::string err_msg("No Error Message");
     if (buf) {
       err_msg = std::string(buf);
@@ -83,7 +83,7 @@ internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
   int ret = sqlite3_exec(ctx.get_sqlite_ctx<sqlite3>(), "SELECT ID FROM SEQ_ID",
                          temp_callback_get_seq_id, &optv, &errmsg);
 
-  if (ret) {
+  if (ret != SQLITE_OK) {
     std::string errmsg_str(errmsg);
     sqlite3_free(errmsg);
     return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID,
@@ -92,7 +92,7 @@ internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
     sqlite3_stmt *stmt = nullptr;
     ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx<sqlite3>(),
                              "UPDATE SEQ_ID SET ID = ?", 24, &stmt, nullptr);
-    if (ret) {
+    if (ret != SQLITE_OK) {
       // error
       sqlite3_finalize(stmt);
       return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_UPDATE_SEQ_ID,
@@ -101,7 +101,7 @@ internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
       GenericCleanup<sqlite3_stmt *> stmt_cleanup(
           stmt, [](sqlite3_stmt **ptr) { sqlite3_finalize(*ptr); });
       ret = sqlite3_bind_int64(stmt, 1, optv.value() + 1);
-      if (ret) {
+      if (ret != SQLITE_OK) {
         // error
         return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_BIND_TO_SEQ_ID,
                 "Failed to bind value to stmt"};
@@ -133,9 +133,44 @@ internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
 
 // Non-Internal Functions.
 
-PMA_SQL::SQLITECtx::SQLITECtx() : ctx(nullptr) {}
+std::string PMA_SQL::error_t_to_string(PMA_SQL::ErrorT err) {
+  switch (err) {
+    case PMA_SQL::ErrorT::SUCCESS:
+      return "Success";
+    case PMA_SQL::ErrorT::FAILED_TO_OPEN_DB:
+      return "FailedToOpenDB";
+    case PMA_SQL::ErrorT::FAILED_TO_INIT_DB:
+      return "FailedToInitDB";
+    case PMA_SQL::ErrorT::DB_ALREADY_FAILED_TO_INIT:
+      return "DBFailedToInitAlready";
+    case PMA_SQL::ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID:
+      return "FailedToFetchFromSEQ_ID";
+    case PMA_SQL::ErrorT::FAILED_TO_UPDATE_SEQ_ID:
+      return "FailedToUpdateSEQ_ID";
+    case PMA_SQL::ErrorT::FAILED_TO_INSERT_TO_SEQ_ID:
+      return "FailedToInsertIntoSEQ_ID";
+    case PMA_SQL::ErrorT::FAILED_TO_BIND_TO_SEQ_ID:
+      return "FailedToBindToSEQ_IDStmt";
+    case PMA_SQL::ErrorT::FAILED_TO_STEP_STMT_SEQ_ID:
+      return "FailedToStmtStepForSEQ_ID";
+    case PMA_SQL::ErrorT::ERROR_ON_FINALIZE_SEQ_ID:
+      return "FailedToFinalizeStmtForSEQ_ID";
+    case PMA_SQL::ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID:
+      return "FailedToCheckChallengeFactorsID";
+    case PMA_SQL::ErrorT::FAILED_INSERT_CHALLENGE_FACTORS:
+      return "FailedToInsertIntoChallengeFactors";
+    case PMA_SQL::ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS:
+      return "FailedToBindToChallengeFactors";
+    case PMA_SQL::ErrorT::FAILED_TO_STEP_STMT_CHALLENGE_FACTORS:
+      return "FailedToStepStmtChallengeFactors";
+    default:
+      return "Unknown error";
+  }
+}
 
-PMA_SQL::SQLITECtx::SQLITECtx(std::string sqlite_path) : ctx(nullptr) {
+PMA_SQL::SQLITECtx::SQLITECtx() : mutex(), ctx(nullptr) {}
+
+PMA_SQL::SQLITECtx::SQLITECtx(std::string sqlite_path) : mutex(), ctx(nullptr) {
   sqlite3 *db = nullptr;
   int ret = sqlite3_open(sqlite_path.c_str(), &db);
 
@@ -165,6 +200,8 @@ PMA_SQL::SQLITECtx *PMA_SQL::SQLITECtx::operator=(SQLITECtx &&other) {
 }
 
 void *PMA_SQL::SQLITECtx::get_ctx() const { return ctx; }
+
+std::mutex &PMA_SQL::SQLITECtx::get_mutex() { return mutex; }
 
 std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string>
 PMA_SQL::init_sqlite(std::string filepath) {
@@ -266,8 +303,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string>
-PMA_SQL::generate_challenge(const SQLITECtx &ctx, uint64_t digits,
-                            uint16_t port) {
+PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
   Work_Factors factors = work_generate_target_factors(digits);
   GenericCleanup<Work_Factors> factors_cleanup(
       factors, [](Work_Factors *ptr) { work_cleanup_factors(ptr); });
@@ -280,10 +316,10 @@ PMA_SQL::generate_challenge(const SQLITECtx &ctx, uint64_t digits,
   std::string answer_str = answer;
   std::free(answer);
 
-  // TODO store hash of answer and port number in database.
+  // Acquire a mutex lock_guard.
+  std::lock_guard<std::mutex> lock(ctx.get_mutex());
 
-  // TODO hash the answer.
-
+  // Get a unique identifier for CHALLENGE_FACTORS.
   uint64_t unique_id = 0;
   bool exists_with_id = true;
   while (exists_with_id) {
@@ -295,13 +331,13 @@ PMA_SQL::generate_challenge(const SQLITECtx &ctx, uint64_t digits,
           ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID, "optv does not have value", {}};
     }
 
-    uint64_t changed_id = internal_next_id(optv.value());
+    unique_id = internal_next_id(optv.value());
 
     sqlite3_stmt *stmt = nullptr;
     int ret = sqlite3_prepare_v2(
         ctx.get_sqlite_ctx<sqlite3>(),
         "SELECT ID FROM CHALLENGE_FACTORS WHERE ID = ?", 45, &stmt, nullptr);
-    if (ret) {
+    if (ret != SQLITE_OK) {
       // error
       return {ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID,
               "Failed to prepare stmt",
@@ -309,8 +345,8 @@ PMA_SQL::generate_challenge(const SQLITECtx &ctx, uint64_t digits,
     } else {
       GenericCleanup<sqlite3_stmt *> stmt_cleanup(
           stmt, [](sqlite3_stmt **ptr) { sqlite3_finalize(*ptr); });
-      ret = sqlite3_bind_int64(stmt, 1, changed_id);
-      if (ret) {
+      ret = sqlite3_bind_int64(stmt, 1, unique_id);
+      if (ret != SQLITE_OK) {
         // error
         return {ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID,
                 "Failed to bind to stmt INTEGER id",
@@ -323,7 +359,6 @@ PMA_SQL::generate_challenge(const SQLITECtx &ctx, uint64_t digits,
         } else if (ret == SQLITE_DONE) {
           // No rows
           exists_with_id = false;
-          unique_id = optv.value();
         } else {
           // error
           return {ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID,
@@ -332,6 +367,55 @@ PMA_SQL::generate_challenge(const SQLITECtx &ctx, uint64_t digits,
         }
       }
     }
+  }
+
+  // Insert challenge into db.
+  sqlite3_stmt *stmt = nullptr;
+  int ret = sqlite3_prepare(
+      ctx.get_sqlite_ctx<sqlite3>(),
+      "INSERT INTO CHALLENGE_FACTORS (ID, FACTORS, PORT) VALUES (?, ?, ?)", 66,
+      &stmt, nullptr);
+  if (ret != SQLITE_OK) {
+    // error
+    return {
+        ErrorT::FAILED_INSERT_CHALLENGE_FACTORS, "Failed to prepare stmt", {}};
+  }
+
+  GenericCleanup<sqlite3_stmt *> stmt_cleanup(stmt, [](sqlite3_stmt **ptr) {
+    int ret = sqlite3_finalize(*ptr);
+    if (ret != SQLITE_OK) {
+      std::println(stderr, "WARNING: sqlite3_finalize returned {}!", ret);
+    }
+  });
+
+  ret = sqlite3_bind_int64(stmt, 1, unique_id);
+  if (ret != SQLITE_OK) {
+    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
+            "Failed to bind int64",
+            {}};
+  }
+
+  // TODO hash the answer
+  ret = sqlite3_bind_text(stmt, 2, answer_str.c_str(), answer_str.size(),
+                          SQLITE_STATIC);
+  if (ret != SQLITE_OK) {
+    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
+            "Failed to bind string factors",
+            {}};
+  }
+
+  ret = sqlite3_bind_int(stmt, 3, port);
+  if (ret != SQLITE_OK) {
+    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
+            "Failed to bind int \"port\"",
+            {}};
+  }
+
+  ret = sqlite3_step(stmt);
+  if (ret != SQLITE_OK && ret != SQLITE_DONE) {
+    return {ErrorT::FAILED_TO_STEP_STMT_CHALLENGE_FACTORS,
+            "Failed to sqlite3_step CHALLENGE_FACTORS",
+            {}};
   }
 
   // ret = sqlite3_prepare_v2(
