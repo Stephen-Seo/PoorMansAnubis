@@ -418,10 +418,5 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
             {}};
   }
 
-  // ret = sqlite3_prepare_v2(
-  //     ctx.get_sqlite_ctx<sqlite3>(), "INSERT INTO CHALLENGE_FACTORS (UUID
-  //);
-  // std::string stmt = std::format
-
   return {ErrorT::SUCCESS, challenge_str, answer_str};
 }
