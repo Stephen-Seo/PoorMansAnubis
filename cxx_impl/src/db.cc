@@ -463,6 +463,9 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
 
 std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
     SQLITECtx &ctx, std::string answer, uint64_t id) {
+  // Acquire a mutex lock_guard.
+  std::lock_guard<std::mutex> lock(ctx.get_mutex());
+
   sqlite3_stmt *stmt = nullptr;
   int ret = sqlite3_prepare(
       ctx.get_sqlite_ctx<sqlite3>(),
