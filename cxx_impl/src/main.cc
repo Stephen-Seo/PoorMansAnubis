@@ -29,7 +29,8 @@ int main(int argc, char **argv) {
   {
     const auto [cleanup_error, error_str] = PMA_SQL::cleanup_stale_entries(ctx);
     if (cleanup_error != PMA_SQL::ErrorT::SUCCESS) {
-      std::println(stderr, "Cleanup Stale Entries ERROR: {}", error_str);
+      std::println(stderr, "Cleanup Stale Entries ErrorT: {}, ERROR: {}",
+                   PMA_SQL::error_t_to_string(cleanup_error), error_str);
       return 1;
     }
   }
@@ -37,7 +38,8 @@ int main(int argc, char **argv) {
     const auto [cleanup_error, error_str] =
         PMA_SQL::cleanup_stale_challenges(ctx);
     if (cleanup_error != PMA_SQL::ErrorT::SUCCESS) {
-      std::println(stderr, "Cleanup Stale Challenges ERROR: {}", error_str);
+      std::println(stderr, "Cleanup Stale Challenges ErrorT: {}, ERROR: {}",
+                   PMA_SQL::error_t_to_string(cleanup_error), error_str);
       return 1;
     }
   }
