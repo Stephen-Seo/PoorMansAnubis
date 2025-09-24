@@ -52,7 +52,8 @@ enum class ErrorT {
   FAILED_TO_PREPARE_SEL_FROM_CHALLENGE,
   FAILED_TO_BIND_FROM_CHALLENGE_FACTORS,
   FAILED_TO_PREPARE_EXEC_GENERIC,
-  EXEC_GENERIC_INVALID_STATE
+  EXEC_GENERIC_INVALID_STATE,
+  CLIENT_IP_DOES_NOT_MATCH_STORED_IP
 };
 
 std::string error_t_to_string(ErrorT err);
@@ -106,7 +107,7 @@ std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
 // in base64 and second string is hashed answer.
 // uint64_t is id.
 std::tuple<ErrorT, std::string, std::string, uint64_t> generate_challenge(
-    SQLITECtx &ctx, uint64_t digits, uint16_t port);
+    SQLITECtx &ctx, uint64_t digits, std::string client_ip, uint16_t port);
 
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.

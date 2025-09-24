@@ -177,6 +177,8 @@ std::string PMA_SQL::error_t_to_string(PMA_SQL::ErrorT err) {
       return "FailedToPrepareStmtGenericExec";
     case PMA_SQL::ErrorT::EXEC_GENERIC_INVALID_STATE:
       return "ExecGenericInvalidState";
+    case PMA_SQL::ErrorT::CLIENT_IP_DOES_NOT_MATCH_STORED_IP:
+      return "ClientIPDoesNotMatchStoredIP";
     default:
       return "Unknown error";
   }
@@ -241,9 +243,9 @@ PMA_SQL::init_sqlite(std::string filepath) {
 
   sql_ret = internal_exec_sqlite_statement(
       ctx,
-      "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS (  ID INTEGER PRIMARY KEY, "
-      "FACTORS TEXT NOT NULL,  PORT INT NOT NULL,  GEN_TIME TEXT DEFAULT ( "
-      "datetime() ) )");
+      "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS ( ID INTEGER PRIMARY KEY, "
+      "FACTORS TEXT NOT NULL, IP TEXT NOT NULL, PORT INT NOT NULL, GEN_TIME "
+      "TEXT DEFAULT ( datetime() ) )");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
@@ -330,7 +332,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string, uint64_t>
-PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
+PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
+                            std::string client_ip, uint16_t port) {
   Work_Factors factors = work_generate_target_factors(digits);
   GenericCleanup<Work_Factors> factors_cleanup(
       factors, [](Work_Factors *ptr) { work_cleanup_factors(ptr); });
@@ -403,10 +406,10 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
 
   // Insert challenge into db.
   sqlite3_stmt *stmt = nullptr;
-  int ret = sqlite3_prepare(
-      ctx.get_sqlite_ctx<sqlite3>(),
-      "INSERT INTO CHALLENGE_FACTORS (ID, FACTORS, PORT) VALUES (?, ?, ?)", 66,
-      &stmt, nullptr);
+  int ret = sqlite3_prepare(ctx.get_sqlite_ctx<sqlite3>(),
+                            "INSERT INTO CHALLENGE_FACTORS (ID, FACTORS, IP, "
+                            "PORT) VALUES (?, ?, ?, ?)",
+                            73, &stmt, nullptr);
   if (ret != SQLITE_OK) {
     // error
     return {ErrorT::FAILED_INSERT_CHALLENGE_FACTORS,
@@ -454,7 +457,16 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
             0};
   }
 
-  ret = sqlite3_bind_int(stmt, 3, port);
+  ret = sqlite3_bind_text(stmt, 3, client_ip.c_str(), client_ip.size(),
+                          SQLITE_STATIC);
+  if (ret != SQLITE_OK) {
+    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
+            "Failed to bind string \"client_ip\"",
+            {},
+            0};
+  }
+
+  ret = sqlite3_bind_int(stmt, 4, port);
   if (ret != SQLITE_OK) {
     return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
             "Failed to bind int \"port\"",
@@ -481,7 +493,7 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
   sqlite3_stmt *stmt = nullptr;
   int ret = sqlite3_prepare(
       ctx.get_sqlite_ctx<sqlite3>(),
-      "SELECT PORT FROM CHALLENGE_FACTORS WHERE ID = ? AND FACTORS = ?", 63,
+      "SELECT IP, PORT FROM CHALLENGE_FACTORS WHERE ID = ? AND FACTORS = ?", 67,
       &stmt, nullptr);
   if (ret != SQLITE_OK) {
     return {ErrorT::FAILED_TO_PREPARE_SEL_FROM_CHALLENGE,
@@ -523,15 +535,22 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
             "Failed to bind factors to select from CHALLENGE_FACTORS", 0};
   }
 
+  std::string stored_ip;
   uint16_t port = 0;
   ret = sqlite3_step(stmt);
   if (ret == SQLITE_ROW) {
-    port = sqlite3_column_int(stmt, 0);
+    stored_ip = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+    port = sqlite3_column_int(stmt, 1);
   } else {
     return {ErrorT::FAILED_TO_STEP_STMT_CHALLENGE_FACTORS,
             "sqlite3_step CHALLENGE_FACTORS during select did not return "
             "SQLITE_ROW",
             0};
+  }
+
+  if (stored_ip != ipaddr) {
+    return {ErrorT::CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
+            "client ip address mismatch", 0};
   }
 
   {

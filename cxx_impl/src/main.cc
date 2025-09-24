@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
 
   {
     const auto [error, challenge_str, answer_str, id] =
-        PMA_SQL::generate_challenge(ctx, 1000, 10000);
+        PMA_SQL::generate_challenge(ctx, 1000, "127.0.0.1", 10000);
     if (error == PMA_SQL::ErrorT::SUCCESS) {
       std::println("Challenge str: {}", challenge_str);
       std::println("Answer str: {}", answer_str);
