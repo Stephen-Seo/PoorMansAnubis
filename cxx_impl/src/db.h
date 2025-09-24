@@ -326,8 +326,13 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
     const PMA_SQL::SQLITECtx &ctx, std::string stmt,
     std::optional<sqlite3_stmt *> sqli3_stmt) {
   if (!sqli3_stmt.has_value()) {
-    return {PMA_SQL::ErrorT::EXEC_GENERIC_INVALID_STATE,
-            "sqli3_stmt is nullopt", std::nullopt};
+    sqli3_stmt = nullptr;
+    int ret = sqlite3_prepare(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(),
+                              stmt.size(), &sqli3_stmt.value(), nullptr);
+    if (ret != SQLITE_OK) {
+      return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
+              "sqlite3_prepare failed", std::nullopt};
+    }
   }
 
   int ret = sqlite3_step(sqli3_stmt.value());

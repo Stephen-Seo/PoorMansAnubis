@@ -72,63 +72,37 @@ std::tuple<std::optional<uint64_t>, PMA_SQL::ErrorT, std::string>
 internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
   std::optional<uint64_t> optv = std::nullopt;
 
-  const auto temp_callback_get_seq_id = [](void *ud, int columns, char **strs,
-                                           char **names) -> int {
-    std::optional<uint64_t> *optv =
-        reinterpret_cast<std::optional<uint64_t> *>(ud);
-    if (columns == 1 && std::strcmp(names[0], "ID") == 0) {
-      *optv = std::strtoull(strs[0], nullptr, 10);
-    }
-    return 0;
-  };
+  {
+    const auto [err_enum, err_msg, opt_vec] =
+        PMA_SQL::SqliteStmtRow<uint64_t>::exec_sqlite_stmt_with_rows<0>(
+            ctx, "SELECT ID FROM SEQ_ID", std::nullopt);
 
-  char *errmsg = nullptr;
-
-  int ret = sqlite3_exec(ctx.get_sqlite_ctx<sqlite3>(), "SELECT ID FROM SEQ_ID",
-                         temp_callback_get_seq_id, &optv, &errmsg);
-
-  if (ret != SQLITE_OK) {
-    std::string errmsg_str(errmsg);
-    sqlite3_free(errmsg);
-    return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID,
-            errmsg_str};
-  } else if (optv.has_value()) {
-    sqlite3_stmt *stmt = nullptr;
-    ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx<sqlite3>(),
-                             "UPDATE SEQ_ID SET ID = ?", 24, &stmt, nullptr);
-    if (ret != SQLITE_OK) {
-      // error
-      sqlite3_finalize(stmt);
-      return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_UPDATE_SEQ_ID,
-              "Failed to prepare stmt to update SEQ_ID"};
+    if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
+      return {std::nullopt, err_enum, err_msg};
+    } else if (!opt_vec.has_value()) {
+      // Intentionally left blank.
     } else {
-      GenericCleanup<sqlite3_stmt *> stmt_cleanup(
-          stmt, [](sqlite3_stmt **ptr) { sqlite3_finalize(*ptr); });
-      ret = sqlite3_bind_int64(stmt, 1, optv.value() + 1);
-      if (ret != SQLITE_OK) {
-        // error
-        return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_BIND_TO_SEQ_ID,
-                "Failed to bind value to stmt"};
-      } else {
-        ret = sqlite3_step(stmt);
-        if (ret == SQLITE_DONE) {
-          // Intentionally left blank.
-        } else {
-          // error
-          return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_STEP_STMT_SEQ_ID,
-                  "Failed to step stmt"};
-        }
-      }
+      optv = std::get<0>(opt_vec.value().at(0).row).value();
+    }
+  }
+
+  if (optv.has_value()) {
+    const auto [err_enum, err_msg, opt_vec] =
+        PMA_SQL::SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t>(
+            ctx, "UPDATE SEQ_ID SET ID = ?", std::nullopt, optv.value() + 1);
+
+    if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
+      return {optv, err_enum, err_msg};
     }
   } else {
-    // optv has no value.
-    auto opt_tuple = internal_exec_sqlite_statement(
-        ctx, "INSERT INTO SEQ_ID (ID) VALUES (1)");
-    if (opt_tuple.has_value()) {
-      // error, failed to insert value into SEQ_ID.
-      return {std::nullopt, PMA_SQL::ErrorT::FAILED_TO_INSERT_TO_SEQ_ID,
-              "Failed to insert to SEQ_ID"};
+    const auto [err_enum, err_msg, opt_vec] =
+        PMA_SQL::SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0>(
+            ctx, "INSERT INTO SEQ_ID (ID) VALUES (1)", std::nullopt);
+
+    if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
+      return {optv, err_enum, err_msg};
     }
+
     optv = 1;
   }
 
@@ -365,78 +339,22 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
 
     unique_id = internal_next_id(optv.value());
 
-    sqlite3_stmt *stmt = nullptr;
-    int ret = sqlite3_prepare_v2(
-        ctx.get_sqlite_ctx<sqlite3>(),
-        "SELECT ID FROM CHALLENGE_FACTORS WHERE ID = ?", 45, &stmt, nullptr);
-    if (ret != SQLITE_OK) {
-      // error
-      return {ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID,
-              "Failed to prepare stmt",
-              {},
-              0};
+    const auto [err_enum, err_msg, opt_vec] =
+        SqliteStmtRow<uint64_t>::exec_sqlite_stmt_with_rows<0, uint64_t>(
+            ctx, "SELECT ID FROM CHALLENGE_FACTORS WHERE ID = ?", std::nullopt,
+            unique_id);
+
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, {}, 0};
+    } else if (opt_vec.has_value() && !opt_vec.value().empty()) {
+      exists_with_id = true;
     } else {
-      GenericCleanup<sqlite3_stmt *> stmt_cleanup(
-          stmt, [](sqlite3_stmt **ptr) { sqlite3_finalize(*ptr); });
-      ret = sqlite3_bind_int64(stmt, 1, unique_id);
-      if (ret != SQLITE_OK) {
-        // error
-        return {ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID,
-                "Failed to bind to stmt INTEGER id",
-                {},
-                0};
-      } else {
-        ret = sqlite3_step(stmt);
-        if (ret == SQLITE_ROW) {
-          // Has a row
-          exists_with_id = true;
-        } else if (ret == SQLITE_DONE) {
-          // No rows
-          exists_with_id = false;
-        } else {
-          // error
-          return {ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID,
-                  "stmt step not done and no row",
-                  {},
-                  0};
-        }
-      }
+      exists_with_id = false;
     }
-  }
-
-  // Insert challenge into db.
-  sqlite3_stmt *stmt = nullptr;
-  int ret = sqlite3_prepare(ctx.get_sqlite_ctx<sqlite3>(),
-                            "INSERT INTO CHALLENGE_FACTORS (ID, FACTORS, IP, "
-                            "PORT) VALUES (?, ?, ?, ?)",
-                            73, &stmt, nullptr);
-  if (ret != SQLITE_OK) {
-    // error
-    return {ErrorT::FAILED_INSERT_CHALLENGE_FACTORS,
-            "Failed to prepare stmt",
-            {},
-            0};
-  }
-
-  // hash declared earlier so it cleans up AFTER stmt gets finalized.
-  std::string hash;
-
-  GenericCleanup<sqlite3_stmt *> stmt_cleanup(stmt, [](sqlite3_stmt **ptr) {
-    int ret = sqlite3_finalize(*ptr);
-    if (ret != SQLITE_OK) {
-      std::println(stderr, "WARNING: sqlite3_finalize returned {}!", ret);
-    }
-  });
-
-  ret = sqlite3_bind_int64(stmt, 1, unique_id);
-  if (ret != SQLITE_OK) {
-    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
-            "Failed to bind int64",
-            {},
-            0};
   }
 
   // hash the answer prior to storing
+  std::string hash;
   {
     std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
     blake3_hasher hasher;
@@ -449,37 +367,19 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
     hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
   }
 
-  ret = sqlite3_bind_text(stmt, 2, hash.c_str(), hash.size(), SQLITE_STATIC);
-  if (ret != SQLITE_OK) {
-    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
-            "Failed to bind string factors",
-            {},
-            0};
-  }
+  // Insert challenge into db.
+  {
+    const auto [err_enum, err_msg, opt_vec] =
+        SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t, std::string,
+                                                    std::string, int>(
+            ctx,
+            "INSERT INTO CHALLENGE_FACTORS (ID, FACTORS, IP, PORT) VALUES (?, "
+            "?, ?, ?)",
+            std::nullopt, unique_id, hash, client_ip, port);
 
-  ret = sqlite3_bind_text(stmt, 3, client_ip.c_str(), client_ip.size(),
-                          SQLITE_STATIC);
-  if (ret != SQLITE_OK) {
-    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
-            "Failed to bind string \"client_ip\"",
-            {},
-            0};
-  }
-
-  ret = sqlite3_bind_int(stmt, 4, port);
-  if (ret != SQLITE_OK) {
-    return {ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS,
-            "Failed to bind int \"port\"",
-            {},
-            0};
-  }
-
-  ret = sqlite3_step(stmt);
-  if (ret != SQLITE_OK && ret != SQLITE_DONE) {
-    return {ErrorT::FAILED_TO_STEP_STMT_CHALLENGE_FACTORS,
-            "Failed to sqlite3_step CHALLENGE_FACTORS during insert",
-            {},
-            0};
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, {}, unique_id};
+    }
   }
 
   return {ErrorT::SUCCESS, challenge_str, answer_str, unique_id};
@@ -490,32 +390,7 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
   // Acquire a mutex lock_guard.
   std::lock_guard<std::mutex> lock(ctx.get_mutex());
 
-  sqlite3_stmt *stmt = nullptr;
-  int ret = sqlite3_prepare(
-      ctx.get_sqlite_ctx<sqlite3>(),
-      "SELECT IP, PORT FROM CHALLENGE_FACTORS WHERE ID = ? AND FACTORS = ?", 67,
-      &stmt, nullptr);
-  if (ret != SQLITE_OK) {
-    return {ErrorT::FAILED_TO_PREPARE_SEL_FROM_CHALLENGE,
-            "Failed to start preparing stmt", 0};
-  }
-
-  // hash declared earlier so it cleans up AFTER stmt gets finalized.
   std::string hash;
-
-  GenericCleanup<sqlite3_stmt *> stmt_cleanup(stmt, [](sqlite3_stmt **ptr) {
-    int ret = sqlite3_finalize(*ptr);
-    if (ret != SQLITE_OK) {
-      std::println(stderr, "WARNING: sqlite3_finalize returned {}!", ret);
-    }
-  });
-
-  ret = sqlite3_bind_int64(stmt, 1, id);
-  if (ret != SQLITE_OK) {
-    return {ErrorT::FAILED_TO_BIND_FROM_CHALLENGE_FACTORS,
-            "Failed to bind id to select from CHALLENGE_FACTORS", 0};
-  }
-
   // get hash
   {
     std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
@@ -529,23 +404,25 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
     hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
   }
 
-  ret = sqlite3_bind_text(stmt, 2, hash.c_str(), hash.size(), SQLITE_STATIC);
-  if (ret != SQLITE_OK) {
-    return {ErrorT::FAILED_TO_BIND_FROM_CHALLENGE_FACTORS,
-            "Failed to bind factors to select from CHALLENGE_FACTORS", 0};
-  }
-
   std::string stored_ip;
   uint16_t port = 0;
-  ret = sqlite3_step(stmt);
-  if (ret == SQLITE_ROW) {
-    stored_ip = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
-    port = sqlite3_column_int(stmt, 1);
-  } else {
-    return {ErrorT::FAILED_TO_STEP_STMT_CHALLENGE_FACTORS,
-            "sqlite3_step CHALLENGE_FACTORS during select did not return "
-            "SQLITE_ROW",
-            0};
+  {
+    const auto [err_enum, err_msg, opt_vec] = SqliteStmtRow<
+        std::string, int>::exec_sqlite_stmt_with_rows<0, uint64_t,
+                                                      std::string>(
+        ctx,
+        "SELECT IP, PORT FROM CHALLENGE_FACTORS WHERE ID = ? AND FACTORS = ?",
+        std::nullopt, id, hash);
+
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, 0};
+    } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
+      return {ErrorT::EXEC_GENERIC_INVALID_STATE,
+              "Failed to get IP, PORT from CHALLENGE_FACTORS", 0};
+    }
+
+    stored_ip = std::get<0>(opt_vec.value().at(0).row).value();
+    port = std::get<1>(opt_vec.value().at(0).row).value();
   }
 
   if (stored_ip != ipaddr) {
