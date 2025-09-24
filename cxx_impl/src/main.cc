@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     if (argc == 2) {
       std::this_thread::sleep_for(std::chrono::seconds(5));
       const auto [error_enum, err_str, port] =
-          PMA_SQL::verify_answer(ctx, answer_str, id);
+          PMA_SQL::verify_answer(ctx, answer_str, "127.0.0.1", id);
       std::println(stderr, "Got error_enum {}, err_str {}, port {}",
                    PMA_SQL::error_t_to_string(error_enum), err_str, port);
     }

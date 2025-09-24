@@ -112,6 +112,7 @@ std::tuple<ErrorT, std::string, std::string, uint64_t> generate_challenge(
 // generation request.
 std::tuple<ErrorT, std::string, uint16_t> verify_answer(SQLITECtx &ctx,
                                                         std::string answer,
+                                                        std::string ipaddr,
                                                         uint64_t id);
 
 }  // namespace PMA_SQL

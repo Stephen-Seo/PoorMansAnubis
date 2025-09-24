@@ -259,8 +259,15 @@ PMA_SQL::init_sqlite(std::string filepath) {
 
   sql_ret = internal_exec_sqlite_statement(
       ctx,
-      "CREATE TABLE IF NOT EXISTS ALLOWED_IPS (  IP TEXT PRIMARY KEY,  ON_TIME "
-      "TEXT NOT NULL DEFAULT ( datetime() ) )");
+      "CREATE TABLE IF NOT EXISTS ALLOWED_IPS ( ID INTEGER PRIMARY KEY "
+      "AUTOINCREMENT, IP TEXT NOT NULL, PORT INTEGER NOT NULL, ON_TIME TEXT "
+      "NOT NULL DEFAULT ( datetime() ) )");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
+  }
+
+  sql_ret = internal_exec_sqlite_statement(
+      ctx, "CREATE INDEX IF NOT EXISTS ALLOWED_IPS_IP ON ALLOWED_IPS (IP)");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
@@ -467,7 +474,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits, uint16_t port) {
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
-    SQLITECtx &ctx, std::string answer, uint64_t id) {
+    SQLITECtx &ctx, std::string answer, std::string ipaddr, uint64_t id) {
   // Acquire a mutex lock_guard.
   std::lock_guard<std::mutex> lock(ctx.get_mutex());
 
@@ -527,10 +534,22 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
             0};
   }
 
-  const auto [err_enum, err_msg] = exec_sqlite_statement<0, uint64_t>(
-      ctx, "DELETE FROM CHALLENGE_FACTORS WHERE ID = ?", std::nullopt, id);
-  if (err_enum != ErrorT::SUCCESS) {
-    return {err_enum, err_msg, 0};
+  {
+    const auto [err_enum, err_msg] = exec_sqlite_statement<0, uint64_t>(
+        ctx, "DELETE FROM CHALLENGE_FACTORS WHERE ID = ?", std::nullopt, id);
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, 0};
+    }
+  }
+
+  {
+    const auto [err_enum, err_msg] = exec_sqlite_statement<0>(
+        ctx, "INSERT INTO ALLOWED_IPS (IP, PORT) VALUES (?, ?)", std::nullopt,
+        ipaddr, port);
+
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, 0};
+    }
   }
 
   return {ErrorT::SUCCESS, {}, port};
