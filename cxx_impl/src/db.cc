@@ -125,28 +125,6 @@ std::string PMA_SQL::error_t_to_string(PMA_SQL::ErrorT err) {
       return "DBFailedToInitAlready";
     case PMA_SQL::ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID:
       return "FailedToFetchFromSEQ_ID";
-    case PMA_SQL::ErrorT::FAILED_TO_UPDATE_SEQ_ID:
-      return "FailedToUpdateSEQ_ID";
-    case PMA_SQL::ErrorT::FAILED_TO_INSERT_TO_SEQ_ID:
-      return "FailedToInsertIntoSEQ_ID";
-    case PMA_SQL::ErrorT::FAILED_TO_BIND_TO_SEQ_ID:
-      return "FailedToBindToSEQ_IDStmt";
-    case PMA_SQL::ErrorT::FAILED_TO_STEP_STMT_SEQ_ID:
-      return "FailedToStmtStepForSEQ_ID";
-    case PMA_SQL::ErrorT::ERROR_ON_FINALIZE_SEQ_ID:
-      return "FailedToFinalizeStmtForSEQ_ID";
-    case PMA_SQL::ErrorT::FAILED_TO_CHECK_CHALLENGE_FACTORS_ID:
-      return "FailedToCheckChallengeFactorsID";
-    case PMA_SQL::ErrorT::FAILED_INSERT_CHALLENGE_FACTORS:
-      return "FailedToInsertIntoChallengeFactors";
-    case PMA_SQL::ErrorT::FAILED_TO_BIND_TO_CHALLENGE_FACTORS:
-      return "FailedToBindToChallengeFactors";
-    case PMA_SQL::ErrorT::FAILED_TO_STEP_STMT_CHALLENGE_FACTORS:
-      return "FailedToStepStmtChallengeFactors";
-    case PMA_SQL::ErrorT::FAILED_TO_PREPARE_SEL_FROM_CHALLENGE:
-      return "FailedToPrepareSelStmtChallengeFactors";
-    case PMA_SQL::ErrorT::FAILED_TO_BIND_FROM_CHALLENGE_FACTORS:
-      return "FailedToBindFromChallengeFactors";
     case PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC:
       return "FailedToPrepareStmtGenericExec";
     case PMA_SQL::ErrorT::EXEC_GENERIC_INVALID_STATE:
