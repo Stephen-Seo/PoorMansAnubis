@@ -46,11 +46,10 @@ int main(int argc, char **argv) {
 
   if (argc == 3) {
     const auto [err_enum, err_msg, opt_vec] =
-        PMA_SQL::SqliteStmtRow<uint64_t, std::string, int,
-                               std::string>::exec_sqlite_stmt_with_rows<0,
-                                                                        int>(
-            ctx, "SELECT ID, IP, PORT, ON_TIME FROM ALLOWED_IPS WHERE 1 == ?",
-            std::nullopt, 1);
+        PMA_SQL::SqliteStmtRow<uint64_t, std::string, int, std::string>::
+            exec_sqlite_stmt_with_rows<0>(
+                ctx, "SELECT ID, IP, PORT, ON_TIME FROM ALLOWED_IPS",
+                std::nullopt);
     if (opt_vec.has_value()) {
       for (auto row : opt_vec.value()) {
         row.print_row<0>();
