@@ -23,9 +23,11 @@
 #include <format>
 #include <mutex>
 #include <optional>
+#include <print>
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <vector>
 
 // third party includes
 #include <sqlite3.h>
@@ -94,6 +96,41 @@ std::tuple<ErrorT, std::string> exec_sqlite_statement(
     const SQLITECtx &ctx, std::string stmt,
     std::optional<sqlite3_stmt *> sqli3_stmt, Arg arg, Args... args);
 
+template <typename... SArgs>
+struct SqliteStmtRow {
+  std::tuple<std::optional<SArgs>...> row;
+
+  template <unsigned long long IDX>
+  void print_row() const;
+
+  template <unsigned long long IDX>
+  static std::tuple<ErrorT, std::string,
+                    std::optional<std::vector<SqliteStmtRow<SArgs...>>>>
+  exec_sqlite_stmt_fetch_rows(const SQLITECtx &ctx, std::string stmt,
+                              std::optional<sqlite3_stmt *> sqli3_stmt,
+                              std::vector<SqliteStmtRow<SArgs...>> v);
+
+  template <unsigned long long IDX, typename Arg, typename... Args>
+  static std::tuple<ErrorT, std::string,
+                    std::optional<std::vector<SqliteStmtRow<SArgs...>>>>
+  exec_sqlite_stmt_fetch_rows(const SQLITECtx &ctx, std::string stmt,
+                              std::optional<sqlite3_stmt *> sqli3_stmt,
+                              std::vector<SqliteStmtRow<SArgs...>> v);
+
+  template <unsigned long long IDX>
+  static std::tuple<ErrorT, std::string,
+                    std::optional<std::vector<SqliteStmtRow<SArgs...>>>>
+  exec_sqlite_stmt_with_rows(const SQLITECtx &ctx, std::string stmt,
+                             std::optional<sqlite3_stmt *> sqli3_stmt);
+
+  template <unsigned long long IDX, typename Arg, typename... Args>
+  static std::tuple<ErrorT, std::string,
+                    std::optional<std::vector<SqliteStmtRow<SArgs...>>>>
+  exec_sqlite_stmt_with_rows(const SQLITECtx &ctx, std::string stmt,
+                             std::optional<sqlite3_stmt *> sqli3_stmt, Arg arg,
+                             Args... args);
+};
+
 // string is err message.
 std::tuple<SQLITECtx, ErrorT, std::string> init_sqlite(std::string filepath);
 
@@ -161,6 +198,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
       if (sizeof(Arg) > 4) {
         int ret = sqlite3_bind_int64(sqli3_stmt.value(), IDX, arg);
         if (ret != SQLITE_OK) {
+          sqlite3_finalize(sqli3_stmt.value());
           return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
                   "Bind int64 failed"};
         }
@@ -169,6 +207,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
       } else {
         int ret = sqlite3_bind_int(sqli3_stmt.value(), IDX, arg);
         if (ret != SQLITE_OK) {
+          sqlite3_finalize(sqli3_stmt.value());
           return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
                   "Bind int failed"};
         }
@@ -181,6 +220,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
       int ret = sqlite3_bind_text(sqli3_stmt.value(), IDX, buf, arg.size(),
                                   exec_sqlite_stmt_str_cleanup);
       if (ret != SQLITE_OK) {
+        sqlite3_finalize(sqli3_stmt.value());
         return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
                 "Bind text failed"};
       }
@@ -190,6 +230,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
       // TODO handle more than integers and strings
       int ret = sqlite3_bind_null(sqli3_stmt.value(), IDX);
       if (ret != SQLITE_OK) {
+        sqlite3_finalize(sqli3_stmt.value());
         return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
                 "Bind NULL failed"};
       }
@@ -206,6 +247,166 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
     }
     return exec_sqlite_statement<1, Arg, Args...>(ctx, stmt, sqli3_stmt, arg,
                                                   args...);
+  }
+}
+
+template <typename... Args>
+template <unsigned long long IDX>
+void PMA_SQL::SqliteStmtRow<Args...>::print_row() const {
+  if constexpr (IDX >= std::tuple_size_v<decltype(row)>) {
+    std::println();
+    return;
+  } else {
+    if (std::get<IDX>(row).has_value()) {
+      std::print("Col {}: {}  ", IDX, std::get<IDX>(row).value());
+    } else {
+      std::print("Col {}: NULL  ", IDX);
+    }
+    print_row<IDX + 1>();
+  }
+}
+
+template <typename... SArgs>
+template <unsigned long long IDX>
+std::tuple<PMA_SQL::ErrorT, std::string,
+           std::optional<std::vector<PMA_SQL::SqliteStmtRow<SArgs...>>>>
+PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_fetch_rows(
+    const PMA_SQL::SQLITECtx &ctx, std::string stmt,
+    std::optional<sqlite3_stmt *> sqli3_stmt,
+    std::vector<PMA_SQL::SqliteStmtRow<SArgs...>> v) {
+  int ret = sqlite3_step(sqli3_stmt.value());
+  if (ret == SQLITE_DONE) {
+    sqlite3_finalize(sqli3_stmt.value());
+    return {ErrorT::SUCCESS, {}, v};
+  } else if (ret == SQLITE_ROW) {
+    v.push_back({});
+    return exec_sqlite_stmt_fetch_rows<0, SArgs...>(ctx, stmt, sqli3_stmt,
+                                                    std::move(v));
+  } else {
+    sqlite3_finalize(sqli3_stmt.value());
+    return {ErrorT::EXEC_GENERIC_INVALID_STATE, "sqlite3_step failed",
+            std::nullopt};
+  }
+}
+
+template <typename... SArgs>
+template <unsigned long long IDX, typename Arg, typename... Args>
+std::tuple<PMA_SQL::ErrorT, std::string,
+           std::optional<std::vector<PMA_SQL::SqliteStmtRow<SArgs...>>>>
+PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_fetch_rows(
+    const PMA_SQL::SQLITECtx &ctx, std::string stmt,
+    std::optional<sqlite3_stmt *> sqli3_stmt,
+    std::vector<PMA_SQL::SqliteStmtRow<SArgs...>> v) {
+  if constexpr (std::is_integral_v<Arg>) {
+    if (sizeof(Arg) > 4) {
+      uint64_t val = sqlite3_column_int64(sqli3_stmt.value(), IDX);
+      std::get<IDX>(v.back().row) = val;
+    } else {
+      int val = sqlite3_column_int(sqli3_stmt.value(), IDX);
+      std::get<IDX>(v.back().row) = val;
+    }
+  } else if constexpr (std::is_same_v<Arg, std::string>) {
+    std::string val = reinterpret_cast<const char *>(
+        sqlite3_column_text(sqli3_stmt.value(), IDX));
+    std::get<IDX>(v.back().row) = val;
+  } else {
+    sqlite3_finalize(sqli3_stmt.value());
+    return {ErrorT::EXEC_GENERIC_INVALID_STATE, "Arg not int or std::string",
+            std::nullopt};
+  }
+  return exec_sqlite_stmt_fetch_rows<IDX + 1, Args...>(ctx, stmt, sqli3_stmt,
+                                                       std::move(v));
+}
+
+template <typename... SArgs>
+template <unsigned long long IDX>
+std::tuple<PMA_SQL::ErrorT, std::string,
+           std::optional<std::vector<PMA_SQL::SqliteStmtRow<SArgs...>>>>
+PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
+    const PMA_SQL::SQLITECtx &ctx, std::string stmt,
+    std::optional<sqlite3_stmt *> sqli3_stmt) {
+  if (!sqli3_stmt.has_value()) {
+    return {PMA_SQL::ErrorT::EXEC_GENERIC_INVALID_STATE,
+            "sqli3_stmt is nullopt", std::nullopt};
+  }
+
+  int ret = sqlite3_step(sqli3_stmt.value());
+  if (ret == SQLITE_DONE) {
+    sqlite3_finalize(sqli3_stmt.value());
+    return {ErrorT::SUCCESS, {}, std::nullopt};
+  } else if (ret == SQLITE_ROW) {
+    std::vector<SqliteStmtRow<SArgs...>> v;
+    v.push_back({});
+    return exec_sqlite_stmt_fetch_rows<0, SArgs...>(ctx, stmt, sqli3_stmt,
+                                                    std::move(v));
+  } else {
+    sqlite3_finalize(sqli3_stmt.value());
+    return {ErrorT::EXEC_GENERIC_INVALID_STATE, "sqlite3_step failed",
+            std::nullopt};
+  }
+}
+
+template <typename... SArgs>
+template <unsigned long long IDX, typename Arg, typename... Args>
+std::tuple<PMA_SQL::ErrorT, std::string,
+           std::optional<std::vector<PMA_SQL::SqliteStmtRow<SArgs...>>>>
+PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
+    const PMA_SQL::SQLITECtx &ctx, std::string stmt,
+    std::optional<sqlite3_stmt *> sqli3_stmt, Arg arg, Args... args) {
+  if (sqli3_stmt.has_value()) {
+    if constexpr (std::is_integral_v<Arg>) {
+      if (sizeof(Arg) > 4) {
+        int ret = sqlite3_bind_int64(sqli3_stmt.value(), IDX, arg);
+        if (ret != SQLITE_OK) {
+          sqlite3_finalize(sqli3_stmt.value());
+          return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
+                  "Bind int64 failed", std::nullopt};
+        }
+        return exec_sqlite_stmt_with_rows<IDX + 1, Args...>(
+            ctx, stmt, sqli3_stmt, args...);
+      } else {
+        int ret = sqlite3_bind_int(sqli3_stmt.value(), IDX, arg);
+        if (ret != SQLITE_OK) {
+          sqlite3_finalize(sqli3_stmt.value());
+          return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
+                  "Bind int failed", std::nullopt};
+        }
+        return exec_sqlite_stmt_with_rows<IDX + 1, Args...>(
+            ctx, stmt, sqli3_stmt, args...);
+      }
+    } else if constexpr (std::is_same_v<Arg, std::string>) {
+      char *buf = new char[arg.size() + 1];
+      std::memcpy(buf, arg.c_str(), arg.size() + 1);
+      int ret = sqlite3_bind_text(sqli3_stmt.value(), IDX, buf, arg.size(),
+                                  exec_sqlite_stmt_str_cleanup);
+      if (ret != SQLITE_OK) {
+        sqlite3_finalize(sqli3_stmt.value());
+        return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
+                "Bind text failed", std::nullopt};
+      }
+      return exec_sqlite_stmt_with_rows<IDX + 1, Args...>(ctx, stmt, sqli3_stmt,
+                                                          args...);
+    } else {
+      // TODO handle more than integers and strings
+      int ret = sqlite3_bind_null(sqli3_stmt.value(), IDX);
+      if (ret != SQLITE_OK) {
+        sqlite3_finalize(sqli3_stmt.value());
+        return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
+                "Bind NULL failed", std::nullopt};
+      }
+      return exec_sqlite_stmt_with_rows<IDX + 1, Args...>(ctx, stmt, sqli3_stmt,
+                                                          args...);
+    }
+  } else {
+    sqli3_stmt = nullptr;
+    int ret = sqlite3_prepare(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(),
+                              stmt.size(), &sqli3_stmt.value(), nullptr);
+    if (ret != SQLITE_OK) {
+      return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
+              "sqlite3_prepare failed", std::nullopt};
+    }
+    return exec_sqlite_stmt_with_rows<1, Arg, Args...>(ctx, stmt, sqli3_stmt,
+                                                       arg, args...);
   }
 }
 

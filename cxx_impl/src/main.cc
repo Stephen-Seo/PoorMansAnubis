@@ -42,7 +42,19 @@ int main(int argc, char **argv) {
     }
   }
 
-  {
+  if (argc == 3) {
+    const auto [err_enum, err_msg, opt_vec] =
+        PMA_SQL::SqliteStmtRow<uint64_t, std::string, int,
+                               std::string>::exec_sqlite_stmt_with_rows<0,
+                                                                        int>(
+            ctx, "SELECT ID, IP, PORT, ON_TIME FROM ALLOWED_IPS WHERE 1 == ?",
+            std::nullopt, 1);
+    if (opt_vec.has_value()) {
+      for (auto row : opt_vec.value()) {
+        row.print_row<0>();
+      }
+    }
+  } else {
     const auto [error, challenge_str, answer_str, id] =
         PMA_SQL::generate_challenge(ctx, 1000, "127.0.0.1", 10000);
     if (error == PMA_SQL::ErrorT::SUCCESS) {
