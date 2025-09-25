@@ -20,6 +20,7 @@
 
 // local includes
 #include "helpers.h"
+#include "http.h"
 
 #define ASSERT_TRUE(x)                                                        \
   test_count.fetch_add(1);                                                    \
@@ -49,6 +50,173 @@ int main() {
     std::array<uint8_t, 3> chars{0x12, 0x34, 0x56};
     std::string result = PMA_HELPER::raw_to_hexadecimal<3>(chars);
     ASSERT_TRUE(result == "123456");
+  }
+
+  // test str_to_ipv6_addr
+  {
+    std::array<uint8_t, 16> ipv6 =
+        PMA_HTTP::str_to_ipv6_addr("1234:123:12:1::abcd");
+    CHECK_TRUE(ipv6.at(0) == 0x12);
+    CHECK_TRUE(ipv6.at(1) == 0x34);
+    CHECK_TRUE(ipv6.at(2) == 1);
+    CHECK_TRUE(ipv6.at(3) == 0x23);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0x12);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 1);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0xab);
+    CHECK_TRUE(ipv6.at(15) == 0xcd);
+
+    ipv6 = PMA_HTTP::str_to_ipv6_addr("5678:9:12:123::fedc:ba:c");
+    CHECK_TRUE(ipv6.at(0) == 0x56);
+    CHECK_TRUE(ipv6.at(1) == 0x78);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0x9);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0x12);
+    CHECK_TRUE(ipv6.at(6) == 1);
+    CHECK_TRUE(ipv6.at(7) == 0x23);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0xfe);
+    CHECK_TRUE(ipv6.at(11) == 0xdc);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0xba);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 0xc);
+
+    ipv6 = PMA_HTTP::str_to_ipv6_addr("::1467:235:89:a");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 0);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0x14);
+    CHECK_TRUE(ipv6.at(9) == 0x67);
+    CHECK_TRUE(ipv6.at(10) == 0x2);
+    CHECK_TRUE(ipv6.at(11) == 0x35);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0x89);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 0xa);
+
+    ipv6 = PMA_HTTP::str_to_ipv6_addr("12:3:456:abc:defa::");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 0x12);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0x3);
+    CHECK_TRUE(ipv6.at(4) == 4);
+    CHECK_TRUE(ipv6.at(5) == 0x56);
+    CHECK_TRUE(ipv6.at(6) == 0xa);
+    CHECK_TRUE(ipv6.at(7) == 0xbc);
+    CHECK_TRUE(ipv6.at(8) == 0xde);
+    CHECK_TRUE(ipv6.at(9) == 0xfa);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 0);
+
+    ipv6 =
+        PMA_HTTP::str_to_ipv6_addr("1234:5678:9abc:def0:1234:5678:9abc:def0");
+    CHECK_TRUE(ipv6.at(0) == 0x12);
+    CHECK_TRUE(ipv6.at(1) == 0x34);
+    CHECK_TRUE(ipv6.at(2) == 0x56);
+    CHECK_TRUE(ipv6.at(3) == 0x78);
+    CHECK_TRUE(ipv6.at(4) == 0x9a);
+    CHECK_TRUE(ipv6.at(5) == 0xbc);
+    CHECK_TRUE(ipv6.at(6) == 0xde);
+    CHECK_TRUE(ipv6.at(7) == 0xf0);
+    CHECK_TRUE(ipv6.at(8) == 0x12);
+    CHECK_TRUE(ipv6.at(9) == 0x34);
+    CHECK_TRUE(ipv6.at(10) == 0x56);
+    CHECK_TRUE(ipv6.at(11) == 0x78);
+    CHECK_TRUE(ipv6.at(12) == 0x9a);
+    CHECK_TRUE(ipv6.at(13) == 0xbc);
+    CHECK_TRUE(ipv6.at(14) == 0xde);
+    CHECK_TRUE(ipv6.at(15) == 0xf0);
+
+    ipv6 = PMA_HTTP::str_to_ipv6_addr("1:12:345:6789:abc:de:f:2");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 1);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0x12);
+    CHECK_TRUE(ipv6.at(4) == 3);
+    CHECK_TRUE(ipv6.at(5) == 0x45);
+    CHECK_TRUE(ipv6.at(6) == 0x67);
+    CHECK_TRUE(ipv6.at(7) == 0x89);
+    CHECK_TRUE(ipv6.at(8) == 0xa);
+    CHECK_TRUE(ipv6.at(9) == 0xbc);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0xde);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0xf);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 2);
+
+    ipv6 = PMA_HTTP::str_to_ipv6_addr("0:1234:0:3a5:9:0:45:1");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 0);
+    CHECK_TRUE(ipv6.at(2) == 0x12);
+    CHECK_TRUE(ipv6.at(3) == 0x34);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0x3);
+    CHECK_TRUE(ipv6.at(7) == 0xa5);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 9);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0x45);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 1);
+
+    ipv6 = PMA_HTTP::str_to_ipv6_addr("::");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 0);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 0);
+
+    ipv6 = PMA_HTTP::str_to_ipv6_addr("::1");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 0);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 1);
   }
 
   std::println("{} out of {} tests succeeded", test_succeeded.load(),

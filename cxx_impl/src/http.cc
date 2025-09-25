@@ -26,6 +26,8 @@
 // Standard library includes
 #include <cstring>
 #include <format>
+#include <print>
+#include <stdexcept>
 
 // Local includes
 #include "helpers.h"
@@ -41,6 +43,546 @@ std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
     default:
       return "UnknownError";
   }
+}
+
+std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
+  std::array<uint8_t, 16> ipv6_addr;
+  // Memset to zero first.
+  std::memset(ipv6_addr.data(), 0, 16);
+
+  // Check for [::] case
+  if (addr == "::" || addr == "[::]") {
+    return ipv6_addr;
+  }
+
+  bool has_double_colon = false;
+
+  // first check for double_colon
+  int colon_count = 0;
+  uint64_t double_colon_idx = 0;
+  for (uint64_t idx = 0; idx < addr.size(); ++idx) {
+    if (addr.at(idx) == ':') {
+      ++colon_count;
+      if (colon_count == 2) {
+        has_double_colon = true;
+        double_colon_idx = idx - 1;
+        break;
+      }
+    } else {
+      colon_count = 0;
+    }
+  }
+
+  if (has_double_colon) {
+    // Populate left side.
+    uint64_t a_idx = 0;
+    uint8_t byte = 0;
+    uint_fast8_t byte_count = 0;
+    uint_fast8_t segment_count = 0;
+    bool checking_for_segment = true;
+    uint64_t idx = 0;
+    while (true) {
+      if (double_colon_idx == 0) {
+        break;
+      } else if (addr.at(idx) == ':') {
+        if (checking_for_segment) {
+          idx -= segment_count;
+          checking_for_segment = false;
+          byte = 0;
+          byte_count = 0;
+          continue;
+        }
+      } else if (checking_for_segment) {
+        ++segment_count;
+      } else {
+        switch (segment_count) {
+          case 1:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++a_idx;
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          case 2:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++a_idx;
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          case 3:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          case 4:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          default:
+            throw std::logic_error(
+                std::format("Failed to parse, count is {}", segment_count));
+        }
+
+        segment_count = 0;
+        checking_for_segment = true;
+        ++idx;
+        if (a_idx >= ipv6_addr.size() || idx >= addr.size() ||
+            idx >= double_colon_idx) {
+          break;
+        } else if (addr.at(idx) != ':') {
+          throw std::logic_error("Failed to parse");
+        }
+      }
+      ++idx;
+    }
+
+    // Populate right side.
+    a_idx = ipv6_addr.size() - 1;
+    byte = 0;
+    byte_count = 0;
+    segment_count = 0;
+    checking_for_segment = true;
+    idx = addr.size() - 1;
+    while (true) {
+      if (double_colon_idx + 2 == addr.size()) {
+        break;
+      } else if (addr.at(idx) == ':') {
+        if (checking_for_segment) {
+          idx += segment_count;
+          checking_for_segment = false;
+          byte = 0;
+          byte_count = 0;
+          continue;
+        }
+      } else if (checking_for_segment) {
+        ++segment_count;
+      } else {
+        switch (segment_count) {
+          case 1:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx--) = byte;
+            --a_idx;
+            break;
+          case 2:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            --idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx--) = byte;
+            --a_idx;
+            break;
+          case 3:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            --idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx--) = byte;
+
+            --idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx--) = byte;
+            break;
+          case 4:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            --idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx--) = byte;
+
+            --idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            --idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx--) = byte;
+            break;
+          default:
+            throw std::logic_error(
+                std::format("Failed to parse, count is {}", segment_count));
+        }
+
+        segment_count = 0;
+        checking_for_segment = true;
+        --idx;
+        if (a_idx >= ipv6_addr.size() || idx < double_colon_idx + 2 ||
+            idx >= addr.size()) {
+          break;
+        } else if (addr.at(idx) != ':') {
+          throw std::logic_error("Failed to parse");
+        }
+      }
+      --idx;
+    }
+  } else {
+    // Populate full ipv6 address.
+    uint64_t a_idx = 0;
+    uint8_t byte = 0;
+    uint_fast8_t byte_count = 0;
+    uint_fast8_t segment_count = 0;
+    bool checking_for_segment = true;
+    uint64_t idx = 0;
+    while (true) {
+      if (idx >= addr.size() || addr.at(idx) == ':') {
+        if (checking_for_segment) {
+          idx -= segment_count;
+          checking_for_segment = false;
+          byte = 0;
+          byte_count = 0;
+          continue;
+        }
+      } else if (checking_for_segment) {
+        ++segment_count;
+      } else {
+        switch (segment_count) {
+          case 1:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++a_idx;
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          case 2:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++a_idx;
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          case 3:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          case 4:
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte = ((addr.at(idx) - '0') & 0xF) << 4;
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte = ((addr.at(idx) - 'a' + 10) & 0xF) << 4;
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ++idx;
+
+            if (addr.at(idx) >= '0' && addr.at(idx) <= '9') {
+              byte |= ((addr.at(idx) - '0') & 0xF);
+            } else if (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') {
+              byte |= ((addr.at(idx) - 'a' + 10) & 0xF);
+            } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
+              byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
+            } else {
+              throw std::logic_error("Failed to parse");
+            }
+
+            ipv6_addr.at(a_idx++) = byte;
+            break;
+          default:
+            throw std::logic_error(
+                std::format("Failed to parse, count is {}", segment_count));
+        }
+
+        segment_count = 0;
+        checking_for_segment = true;
+        ++idx;
+        if (a_idx >= ipv6_addr.size() || idx >= addr.size()) {
+          break;
+        } else if (addr.at(idx) != ':') {
+          throw std::logic_error("Failed to parse");
+        }
+      }
+      ++idx;
+    }
+  }
+
+  return ipv6_addr;
 }
 
 std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket(
