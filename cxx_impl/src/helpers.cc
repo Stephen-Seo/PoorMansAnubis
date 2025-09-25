@@ -56,3 +56,15 @@ uint64_t PMA_HELPER::endian_swap_u64(uint64_t u64) {
 
   return result;
 }
+
+uint16_t PMA_HELPER::be_swap_u16(uint16_t u16) {
+  return is_big_endian() ? u16 : endian_swap_u16(u16);
+}
+
+uint32_t PMA_HELPER::be_swap_u32(uint32_t u32) {
+  return is_big_endian() ? u32 : endian_swap_u32(u32);
+}
+
+uint64_t PMA_HELPER::be_swap_u64(uint64_t u64) {
+  return is_big_endian() ? u64 : endian_swap_u64(u64);
+}

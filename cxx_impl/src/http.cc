@@ -27,6 +27,9 @@
 #include <cstring>
 #include <format>
 
+// Local includes
+#include "helpers.h"
+
 std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
   switch (err_enum) {
     case ErrorT::SUCCESS:
@@ -52,7 +55,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket(
   {
     struct sockaddr_in6 sain6;
     sain6.sin6_family = AF_INET6;
-    sain6.sin6_port = port;
+    sain6.sin6_port = PMA_HELPER::be_swap_u16(port);
     sain6.sin6_flowinfo = 0;
     std::memset(sain6.sin6_addr.s6_addr, 0, 16);
     sain6.sin6_scope_id = 0;
@@ -92,7 +95,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket(
   {
     struct sockaddr_in sain;
     sain.sin_family = AF_INET;
-    sain.sin_port = port;
+    sain.sin_port = PMA_HELPER::be_swap_u16(port);
     sain.sin_addr.s_addr = 0;
 
     int ret = bind(socket_fd, reinterpret_cast<const sockaddr*>(&sain),

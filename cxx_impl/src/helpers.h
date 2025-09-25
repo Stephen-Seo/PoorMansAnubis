@@ -61,6 +61,10 @@ uint16_t endian_swap_u16(uint16_t);
 uint32_t endian_swap_u32(uint32_t);
 uint64_t endian_swap_u64(uint64_t);
 
+uint16_t be_swap_u16(uint16_t);
+uint32_t be_swap_u32(uint32_t);
+uint64_t be_swap_u64(uint64_t);
+
 }  // namespace PMA_HELPER
 
 ////////////////////////////////////////////////////////////////////////////////
