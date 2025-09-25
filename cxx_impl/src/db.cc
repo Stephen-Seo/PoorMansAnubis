@@ -40,8 +40,8 @@ std::optional<std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string> >
 internal_exec_sqlite_statement(const PMA_SQL::SQLITECtx &ctx,
                                std::string stmt) {
   char *buf = nullptr;
-  int ret = sqlite3_exec(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(), nullptr,
-                         nullptr, &buf);
+  int ret =
+      sqlite3_exec(ctx.get_sqlite_ctx(), stmt.c_str(), nullptr, nullptr, &buf);
   if (ret != SQLITE_OK) {
     std::string err_msg("No Error Message");
     if (buf) {
@@ -169,6 +169,10 @@ PMA_SQL::SQLITECtx *PMA_SQL::SQLITECtx::operator=(SQLITECtx &&other) {
 
 void *PMA_SQL::SQLITECtx::get_ctx() const { return ctx; }
 
+sqlite3 *PMA_SQL::SQLITECtx::get_sqlite_ctx() const {
+  return reinterpret_cast<sqlite3 *>(ctx);
+}
+
 std::mutex &PMA_SQL::SQLITECtx::get_mutex() { return mutex; }
 
 void PMA_SQL::exec_sqlite_stmt_str_cleanup(void *ud) {
@@ -239,7 +243,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
     const PMA_SQL::SQLITECtx &ctx) {
-  sqlite3 *db = ctx.get_sqlite_ctx<sqlite3>();
+  sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
   }
@@ -262,7 +266,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
     const PMA_SQL::SQLITECtx &ctx) {
-  sqlite3 *db = ctx.get_sqlite_ctx<sqlite3>();
+  sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
   }

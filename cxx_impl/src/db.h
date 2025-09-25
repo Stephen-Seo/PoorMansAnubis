@@ -63,8 +63,7 @@ class SQLITECtx {
 
   void *get_ctx() const;
 
-  template <typename SqliteT>
-  SqliteT *get_sqlite_ctx() const;
+  sqlite3 *get_sqlite_ctx() const;
 
   std::mutex &get_mutex();
 
@@ -148,11 +147,6 @@ std::tuple<ErrorT, std::string, uint16_t> verify_answer(SQLITECtx &ctx,
 // templated implementations
 ////////////////////////////////////////////////////////////////////////////////
 
-template <typename SqliteT>
-SqliteT *PMA_SQL::SQLITECtx::get_sqlite_ctx() const {
-  return reinterpret_cast<SqliteT *>(ctx);
-}
-
 template <unsigned long long IDX>
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
     const PMA_SQL::SQLITECtx &ctx, std::string stmt,
@@ -228,8 +222,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
     }
   } else {
     sqli3_stmt = nullptr;
-    int ret = sqlite3_prepare(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(),
-                              stmt.size(), &sqli3_stmt.value(), nullptr);
+    int ret = sqlite3_prepare(ctx.get_sqlite_ctx(), stmt.c_str(), stmt.size(),
+                              &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
               "sqlite3_prepare failed"};
@@ -316,8 +310,8 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
     std::optional<sqlite3_stmt *> sqli3_stmt) {
   if (!sqli3_stmt.has_value()) {
     sqli3_stmt = nullptr;
-    int ret = sqlite3_prepare(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(),
-                              stmt.size(), &sqli3_stmt.value(), nullptr);
+    int ret = sqlite3_prepare(ctx.get_sqlite_ctx(), stmt.c_str(), stmt.size(),
+                              &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
               "sqlite3_prepare failed", std::nullopt};
@@ -393,8 +387,8 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
     }
   } else {
     sqli3_stmt = nullptr;
-    int ret = sqlite3_prepare(ctx.get_sqlite_ctx<sqlite3>(), stmt.c_str(),
-                              stmt.size(), &sqli3_stmt.value(), nullptr);
+    int ret = sqlite3_prepare(ctx.get_sqlite_ctx(), stmt.c_str(), stmt.size(),
+                              &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
               "sqlite3_prepare failed", std::nullopt};
