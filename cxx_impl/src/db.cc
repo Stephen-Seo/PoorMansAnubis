@@ -36,7 +36,7 @@
 // Internal Functions.
 ////////////////////////////////////////////////////////////////////////////////
 
-std::optional<std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string> >
+std::optional<std::tuple<PMA_SQL::SQLITECtx, PMA_SQL::ErrorT, std::string>>
 internal_exec_sqlite_statement(const PMA_SQL::SQLITECtx &ctx,
                                std::string stmt) {
   char *buf = nullptr;
@@ -131,6 +131,8 @@ std::string PMA_SQL::error_t_to_string(PMA_SQL::ErrorT err) {
       return "ExecGenericInvalidState";
     case PMA_SQL::ErrorT::CLIENT_IP_DOES_NOT_MATCH_STORED_IP:
       return "ClientIPDoesNotMatchStoredIP";
+    case PMA_SQL::ErrorT::FAILED_TO_FETCH_FROM_ALLOWED_IPS:
+      return "FailedToFetchFromAllowedIPs";
     default:
       return "Unknown error";
   }
@@ -174,6 +176,10 @@ sqlite3 *PMA_SQL::SQLITECtx::get_sqlite_ctx() const {
 }
 
 std::mutex &PMA_SQL::SQLITECtx::get_mutex() { return mutex; }
+
+std::lock_guard<std::mutex> PMA_SQL::SQLITECtx::get_mutex_lock_guard() {
+  return std::lock_guard<std::mutex>(mutex);
+}
 
 void PMA_SQL::exec_sqlite_stmt_str_cleanup(void *ud) {
   char *buf = reinterpret_cast<char *>(ud);
@@ -303,7 +309,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
   std::free(answer);
 
   // Acquire a mutex lock_guard.
-  std::lock_guard<std::mutex> lock(ctx.get_mutex());
+  auto lock = ctx.get_mutex_lock_guard();
 
   // Get a unique identifier for CHALLENGE_FACTORS.
   uint64_t unique_id = 0;
@@ -369,8 +375,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
 
 std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
     SQLITECtx &ctx, std::string answer, std::string ipaddr, uint64_t id) {
-  // Acquire a mutex lock_guard.
-  std::lock_guard<std::mutex> lock(ctx.get_mutex());
+  auto lock = ctx.get_mutex_lock_guard();
 
   std::string hash;
   // get hash
@@ -431,4 +436,33 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
   }
 
   return {ErrorT::SUCCESS, {}, port};
+}
+
+std::tuple<PMA_SQL::ErrorT, std::string, std::unordered_set<uint16_t>>
+PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr) {
+  auto lock = ctx.get_mutex_lock_guard();
+
+  const auto [err_enum, err_msg, opt_vec] =
+      SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string>(
+          ctx, "SELECT PORT FROM ALLOWED_IPS WHERE IP = ?", std::nullopt,
+          ipaddr);
+
+  if (err_enum != ErrorT::SUCCESS) {
+    return {err_enum, err_msg, {}};
+  } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
+    return {ErrorT::FAILED_TO_FETCH_FROM_ALLOWED_IPS,
+            "opt_vec is nullopt or empty",
+            {}};
+  }
+
+  std::unordered_set<uint16_t> ret;
+
+  for (uint64_t idx = 0; idx < opt_vec.value().size(); ++idx) {
+    if (auto opt_val = std::get<0>(opt_vec.value().at(idx).row);
+        opt_val.has_value()) {
+      ret.insert(static_cast<uint16_t>(opt_val.value()));
+    }
+  }
+
+  return {ErrorT::SUCCESS, {}, ret};
 }

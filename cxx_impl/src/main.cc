@@ -44,7 +44,21 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (argc == 3) {
+  if (argc == 4) {
+    const auto [err_enum, err_msg, ports_set] =
+        PMA_SQL::get_allowed_ip_ports(ctx, "127.0.0.1");
+    if (err_enum == PMA_SQL::ErrorT::SUCCESS) {
+      std::print("Allowed ports for IP: ");
+      for (uint16_t port : ports_set) {
+        std::print("{} ", port);
+      }
+      std::println();
+    } else {
+      std::println("err_enum {}, err_msg {}",
+                   PMA_SQL::error_t_to_string(err_enum), err_msg);
+      return 1;
+    }
+  } else if (argc == 3) {
     const auto [err_enum, err_msg, opt_vec] =
         PMA_SQL::SqliteStmtRow<uint64_t, std::string, int, std::string>::
             exec_sqlite_stmt_with_rows<0>(
@@ -68,7 +82,7 @@ int main(int argc, char **argv) {
     }
 
     if (argc == 2) {
-      std::this_thread::sleep_for(std::chrono::seconds(5));
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
       const auto [error_enum, err_str, port] =
           PMA_SQL::verify_answer(ctx, answer_str, "127.0.0.1", id);
       std::println(stderr, "Got error_enum {}, err_str {}, port {}",

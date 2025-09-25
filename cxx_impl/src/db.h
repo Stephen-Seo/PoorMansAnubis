@@ -27,6 +27,7 @@
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <unordered_set>
 #include <vector>
 
 // third party includes
@@ -44,7 +45,8 @@ enum class ErrorT {
   FAILED_TO_FETCH_FROM_SEQ_ID,
   FAILED_TO_PREPARE_EXEC_GENERIC,
   EXEC_GENERIC_INVALID_STATE,
-  CLIENT_IP_DOES_NOT_MATCH_STORED_IP
+  CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
+  FAILED_TO_FETCH_FROM_ALLOWED_IPS
 };
 
 std::string error_t_to_string(ErrorT err);
@@ -66,6 +68,8 @@ class SQLITECtx {
   sqlite3 *get_sqlite_ctx() const;
 
   std::mutex &get_mutex();
+
+  std::lock_guard<std::mutex> get_mutex_lock_guard();
 
  private:
   std::mutex mutex;
@@ -141,6 +145,8 @@ std::tuple<ErrorT, std::string, uint16_t> verify_answer(SQLITECtx &ctx,
                                                         std::string ipaddr,
                                                         uint64_t id);
 
+std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
+get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////
