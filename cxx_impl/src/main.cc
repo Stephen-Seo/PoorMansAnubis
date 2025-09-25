@@ -16,6 +16,7 @@
 
 // Local includes.
 #include "db.h"
+#include "helpers.h"
 
 // Standard library includes.
 #include <chrono>
@@ -23,6 +24,9 @@
 #include <thread>
 
 int main(int argc, char **argv) {
+  std::println("This system is {}",
+               PMA_HELPER::is_big_endian() ? "big endian" : "little endian");
+
   // Test init sqlite3.
   auto [ctx, error, cxx_string] = PMA_SQL::init_sqlite("./sqlite_db");
 

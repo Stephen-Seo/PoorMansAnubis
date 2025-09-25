@@ -17,24 +17,27 @@
 #ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_HELPERS_H_
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_HELPERS_H_
 
+// Standard library includes
+#include <cstdint>
 #include <functional>
 #include <optional>
+#include <string>
 
 template <typename T>
 class GenericCleanup {
-  public:
-    GenericCleanup(T value, std::function<void(T*)> cleanup_fn);
-    ~GenericCleanup();
+ public:
+  GenericCleanup(T value, std::function<void(T *)> cleanup_fn);
+  ~GenericCleanup();
 
-    GenericCleanup(const GenericCleanup<T> &) = delete;
-    GenericCleanup *operator=(const GenericCleanup<T> &) = delete;
+  GenericCleanup(const GenericCleanup<T> &) = delete;
+  GenericCleanup *operator=(const GenericCleanup<T> &) = delete;
 
-    GenericCleanup(GenericCleanup<T> &&);
-    GenericCleanup *operator=(GenericCleanup<T> &&);
+  GenericCleanup(GenericCleanup<T> &&);
+  GenericCleanup *operator=(GenericCleanup<T> &&);
 
-  private:
-    std::optional<std::function<void(T*)>> cleanup_fn;
-    std::optional<T> value;
+ private:
+  std::optional<std::function<void(T *)>> cleanup_fn;
+  std::optional<T> value;
 };
 
 namespace PMA_HELPER {
@@ -42,16 +45,31 @@ namespace PMA_HELPER {
 template <unsigned long long SIZE>
 extern std::string raw_to_hexadecimal(const std::array<uint8_t, SIZE> &data);
 
+bool constexpr is_big_endian() {
+  struct {
+    union {
+      uint32_t integer;
+      char c_arr[4];
+    };
+  } endian_struct;
+
+  endian_struct.integer = 0x12345678;
+  return endian_struct.c_arr[0] == 0x12;
 }
+
+uint16_t endian_swap_u16(uint16_t);
+uint32_t endian_swap_u32(uint32_t);
+uint64_t endian_swap_u64(uint64_t);
+
+}  // namespace PMA_HELPER
 
 ////////////////////////////////////////////////////////////////////////////////
 // Templated Implementations.
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-GenericCleanup<T>::GenericCleanup(T value, std::function<void(T*)> cleanup_fn) :
-cleanup_fn(cleanup_fn),
-value(value) {}
+GenericCleanup<T>::GenericCleanup(T value, std::function<void(T *)> cleanup_fn)
+    : cleanup_fn(cleanup_fn), value(value) {}
 
 template <typename T>
 GenericCleanup<T>::~GenericCleanup() {
@@ -84,7 +102,8 @@ GenericCleanup<T> *GenericCleanup<T>::operator=(GenericCleanup<T> &&other) {
 }
 
 template <unsigned long long SIZE>
-std::string PMA_HELPER::raw_to_hexadecimal(const std::array<uint8_t, SIZE> &data) {
+std::string PMA_HELPER::raw_to_hexadecimal(
+    const std::array<uint8_t, SIZE> &data) {
   std::string hexadecimal;
 
   for (unsigned long long idx = 0; idx < SIZE; ++idx) {
