@@ -66,7 +66,8 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
       if (colon_count == 2) {
         has_double_colon = true;
         double_colon_idx = idx - 1;
-        break;
+      } else if (colon_count > 2) {
+        throw std::invalid_argument("Too many consecutive colons");
       }
     } else {
       colon_count = 0;
@@ -74,6 +75,33 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
   }
 
   if (has_double_colon) {
+    // Validate number of segments.
+    {
+      int segment_count = 1;
+      bool reached_colon = false;
+      bool reached_value = false;
+      for (uint64_t idx = 0; idx < addr.size(); ++idx) {
+        if (addr.at(idx) == ':') {
+          if (!reached_colon && reached_value) {
+            ++segment_count;
+            reached_colon = true;
+          }
+        } else {
+          reached_colon = false;
+          reached_value = true;
+        }
+      }
+
+      if (addr.substr(addr.size() - 2, 2) == "::") {
+        --segment_count;
+      }
+
+      if (segment_count > 7) {
+        throw std::invalid_argument(
+            "Invalid number of segments for full ipv6 addr");
+      }
+    }
+
     // Populate left side.
     uint64_t a_idx = 0;
     uint8_t byte = 0;
@@ -104,7 +132,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++a_idx;
@@ -118,7 +146,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -130,7 +158,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++a_idx;
@@ -144,7 +172,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
@@ -158,7 +186,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -170,7 +198,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
@@ -183,7 +211,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -195,7 +223,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
@@ -209,7 +237,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -221,13 +249,13 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
             break;
           default:
-            throw std::logic_error(
+            throw std::invalid_argument(
                 std::format("Failed to parse, count is {}", segment_count));
         }
 
@@ -238,7 +266,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             idx >= double_colon_idx) {
           break;
         } else if (addr.at(idx) != ':') {
-          throw std::logic_error("Failed to parse");
+          throw std::invalid_argument("Failed to parse");
         }
       }
       ++idx;
@@ -274,7 +302,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx--) = byte;
@@ -288,7 +316,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             --idx;
@@ -300,7 +328,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx--) = byte;
@@ -314,7 +342,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             --idx;
@@ -326,7 +354,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx--) = byte;
@@ -340,7 +368,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx--) = byte;
@@ -353,7 +381,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             --idx;
@@ -365,7 +393,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx--) = byte;
@@ -379,7 +407,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             --idx;
@@ -391,13 +419,13 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx--) = byte;
             break;
           default:
-            throw std::logic_error(
+            throw std::invalid_argument(
                 std::format("Failed to parse, count is {}", segment_count));
         }
 
@@ -408,12 +436,26 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             idx >= addr.size()) {
           break;
         } else if (addr.at(idx) != ':') {
-          throw std::logic_error("Failed to parse");
+          throw std::invalid_argument("Failed to parse");
         }
       }
       --idx;
     }
   } else {
+    // Validate number of segments.
+    {
+      int segment_count = 1;
+      for (uint64_t idx = 0; idx < addr.size(); ++idx) {
+        if (addr.at(idx) == ':') {
+          ++segment_count;
+        }
+      }
+      if (segment_count > 8) {
+        throw std::invalid_argument(
+            "Invalid number of segments for full ipv6 addr");
+      }
+    }
+
     // Populate full ipv6 address.
     uint64_t a_idx = 0;
     uint8_t byte = 0;
@@ -442,7 +484,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++a_idx;
@@ -456,7 +498,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -468,7 +510,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++a_idx;
@@ -482,7 +524,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
@@ -496,7 +538,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -508,7 +550,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
@@ -521,7 +563,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -533,7 +575,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
@@ -547,7 +589,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte = ((addr.at(idx) - 'A' + 10) & 0xF) << 4;
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ++idx;
@@ -559,13 +601,13 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
             } else if (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') {
               byte |= ((addr.at(idx) - 'A' + 10) & 0xF);
             } else {
-              throw std::logic_error("Failed to parse");
+              throw std::invalid_argument("Failed to parse");
             }
 
             ipv6_addr.at(a_idx++) = byte;
             break;
           default:
-            throw std::logic_error(
+            throw std::invalid_argument(
                 std::format("Failed to parse, count is {}", segment_count));
         }
 
@@ -575,7 +617,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
         if (a_idx >= ipv6_addr.size() || idx >= addr.size()) {
           break;
         } else if (addr.at(idx) != ':') {
-          throw std::logic_error("Failed to parse");
+          throw std::invalid_argument("Failed to parse");
         }
       }
       ++idx;
