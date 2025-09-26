@@ -63,4 +63,4 @@ clean:
 	rm -f test
 
 clang-format:
-	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=Google ${SOURCES} ${HEADERS} src/test.cc
+	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=Google ${SOURCES} ${HEADERS} src/test.cc || true
