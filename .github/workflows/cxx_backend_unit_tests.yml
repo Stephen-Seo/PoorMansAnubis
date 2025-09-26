@@ -1,0 +1,15 @@
+name: cxx_backend Unit Tests
+run-name: ${{ github.actor }} is running the tests
+on: [push]
+jobs:
+  Build-and-Test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Dependencies
+        run: sudo /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install g++
+      - name: Get Sources
+        run: git clone --depth=1 --no-single-branch https://github.com/Stephen-Seo/PoorMansAnubis.git PMA && cd PMA && git checkout $GITHUB_REF_NAME
+      - name: Build UnitTests
+        run: cd PMA/cxx_impl && make test
+      - name: Run UnitTests
+        run: ./PMA/cxx_impl/test
