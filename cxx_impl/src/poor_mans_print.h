@@ -14,6 +14,10 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
+// Note that this header and corresponding source file only exists so that a
+// Github Workflow can run unit tests. The "<print>" header exists on and after
+// C++23, which "ubuntu-latest" does not have as of 2025-09-26.
+
 #ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_POOR_MANS_PRINT_H_
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_POOR_MANS_PRINT_H_
 
