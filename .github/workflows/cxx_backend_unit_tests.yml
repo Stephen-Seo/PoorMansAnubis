@@ -6,10 +6,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Dependencies
-        run: sudo /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install g++
+        run: sudo /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install g++ sed libsqlite3-dev librust-blake3-dev cargo
+      - name: Build dependency blake3
+        run: mkdir $HOME/blake3_build_dir && cp -r $(find /usr/share/cargo/registry -type d -name 'blake3*') $HOME/blake3_build_dir/ && cd $(find $HOME/blake3_build_dir -type d -name 'blake3-1*') && echo -e '[lib]\ncrate-type=["staticlib"]' >> Cargo.toml && cargo build --release && install -D -m644 target/release/libblake3.a $HOME/blake3_lib/libblake3.a
       - name: Get Sources
-        run: git clone --depth=1 --no-single-branch https://github.com/Stephen-Seo/PoorMansAnubis.git PMA && cd PMA && git checkout $GITHUB_REF_NAME
+        run: git clone --depth=1 --no-single-branch https://github.com/Stephen-Seo/PoorMansAnubis.git PMA && cd PMA && git checkout $GITHUB_REF_NAME && git submodule update --init --recursive
+      - name: Use Sed for fixes due to lack of C++23 support
+        run: cd PMA/cxx_impl && find . -regex '.*\.\(cc\|h\)$' -not -wholename './src/poor_mans_print.h' -not -wholename './src/poor_mans_print.cc' -execdir sed -i -e 's/std::print/poormansprint/g' -e 's/#include <print>/#include "poor_mans_print.h"/g' -e 's/poormansprintln()/std::println()/g' -e 's/poormansprintln(stderr, /poormansprintln(/g' '{}' ';'
+      - name: Use Sed to depend on blake3 header/lib in alternate directories
+        run: find /usr/share/cargo/registry -regex '.*/blake3\.h$' > BLAKE3_PATH.txt && sed -i -e "/^COMMON_FLAGS/s|\$| -I$(dirname $(cat BLAKE3_PATH.txt) )|" -e "/^LINKER_FLAGS/s|-lblake3|$HOME/blake3_lib/libblake3.a|" PMA/cxx_impl/Makefile
+      - name: Use Sed to add search path for sqlite3 library
+        run: sed -i -e '/^LINKER_FLAGS/s|-lsqlite3|-L/usr/lib/x86_64-linux-gnu -lsqlite3|' PMA/cxx_impl/Makefile
       - name: Build UnitTests
-        run: cd PMA/cxx_impl && make test
+        run: make -C PMA/cxx_impl test
       - name: Run UnitTests
         run: ./PMA/cxx_impl/test
