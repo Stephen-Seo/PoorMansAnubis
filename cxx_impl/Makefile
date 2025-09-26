@@ -42,10 +42,10 @@ OBJECTS := $(addprefix ${OBJDIR_ABS}/,$(subst .cc,.cc.o,${SOURCES}))
 all: cxx_backend_impl
 
 cxx_backend_impl: ${OBJECTS} ${C_IMPL_OBJECTS}
-	${CXX} -o cxx_backend_impl ${FINAL_COMMON_FLAGS} ${LINKER_FLAGS} $^
+	${CXX} -o cxx_backend_impl ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
 test: ${OBJDIR_ABS}/src/test.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
-	${CXX} -o test ${FINAL_COMMON_FLAGS} ${LINKER_FLAGS} $^
+	${CXX} -o test ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
 ${OBJDIR_ABS}/src/%.cc.o: ${CWD}/src/%.cc ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
