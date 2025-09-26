@@ -228,11 +228,11 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
     }
   } else {
     sqli3_stmt = nullptr;
-    int ret = sqlite3_prepare(ctx.get_sqlite_ctx(), stmt.c_str(), stmt.size(),
-                              &sqli3_stmt.value(), nullptr);
+    int ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx(), stmt.c_str(),
+                                 stmt.size(), &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
-              "sqlite3_prepare failed"};
+              "sqlite3_prepare_v2 failed"};
     }
     return exec_sqlite_statement<1, Arg, Args...>(ctx, stmt, sqli3_stmt, arg,
                                                   args...);
@@ -316,11 +316,11 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
     std::optional<sqlite3_stmt *> sqli3_stmt) {
   if (!sqli3_stmt.has_value()) {
     sqli3_stmt = nullptr;
-    int ret = sqlite3_prepare(ctx.get_sqlite_ctx(), stmt.c_str(), stmt.size(),
-                              &sqli3_stmt.value(), nullptr);
+    int ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx(), stmt.c_str(),
+                                 stmt.size(), &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
-              "sqlite3_prepare failed", std::nullopt};
+              "sqlite3_prepare_v2 failed", std::nullopt};
     }
   }
 
@@ -393,11 +393,11 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
     }
   } else {
     sqli3_stmt = nullptr;
-    int ret = sqlite3_prepare(ctx.get_sqlite_ctx(), stmt.c_str(), stmt.size(),
-                              &sqli3_stmt.value(), nullptr);
+    int ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx(), stmt.c_str(),
+                                 stmt.size(), &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
-              "sqlite3_prepare failed", std::nullopt};
+              "sqlite3_prepare_v2 failed", std::nullopt};
     }
     return exec_sqlite_stmt_with_rows<1, Arg, Args...>(ctx, stmt, sqli3_stmt,
                                                        arg, args...);
