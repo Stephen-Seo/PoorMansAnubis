@@ -474,5 +474,5 @@ int main() {
 
   std::println("{} out of {} tests succeeded", test_succeeded.load(),
                test_count.load());
-  return 0;
+  return test_succeeded.load() == test_count.load() ? 0 : 1;
 }
