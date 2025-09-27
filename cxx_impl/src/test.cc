@@ -52,6 +52,27 @@ int main() {
     ASSERT_TRUE(result == "123456");
   }
 
+  // test endian_swap_*
+  {
+    uint16_t u16 = 0x12ab;
+    u16 = PMA_HELPER::endian_swap_u16(u16);
+    ASSERT_TRUE(u16 == 0xab12);
+    u16 = PMA_HELPER::endian_swap_u16(u16);
+    ASSERT_TRUE(u16 == 0x12ab);
+
+    uint32_t u32 = 0x1234abcd;
+    u32 = PMA_HELPER::endian_swap_u32(u32);
+    ASSERT_TRUE(u32 == 0xcdab3412);
+    u32 = PMA_HELPER::endian_swap_u32(u32);
+    ASSERT_TRUE(u32 == 0x1234abcd);
+
+    uint64_t u64 = 0x12345678abcdefdd;
+    u64 = PMA_HELPER::endian_swap_u64(u64);
+    ASSERT_TRUE(u64 == 0xddefcdab78563412);
+    u64 = PMA_HELPER::endian_swap_u64(u64);
+    ASSERT_TRUE(u64 == 0x12345678abcdefdd);
+  }
+
   // test str_to_ipv6_addr
   {
     std::array<uint8_t, 16> ipv6 =
