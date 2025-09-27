@@ -20,8 +20,6 @@
 
 void std::println() { std::printf("\n"); }
 
-void PoorMans::println() { std::printf("\n"); }
-
 void PoorMans::print_actual(std::string str) { std::printf("%s", str.c_str()); }
 
 void PoorMans::println_actual(std::string str) {

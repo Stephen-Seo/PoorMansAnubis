@@ -36,33 +36,12 @@ void println();
 
 namespace PoorMans {
 
-template <typename FMT_T, typename... Args>
-void print(FMT_T, Args...);
-
-template <typename FMT_T, typename... Args>
-void println(FMT_T, Args...);
-
-void println();
-
 void print_actual(std::string);
 
 void println_actual(std::string);
 
 void println_actual();
+
 }  // namespace PoorMans
-
-////////////////////////////////////////////////////////////////////////////////
-// Templated Functions Implemenations
-////////////////////////////////////////////////////////////////////////////////
-
-template <typename FMT_T, typename... Args>
-void PoorMans::print(FMT_T fmt, Args... args) {
-  print_actual(std::format(std::forward<FMT_T>(fmt), args...));
-}
-
-template <typename FMT_T, typename... Args>
-void PoorMans::println(FMT_T fmt, Args... args) {
-  println_actual(std::format(std::forward<FMT_T>(fmt), args...));
-}
 
 #endif
