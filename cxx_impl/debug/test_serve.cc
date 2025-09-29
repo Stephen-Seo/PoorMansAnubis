@@ -4,6 +4,8 @@
 #include <chrono>
 #include <print>
 #include <unordered_set>
+#include <cstring>
+#include <cstdlib>
 
 #include <signal.h>
 #include <errno.h>
@@ -37,15 +39,55 @@ std::unordered_set<int> update_connections(const std::unordered_set<int> &connec
   return to_remove;
 }
 
-int main() {
-  const auto [err_enum, err_str, socket_fd] = PMA_HTTP::get_ipv4_socket("127.0.0.1", 9000);
+void print_usage() {
+  std::println("./program ( --ipv4=0.0.0.0 | --ipv6=:: ) --port=9000");
+}
 
-  if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
-    std::println(stderr, "Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
-    if (socket_fd >= 0) {
-      close(socket_fd);
+int main(int argc, char **argv) {
+  int socket_fd = -1;
+
+  if (argc != 3) {
+    print_usage();
+    return 0;
+  }
+
+  uint16_t port = 0;
+
+  if (std::strncmp(argv[2], "--port=", 7) == 0) {
+    port = std::atoi(argv[2] + 7);
+  } else {
+  }
+
+  std::println("Using port {}", port);
+
+  if (std::strncmp(argv[1], "--ipv4=", 7) == 0) {
+    std::println("Using ipv4 addr {}", argv[1] + 7);
+    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv4_socket(argv[1] + 7, port);
+
+    if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
+      std::println(stderr, "Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
+      if (ret_socket_fd >= 0) {
+        close(ret_socket_fd);
+      }
+      return 1;
     }
-    return 1;
+    socket_fd = ret_socket_fd;
+  } else if (std::strncmp(argv[1], "--ipv6=", 7) == 0) {
+    std::println("Using ipv6 addr {}", argv[1] + 7);
+
+    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv6_socket(argv[1] + 7, port);
+
+    if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
+      std::println(stderr, "Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
+      if (ret_socket_fd >= 0) {
+        close(ret_socket_fd);
+      }
+      return 1;
+    }
+    socket_fd = ret_socket_fd;
+  } else {
+    print_usage();
+    return 0;
   }
 
   signal(SIGINT, handle_signal);
