@@ -45,7 +45,7 @@ std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
   }
 }
 
-std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
+std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(const std::string &addr) {
   std::array<uint8_t, 16> ipv6_addr;
   // Memset to zero first.
   std::memset(ipv6_addr.data(), 0, 16);
@@ -627,29 +627,60 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(std::string addr) {
   return ipv6_addr;
 }
 
+uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) {
+  union {
+    uint32_t u32;
+    std::array<uint8_t, 4> u8_arr;
+  } addr_u;
+
+  addr_u.u32 = 0;
+
+  int addr_idx = 4;
+  int value = 0;
+  for (uint64_t idx = 0; idx < addr.size(); ++idx) {
+    if (addr[idx] >= '0' && addr[idx] <= '9') {
+      value = value * 10 + static_cast<int>(addr[idx] - '0');
+      if (value > 255) {
+        throw std::invalid_argument(
+            "Failed to parse, segment greater than 255");
+      }
+    } else if (addr[idx] == '.') {
+      addr_u.u8_arr.at(--addr_idx) = value;
+      value = 0;
+    } else {
+      throw std::invalid_argument("Failed to parse");
+    }
+  }
+  addr_u.u8_arr.at(--addr_idx) = value;
+
+  return PMA_HELPER::be_swap_u32(addr_u.u32);
+}
+
 std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket(
     std::string addr, uint16_t port) {
   int socket_fd = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 6);
   if (socket_fd == -1) {
     return {ErrorT::FAILED_TO_GET_IPV6_SOCKET,
-            std::format("Failed to create socket, errno {}", errno), 0};
+            std::format("Failed to create socket, errno {}", errno), -1};
   }
 
-  // bind to [::], with port
+  // bind to "addr", with port
   {
+    std::array<uint8_t, 16> ipv6_addr = str_to_ipv6_addr(addr);
+
     struct sockaddr_in6 sain6;
     sain6.sin6_family = AF_INET6;
     sain6.sin6_port = PMA_HELPER::be_swap_u16(port);
     sain6.sin6_flowinfo = 0;
-    std::memset(sain6.sin6_addr.s6_addr, 0, 16);
+    std::memcpy(sain6.sin6_addr.s6_addr, ipv6_addr.data(), 16);
     sain6.sin6_scope_id = 0;
 
-    int ret = bind(socket_fd, reinterpret_cast<const sockaddr*>(&sain6),
+    int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain6),
                    sizeof(struct sockaddr_in6));
     if (ret != 0) {
       close(socket_fd);
       return {ErrorT::FAILED_TO_GET_IPV6_SOCKET,
-              std::format("Failed to bind socket, errno {}", errno), 0};
+              std::format("Failed to bind socket, errno {}", errno), -1};
     }
   }
 
@@ -660,7 +691,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket(
       close(socket_fd);
       return {ErrorT::FAILED_TO_GET_IPV6_SOCKET,
               std::format("Failed to set socket to listen, errno {}", errno),
-              0};
+              -1};
     }
   }
 
@@ -672,22 +703,22 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket(
   int socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 6);
   if (socket_fd == -1) {
     return {ErrorT::FAILED_TO_GET_IPV4_SOCKET,
-            std::format("Failed to create socket, errno {}", errno), 0};
+            std::format("Failed to create socket, errno {}", errno), -1};
   }
 
-  // bind to 0.0.0.0, with port
+  // bind to "addr", with port
   {
     struct sockaddr_in sain;
     sain.sin_family = AF_INET;
     sain.sin_port = PMA_HELPER::be_swap_u16(port);
-    sain.sin_addr.s_addr = 0;
+    sain.sin_addr.s_addr = str_to_ipv4_addr(addr);
 
-    int ret = bind(socket_fd, reinterpret_cast<const sockaddr*>(&sain),
+    int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain),
                    sizeof(struct sockaddr_in));
     if (ret != 0) {
       close(socket_fd);
       return {ErrorT::FAILED_TO_GET_IPV4_SOCKET,
-              std::format("Failed to bind socket, errno {}", errno), 0};
+              std::format("Failed to bind socket, errno {}", errno), -1};
     }
   }
 
@@ -698,7 +729,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket(
       close(socket_fd);
       return {ErrorT::FAILED_TO_GET_IPV4_SOCKET,
               std::format("Failed to set socket to listen, errno {}", errno),
-              0};
+              -1};
     }
   }
 

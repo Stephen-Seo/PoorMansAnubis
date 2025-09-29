@@ -493,6 +493,33 @@ int main() {
     }
   }
 
+  // test str_to_ipv4_addr
+  {
+    uint32_t ipv4_addr = PMA_HTTP::str_to_ipv4_addr("10.123.45.6");
+    // To native byte order.
+    ipv4_addr = PMA_HELPER::be_swap_u32(ipv4_addr);
+    CHECK_TRUE(ipv4_addr == 0x0A7B2D06);
+
+    ipv4_addr = PMA_HTTP::str_to_ipv4_addr("192.168.0.1");
+    // To native byte order.
+    ipv4_addr = PMA_HELPER::be_swap_u32(ipv4_addr);
+    CHECK_TRUE(ipv4_addr == 0xC0A80001);
+
+    try {
+      ipv4_addr = PMA_HTTP::str_to_ipv4_addr("256.1.2.3");
+      CHECK_TRUE(!"Should have failed to parse \"256.1.2.3\"!");
+    } catch (const std::exception &e) {
+      CHECK_TRUE("Expected to fail to parse \"256.1.2.3\"!");
+    }
+
+    try {
+      ipv4_addr = PMA_HTTP::str_to_ipv4_addr("1.2.3.1111");
+      CHECK_TRUE(!"Should have failed to parse \"1.2.3.1111\"!");
+    } catch (const std::exception &e) {
+      CHECK_TRUE("Expected to fail to parse \"1.2.3.1111\"!");
+    }
+  }
+
   std::println("{} out of {} tests succeeded", test_succeeded.load(),
                test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;
