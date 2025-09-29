@@ -56,6 +56,9 @@ int main(int argc, char **argv) {
   if (std::strncmp(argv[2], "--port=", 7) == 0) {
     port = std::atoi(argv[2] + 7);
   } else {
+    std::println("Expected --port=... for second argument.");
+    print_usage();
+    return 1;
   }
 
   std::println("Using port {}", port);
@@ -86,6 +89,7 @@ int main(int argc, char **argv) {
     }
     socket_fd = ret_socket_fd;
   } else {
+    std::println("Expected --ipv4=... or --ipv6=... as first argument.");
     print_usage();
     return 0;
   }
