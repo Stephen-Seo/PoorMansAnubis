@@ -92,6 +92,11 @@ int main(int argc, char **argv) {
       socket_fd = -1;
       std::println("Error while polling socket_fd, errno {}", errno);
       break;
+    } else if ((pfd.revents & POLLHUP) != 0 || (pfd.revents & POLLERR) != 0) {
+      std::println("POLLHUP | POLLERR");
+      close(socket_fd);
+      socket_fd = -1;
+      break;
     } else if ((pfd.revents & POLLIN) != 0) {
       std::println("POLLIN");
       std::array<char, 1024> buf{0};
@@ -114,12 +119,6 @@ int main(int argc, char **argv) {
         socket_fd = -1;
         break;
       }
-    } else if ((pfd.revents & POLLHUP) != 0 || (pfd.revents & POLLERR) != 0) {
-      std::println("POLLHUP | POLLERR");
-      close(socket_fd);
-      socket_fd = -1;
-      std::println("Notice connection closed by other side");
-      break;
     }
   }
 
