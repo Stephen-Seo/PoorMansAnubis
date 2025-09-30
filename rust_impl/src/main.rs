@@ -89,7 +89,7 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
 
     let mut conn = pool.get_conn().await?;
 
-    r"CREATE TABLE IF NOT EXISTS SEQ_ID (
+    r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID (
         ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         SEQ_ID INT UNSIGNED NOT NULL
     )"
@@ -100,17 +100,29 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
         .ignore(&mut conn)
         .await?;
 
-    r"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS2 (
+    r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS (
         UUID CHAR(36) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         FACTORS CHAR(128) CHARACTER SET ascii NOT NULL,
+        PORT INT UNSIGNED NOT NULL,
         GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )"
     .ignore(&mut conn)
     .await?;
 
-    r"CREATE TABLE IF NOT EXISTS ALLOWED_IPS (
-        IP VARCHAR(45) NOT NULL PRIMARY KEY,
-        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    r"CREATE TABLE IF NOT EXISTS RUST_ALLOWED_IPS (
+        ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        IP VARCHAR(45) NOT NULL,
+        PORT INT UNSIGNED NOT NULL,
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX IP_PORT_INDEX USING HASH (IP, PORT),
+        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
+    )"
+    .ignore(&mut conn)
+    .await?;
+
+    r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT (
+        UUID CHAR(36) CHARACTER SET ascii NOT NULL PRIMARY KEY,
+        PORT INT UNSIGNED NOT NULL
     )"
     .ignore(&mut conn)
     .await?;
@@ -178,7 +190,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
     Ok(addr_string)
 }
 
-async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Error> {
+async fn set_up_factors_challenge(depot: &Depot, port: u16) -> Result<(String, String), Error> {
     let args = depot.obtain::<args::Args>().unwrap();
 
     let (value, factors) = ffi::generate_value_and_factors_strings2(if args.factors.is_some() {
@@ -193,12 +205,12 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Err
     {
         let mut conn = pool.get_conn().await?;
 
-        r"LOCK TABLE SEQ_ID WRITE"
+        r"LOCK TABLE RUST_SEQ_ID WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM SEQ_ID"
+        let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM RUST_SEQ_ID"
             .with(())
             .first(&mut conn)
             .await
@@ -207,14 +219,14 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Err
         if let Some(seq_r) = seq_row {
             let id: u32 = seq_r.get(0).expect("Row should have ID");
             seq = seq_r.get(1).expect("Row should have SEQ_ID");
-            r"UPDATE SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+            r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
                 .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
                 .ignore(&mut conn)
                 .await
                 .map_err(Error::from)?;
         } else {
             seq = 1;
-            r"INSERT INTO SEQ_ID (SEQ_ID) VALUES (:seq_id)"
+            r"INSERT INTO RUST_SEQ_ID (SEQ_ID) VALUES (:seq_id)"
                 .with(params! {"seq_id" => (seq + 1)})
                 .ignore(&mut conn)
                 .await
@@ -238,13 +250,13 @@ async fn set_up_factors_challenge(depot: &Depot) -> Result<(String, String), Err
     {
         let mut conn = pool.get_conn().await?;
 
-        r"LOCK TABLE CHALLENGE_FACTORS2 WRITE"
+        r"LOCK TABLE RUST_CHALLENGE_FACTORS WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        r"INSERT INTO CHALLENGE_FACTORS2 (UUID, FACTORS) VALUES (:uuid, :factors)"
-            .with(params! {"uuid" => &uuid, "factors" => factors_hash})
+        r"INSERT INTO RUST_CHALLENGE_FACTORS (UUID, PORT, FACTORS) VALUES (:uuid, :port, :factors)"
+            .with(params! {"uuid" => &uuid, "port" => port, "factors" => factors_hash})
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
@@ -290,10 +302,34 @@ async fn factors_js_fn(
 ) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
     let addr_string = get_client_ip_addr(depot, req).await?;
+    let id: String =
+        req.query("id")
+            .ok_or(salvo::Error::Other(Box::new(crate::Error::Generic(
+                "No id passed to factors_js url!".to_owned(),
+            ))))?;
 
-    eprintln!("Requested challenge from {}", &addr_string);
+    let mut port: Option<u16> = None;
+    {
+        let pool = get_db_pool(args).await?;
+        let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-    let (value, uuid) = set_up_factors_challenge(depot).await?;
+        let sel_row: Option<Row> = r"SELECT PORT FROM RUST_ID_TO_PORT WHERE UUID = :uuid"
+            .with(params! {"uuid" => &id})
+            .first(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        if let Some(sel_r) = sel_row {
+            port = sel_r.get(0).expect("Row should have port");
+        }
+    }
+    let port: u16 = port.ok_or(salvo::Error::Other(Box::new(Error::Generic(
+        "No Port in database for given id!".to_owned(),
+    ))))?;
+
+    eprintln!("Requested challenge from {}:{}", &addr_string, port);
+
+    let (value, uuid) = set_up_factors_challenge(depot, port).await?;
     let js = constants::JAVASCRIPT_FACTORS_WORKER;
     let js = js
         .replacen("{API_URL}", &args.api_url, 1)
@@ -320,29 +356,32 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     let pool = get_db_pool(args).await?;
 
     let correct: bool;
+    let mut port_opt: Option<u16> = None;
     {
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-        r"LOCK TABLE CHALLENGE_FACTORS2 WRITE"
+        r"LOCK TABLE RUST_CHALLENGE_FACTORS WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        let factors_row: Option<Row> = r"SELECT FACTORS FROM CHALLENGE_FACTORS2 WHERE UUID = :uuid"
-            .with(params! {"uuid" => &factors_response.id})
-            .first(&mut conn)
-            .await
-            .map_err(Error::from)?;
+        let factors_row: Option<Row> =
+            r"SELECT FACTORS, PORT FROM RUST_CHALLENGE_FACTORS WHERE UUID = :uuid"
+                .with(params! {"uuid" => &factors_response.id})
+                .first(&mut conn)
+                .await
+                .map_err(Error::from)?;
 
         if let Some(factors_r) = factors_row {
             let factors: String = factors_r.get(0).expect("Row should have factors");
             if factors == blake3::hash(factors_response.factors.as_bytes()).to_string() {
                 correct = true;
-                r"DELETE FROM CHALLENGE_FACTORS2 WHERE UUID = :uuid"
+                r"DELETE FROM RUST_CHALLENGE_FACTORS WHERE UUID = :uuid"
                     .with(params! {"uuid" => &factors_response.id})
                     .ignore(&mut conn)
                     .await
                     .map_err(Error::from)?;
+                port_opt = Some(factors_r.get(1).expect("Row should have Port"));
             } else {
                 correct = false;
             }
@@ -350,7 +389,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             correct = false;
         }
 
-        r"DELETE FROM CHALLENGE_FACTORS2 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
+        r"DELETE FROM RUST_CHALLENGE_FACTORS WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.challenge_timeout_mins})
             .ignore(&mut conn)
             .await
@@ -361,11 +400,14 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             .await
             .map_err(Error::from)?;
     }
+    let port = port_opt.ok_or(salvo::Error::Other(Box::new(Error::Generic(
+        "No port from challenge factors!".to_owned(),
+    ))))?;
 
     if correct {
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
-        r"INSERT INTO ALLOWED_IPS (IP) VALUES (:ip)"
-            .with(params! { "ip" => &addr_string })
+        r"INSERT INTO RUST_ALLOWED_IPS (IP, PORT) VALUES (:ip, :port)"
+            .with(params! { "ip" => &addr_string, "port" => port })
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
@@ -374,12 +416,12 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     pool.disconnect().await.map_err(Error::from)?;
 
     if correct {
-        eprintln!("Challenge response accepted from {}", &addr_string);
+        eprintln!("Challenge response accepted from {}:{}", &addr_string, port);
         res.body("Correct")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::OK);
     } else {
-        eprintln!("Challenge response DENIED from {}", &addr_string);
+        eprintln!("Challenge response DENIED from {}:{}", &addr_string, port);
         res.body("Incorrect")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::BAD_REQUEST);
@@ -394,6 +436,17 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
     let addr_string = get_client_ip_addr(depot, req).await?;
 
+    let port: Option<u16> = match req.local_addr() {
+        salvo::conn::SocketAddr::Unknown => None,
+        salvo::conn::SocketAddr::IPv4(socket_addr_v4) => Some(socket_addr_v4.port()),
+        salvo::conn::SocketAddr::IPv6(socket_addr_v6) => Some(socket_addr_v6.port()),
+        salvo::conn::SocketAddr::Unix(_socket_addr) => None,
+        _ => None,
+    };
+    let port: u16 = port.ok_or(salvo::Error::Other(Box::new(crate::Error::Generic(
+        "Should have port from request!".to_owned(),
+    ))))?;
+
     let is_allowed: bool;
     {
         let pool = get_db_pool(args).await?;
@@ -401,12 +454,12 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
         let mut ip_entry: Option<AllowedIPs> = None;
 
-        r"LOCK TABLE ALLOWED_IPS WRITE"
+        r"LOCK TABLE RUST_ALLOWED_IPS WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        r"DELETE FROM ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
+        r"DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.allowed_timeout_mins})
             .ignore(&mut conn)
             .await
@@ -417,16 +470,17 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .await
             .map_err(Error::from)?;
 
-        r"LOCK TABLE ALLOWED_IPS READ"
+        r"LOCK TABLE RUST_ALLOWED_IPS READ"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        let ip_entry_row: Option<Row> = r"SELECT IP, ON_TIME FROM ALLOWED_IPS WHERE IP = :ipaddr"
-            .with(params! {"ipaddr" => &addr_string})
-            .first(&mut conn)
-            .await
-            .map_err(Error::from)?;
+        let ip_entry_row: Option<Row> =
+            r"SELECT IP, ON_TIME FROM RUST_ALLOWED_IPS WHERE IP = :ipaddr AND PORT = :port"
+                .with(params! {"ipaddr" => &addr_string, "port" => port})
+                .first(&mut conn)
+                .await
+                .map_err(Error::from)?;
         if let Some(row) = ip_entry_row {
             ip_entry = Some(AllowedIPs::try_from(row)?);
         }
@@ -482,8 +536,22 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
+        let uuid: String = Uuid::new_v4().to_string();
+        let pool = get_db_pool(args).await?;
+        let mut conn = pool.get_conn().await.map_err(Error::from)?;
+
+        r"INSERT INTO RUST_ID_TO_PORT (UUID, PORT) VALUES (:uuid, :port)"
+            .with(params! {"uuid" => &uuid, "port" => port})
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
         let html = constants::HTML_BODY_FACTORS;
-        let html = html.replacen("{JS_FACTORS_URL}", &args.js_factors_url, 1);
+        let html = html.replacen(
+            "{JS_FACTORS_URL}",
+            &format!("{}?id={}", args.js_factors_url, &uuid),
+            1,
+        );
         res.body(html).status_code(StatusCode::OK);
     }
 

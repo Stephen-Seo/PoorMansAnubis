@@ -100,6 +100,7 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
             });
 
             worker.addEventListener("error", (e) => {
+                console.error(e);
                 console.error(e.message);
                 console.error(e.lineno);
             });
