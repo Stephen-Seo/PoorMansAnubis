@@ -7,3 +7,4 @@ compile_commands.json
 /cxx_backend_impl
 /test
 /debug_serve
+/debug_client

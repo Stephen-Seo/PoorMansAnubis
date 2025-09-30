@@ -28,7 +28,9 @@ constexpr int SOCKET_BACKLOG_SIZE = 32;
 enum class ErrorT {
   SUCCESS,
   FAILED_TO_GET_IPV6_SOCKET,
-  FAILED_TO_GET_IPV4_SOCKET
+  FAILED_TO_GET_IPV4_SOCKET,
+  FAILED_TO_CONNECT_IPV6_SOCKET,
+  FAILED_TO_CONNECT_IPV4_SOCKET
 };
 
 std::string error_t_to_str(ErrorT err_enum);
@@ -42,6 +44,11 @@ std::tuple<ErrorT, std::string, int> get_ipv6_socket_server(std::string addr,
                                                             uint16_t port);
 std::tuple<ErrorT, std::string, int> get_ipv4_socket_server(std::string addr,
                                                             uint16_t port);
+
+std::tuple<ErrorT, std::string, int> connect_ipv6_socket_client(
+    std::string client_addr, std::string server_addr, uint16_t port);
+std::tuple<ErrorT, std::string, int> connect_ipv4_socket_client(
+    std::string client_addr, std::string server_addr, uint16_t port);
 }  // namespace PMA_HTTP
 
 #endif

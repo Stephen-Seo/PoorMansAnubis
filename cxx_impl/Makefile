@@ -50,6 +50,9 @@ test: ${OBJDIR_ABS}/src/test.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJ
 debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
 	${CXX} -o debug_serve ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
+debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
+	${CXX} -o debug_client ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
+
 ${OBJDIR_ABS}/src/%.cc.o: ${CWD}/src/%.cc ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
 	${CXX} -o $@ -c ${FINAL_COMMON_FLAGS} $<
@@ -69,6 +72,7 @@ clean:
 	rm -f cxx_backend_impl
 	rm -f test
 	rm -f debug_serve
+	rm -f debug_client
 
 clang-format:
 	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=Google ${SOURCES} ${HEADERS} src/test.cc || true

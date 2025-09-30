@@ -46,6 +46,8 @@ void print_usage() {
 int main(int argc, char **argv) {
   int socket_fd = -1;
 
+  bool is_ipv6 = false;
+
   if (argc != 3) {
     print_usage();
     return 0;
@@ -75,6 +77,7 @@ int main(int argc, char **argv) {
       return 1;
     }
     socket_fd = ret_socket_fd;
+    is_ipv6 = false;
   } else if (std::strncmp(argv[1], "--ipv6=", 7) == 0) {
     std::println("Using ipv6 addr {}", argv[1] + 7);
 
@@ -88,6 +91,7 @@ int main(int argc, char **argv) {
       return 1;
     }
     socket_fd = ret_socket_fd;
+    is_ipv6 = true;
   } else {
     std::println("Expected --ipv4=... or --ipv6=... as first argument.");
     print_usage();
@@ -99,10 +103,17 @@ int main(int argc, char **argv) {
 
   std::unordered_set<int> connections;
   struct sockaddr_in addr_v4;
+  struct sockaddr_in6 addr_v6;
   while (do_run) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    socklen_t socklen = sizeof(struct sockaddr_in);
-    int ret = accept4(socket_fd, reinterpret_cast<sockaddr*>(&addr_v4), &socklen, SOCK_NONBLOCK);
+    int ret;
+    if (is_ipv6) {
+      socklen_t socklen = sizeof(struct sockaddr_in6);
+      ret = accept4(socket_fd, reinterpret_cast<sockaddr*>(&addr_v6), &socklen, SOCK_NONBLOCK);
+    } else {
+      socklen_t socklen = sizeof(struct sockaddr_in);
+      ret = accept4(socket_fd, reinterpret_cast<sockaddr*>(&addr_v4), &socklen, SOCK_NONBLOCK);
+    }
     if (ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {}
       else {
