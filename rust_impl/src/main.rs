@@ -96,15 +96,16 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
     .ignore(&mut conn)
     .await?;
 
-    r"DROP TABLE IF EXISTS CHALLENGE_FACTORS"
+    r"DROP TABLE IF EXISTS RUST_CHALLENGE_FACTORS"
         .ignore(&mut conn)
         .await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS (
+    r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_2 (
         UUID CHAR(36) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         FACTORS CHAR(128) CHARACTER SET ascii NOT NULL,
         PORT INT UNSIGNED NOT NULL,
-        GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
     )"
     .ignore(&mut conn)
     .await?;
@@ -120,9 +121,15 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
     .ignore(&mut conn)
     .await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT (
+    r"DROP TABLE IF EXISTS RUST_ID_TO_PORT"
+        .ignore(&mut conn)
+        .await?;
+
+    r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT_2 (
         UUID CHAR(36) CHARACTER SET ascii NOT NULL PRIMARY KEY,
-        PORT INT UNSIGNED NOT NULL
+        PORT INT UNSIGNED NOT NULL,
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
     )"
     .ignore(&mut conn)
     .await?;
@@ -250,12 +257,12 @@ async fn set_up_factors_challenge(depot: &Depot, port: u16) -> Result<(String, S
     {
         let mut conn = pool.get_conn().await?;
 
-        r"LOCK TABLE RUST_CHALLENGE_FACTORS WRITE"
+        r"LOCK TABLE RUST_CHALLENGE_FACTORS_2 WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        r"INSERT INTO RUST_CHALLENGE_FACTORS (UUID, PORT, FACTORS) VALUES (:uuid, :port, :factors)"
+        r"INSERT INTO RUST_CHALLENGE_FACTORS_2 (UUID, PORT, FACTORS) VALUES (:uuid, :port, :factors)"
             .with(params! {"uuid" => &uuid, "port" => port, "factors" => factors_hash})
             .ignore(&mut conn)
             .await
@@ -313,7 +320,7 @@ async fn factors_js_fn(
         let pool = get_db_pool(args).await?;
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-        let sel_row: Option<Row> = r"SELECT PORT FROM RUST_ID_TO_PORT WHERE UUID = :uuid"
+        let sel_row: Option<Row> = r"SELECT PORT FROM RUST_ID_TO_PORT_2 WHERE UUID = :uuid"
             .with(params! {"uuid" => &id})
             .first(&mut conn)
             .await
@@ -360,13 +367,13 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     {
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-        r"LOCK TABLE RUST_CHALLENGE_FACTORS WRITE"
+        r"LOCK TABLE RUST_CHALLENGE_FACTORS_2 WRITE"
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
         let factors_row: Option<Row> =
-            r"SELECT FACTORS, PORT FROM RUST_CHALLENGE_FACTORS WHERE UUID = :uuid"
+            r"SELECT FACTORS, PORT FROM RUST_CHALLENGE_FACTORS_2 WHERE UUID = :uuid"
                 .with(params! {"uuid" => &factors_response.id})
                 .first(&mut conn)
                 .await
@@ -376,7 +383,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             let factors: String = factors_r.get(0).expect("Row should have factors");
             if factors == blake3::hash(factors_response.factors.as_bytes()).to_string() {
                 correct = true;
-                r"DELETE FROM RUST_CHALLENGE_FACTORS WHERE UUID = :uuid"
+                r"DELETE FROM RUST_CHALLENGE_FACTORS_2 WHERE UUID = :uuid"
                     .with(params! {"uuid" => &factors_response.id})
                     .ignore(&mut conn)
                     .await
@@ -389,7 +396,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             correct = false;
         }
 
-        r"DELETE FROM RUST_CHALLENGE_FACTORS WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
+        r"DELETE FROM RUST_CHALLENGE_FACTORS_2 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.challenge_timeout_mins})
             .ignore(&mut conn)
             .await
@@ -540,12 +547,27 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         let pool = get_db_pool(args).await?;
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-        r"INSERT INTO RUST_ID_TO_PORT (UUID, PORT) VALUES (:uuid, :port)"
+        r"LOCK TABLE RUST_ID_TO_PORT_2 WRITE"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        r"DELETE FROM RUST_ID_TO_PORT_2 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
+            .with(params! {"minutes" => args.challenge_timeout_mins})
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
+
+        r"INSERT INTO RUST_ID_TO_PORT_2 (UUID, PORT) VALUES (:uuid, :port)"
             .with(params! {"uuid" => &uuid, "port" => port})
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
+        r"UNLOCK TABLES"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
         let html = constants::HTML_BODY_FACTORS;
         let html = html.replacen(
             "{JS_FACTORS_URL}",
