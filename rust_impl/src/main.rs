@@ -309,30 +309,48 @@ async fn factors_js_fn(
 ) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
     let addr_string = get_client_ip_addr(depot, req).await?;
-    let id: String =
-        req.query("id")
-            .ok_or(salvo::Error::Other(Box::new(crate::Error::Generic(
-                "No id passed to factors_js url!".to_owned(),
-            ))))?;
+    let id: String = req.query("id").ok_or(crate::Error::Generic(
+        "No id passed to factors_js url!".to_owned(),
+    ))?;
 
     let mut port: Option<u16> = None;
     {
         let pool = get_db_pool(args).await?;
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-        let sel_row: Option<Row> = r"SELECT PORT FROM RUST_ID_TO_PORT_2 WHERE UUID = :uuid"
-            .with(params! {"uuid" => &id})
-            .first(&mut conn)
+        r"LOCK TABLE RUST_ID_TO_PORT_2 WRITE"
+            .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        if let Some(sel_r) = sel_row {
-            port = sel_r.get(0).expect("Row should have port");
+        {
+            let sel_row: Option<Row> = r"SELECT PORT FROM RUST_ID_TO_PORT_2 WHERE UUID = :uuid"
+                .with(params! {"uuid" => &id})
+                .first(&mut conn)
+                .await
+                .map_err(Error::from)?;
+
+            if let Some(sel_r) = sel_row {
+                port = sel_r.get(0);
+            }
         }
+
+        if port.is_some() {
+            r"DELETE FROM RUST_ID_TO_PORT_2 WHERE UUID = :uuid"
+                .with(params! {"uuid" => &id})
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+        }
+
+        r"UNLOCK TABLES"
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from)?;
     }
-    let port: u16 = port.ok_or(salvo::Error::Other(Box::new(Error::Generic(
+    let port: u16 = port.ok_or(Error::Generic(
         "No Port in database for given id!".to_owned(),
-    ))))?;
+    ))?;
 
     eprintln!("Requested challenge from {}:{}", &addr_string, port);
 
@@ -407,9 +425,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             .await
             .map_err(Error::from)?;
     }
-    let port = port_opt.ok_or(salvo::Error::Other(Box::new(Error::Generic(
-        "No port from challenge factors!".to_owned(),
-    ))))?;
+    let port = port_opt.ok_or(Error::Generic("No port from challenge factors!".to_owned()))?;
 
     if correct {
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
@@ -450,9 +466,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         salvo::conn::SocketAddr::Unix(_socket_addr) => None,
         _ => None,
     };
-    let port: u16 = port.ok_or(salvo::Error::Other(Box::new(crate::Error::Generic(
+    let port: u16 = port.ok_or(crate::Error::Generic(
         "Should have port from request!".to_owned(),
-    ))))?;
+    ))?;
 
     let is_allowed: bool;
     {
@@ -543,7 +559,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
-        let uuid: String = Uuid::new_v4().to_string();
         let pool = get_db_pool(args).await?;
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
@@ -557,6 +572,26 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
+
+        let mut uuid: String = Uuid::new_v4().to_string();
+
+        loop {
+            let row: Result<Option<Row>, _> =
+                r"SELECT UUID FROM RUST_ID_TO_PORT_2 WHERE UUID = :uuid"
+                    .with(params! {"uuid" => &uuid})
+                    .first(&mut conn)
+                    .await;
+
+            if let Ok(Some(r)) = &row {
+                if let Some(id) = r.get::<String, usize>(0) {
+                    if &id == &uuid {
+                        uuid = Uuid::new_v4().to_string();
+                        continue;
+                    }
+                }
+            }
+            break;
+        }
 
         r"INSERT INTO RUST_ID_TO_PORT_2 (UUID, PORT) VALUES (:uuid, :port)"
             .with(params! {"uuid" => &uuid, "port" => port})
