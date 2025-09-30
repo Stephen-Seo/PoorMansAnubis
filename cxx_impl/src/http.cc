@@ -656,7 +656,7 @@ uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) {
   return PMA_HELPER::be_swap_u32(addr_u.u32);
 }
 
-std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket(
+std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket_server(
     std::string addr, uint16_t port) {
   int socket_fd = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 6);
   if (socket_fd == -1) {
@@ -698,7 +698,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket(
   return {ErrorT::SUCCESS, {}, socket_fd};
 }
 
-std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket(
+std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket_server(
     std::string addr, uint16_t port) {
   int socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 6);
   if (socket_fd == -1) {

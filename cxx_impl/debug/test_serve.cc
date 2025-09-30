@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 
   if (std::strncmp(argv[1], "--ipv4=", 7) == 0) {
     std::println("Using ipv4 addr {}", argv[1] + 7);
-    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv4_socket(argv[1] + 7, port);
+    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv4_socket_server(argv[1] + 7, port);
 
     if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
       std::println(stderr, "Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
   } else if (std::strncmp(argv[1], "--ipv6=", 7) == 0) {
     std::println("Using ipv6 addr {}", argv[1] + 7);
 
-    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv6_socket(argv[1] + 7, port);
+    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv6_socket_server(argv[1] + 7, port);
 
     if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
       std::println(stderr, "Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);

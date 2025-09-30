@@ -38,10 +38,10 @@ std::array<uint8_t, 16> str_to_ipv6_addr(const std::string &addr);
 // The returned value should be in big-endian.
 uint32_t str_to_ipv4_addr(const std::string &addr);
 
-std::tuple<ErrorT, std::string, int> get_ipv6_socket(std::string addr,
-                                                     uint16_t port);
-std::tuple<ErrorT, std::string, int> get_ipv4_socket(std::string addr,
-                                                     uint16_t port);
+std::tuple<ErrorT, std::string, int> get_ipv6_socket_server(std::string addr,
+                                                            uint16_t port);
+std::tuple<ErrorT, std::string, int> get_ipv4_socket_server(std::string addr,
+                                                            uint16_t port);
 }  // namespace PMA_HTTP
 
 #endif
