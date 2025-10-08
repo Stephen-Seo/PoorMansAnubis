@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
       }
     }
   } else {
-    uint64_t id_to_port_ID = 0;
+    std::string id_to_port_ID;
     {
       const auto [err_enum, err_msg, id] = PMA_SQL::init_id_to_port(ctx, 10000);
       if (err_enum != PMA_SQL::ErrorT::SUCCESS) {

@@ -136,15 +136,15 @@ std::tuple<ErrorT, std::string> cleanup_stale_challenges(const SQLITECtx &ctx);
 // string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
 
-// uint64_t is id.
-std::tuple<ErrorT, std::string, uint64_t> init_id_to_port(SQLITECtx &ctx,
-                                                          uint16_t port);
+// last string is id.
+std::tuple<ErrorT, std::string, std::string> init_id_to_port(SQLITECtx &ctx,
+                                                             uint16_t port);
 
 // On error, first string is err message. On SUCCESS, first string is challenge
 // in base64 and second string is hashed answer.
 // uint64_t is id.
 std::tuple<ErrorT, std::string, std::string, uint64_t> generate_challenge(
-    SQLITECtx &ctx, uint64_t digits, std::string client_ip, uint64_t id);
+    SQLITECtx &ctx, uint64_t digits, std::string client_ip, std::string id);
 
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.
