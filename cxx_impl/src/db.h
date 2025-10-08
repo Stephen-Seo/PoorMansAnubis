@@ -142,8 +142,8 @@ std::tuple<ErrorT, std::string, std::string> init_id_to_port(SQLITECtx &ctx,
 
 // On error, first string is err message. On SUCCESS, first string is challenge
 // in base64 and second string is hashed answer.
-// uint64_t is id.
-std::tuple<ErrorT, std::string, std::string, uint64_t> generate_challenge(
+// Last string is id.
+std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
     SQLITECtx &ctx, uint64_t digits, std::string client_ip, std::string id);
 
 // string is error msg, uint16_t is destination port of initial challenge
@@ -151,7 +151,7 @@ std::tuple<ErrorT, std::string, std::string, uint64_t> generate_challenge(
 std::tuple<ErrorT, std::string, uint16_t> verify_answer(SQLITECtx &ctx,
                                                         std::string answer,
                                                         std::string ipaddr,
-                                                        uint64_t id);
+                                                        std::string id);
 
 std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
 get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
