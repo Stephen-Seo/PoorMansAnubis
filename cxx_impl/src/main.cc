@@ -47,6 +47,14 @@ int main(int argc, char **argv) {
       return 1;
     }
   }
+  {
+    const auto [err_enum, err_str] = PMA_SQL::cleanup_stale_id_to_ports(ctx);
+    if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
+      std::println(stderr, "Cleanup Stale IDToPort: {}, ERROR: {}",
+                   PMA_SQL::error_t_to_string(err_enum), err_str);
+      return 1;
+    }
+  }
 
   if (argc == 4) {
     const auto [err_enum, err_msg, ports_set] =
@@ -66,7 +74,7 @@ int main(int argc, char **argv) {
     const auto [err_enum, err_msg, opt_vec] =
         PMA_SQL::SqliteStmtRow<uint64_t, std::string, int, std::string>::
             exec_sqlite_stmt_with_rows<0>(
-                ctx, "SELECT ID, IP, PORT, ON_TIME FROM ALLOWED_IPS",
+                ctx, "SELECT ID, IP, PORT, ON_TIME FROM ALLOWED_IP",
                 std::nullopt);
     if (opt_vec.has_value()) {
       for (auto row : opt_vec.value()) {
@@ -74,8 +82,22 @@ int main(int argc, char **argv) {
       }
     }
   } else {
+    uint64_t id_to_port_ID = 0;
+    {
+      const auto [err_enum, err_msg, id] = PMA_SQL::init_id_to_port(ctx, 10000);
+      if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
+        std::println("Failed to init_id_to_port: Err {}, Msg {}",
+                     PMA_SQL::error_t_to_string(err_enum), err_msg);
+        return 1;
+      }
+      id_to_port_ID = id;
+    }
+
+    std::println("Post insert to ID_TO_PORT...");
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
     const auto [error, challenge_str, answer_str, id] =
-        PMA_SQL::generate_challenge(ctx, 1000, "127.0.0.1", 10000);
+        PMA_SQL::generate_challenge(ctx, 1000, "127.0.0.1", id_to_port_ID);
     if (error == PMA_SQL::ErrorT::SUCCESS) {
       std::println("Challenge str: {}", challenge_str);
       std::println("Answer str: {}", answer_str);

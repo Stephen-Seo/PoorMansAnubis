@@ -133,6 +133,8 @@ std::string PMA_SQL::error_t_to_string(PMA_SQL::ErrorT err) {
       return "ClientIPDoesNotMatchStoredIP";
     case PMA_SQL::ErrorT::FAILED_TO_FETCH_FROM_ALLOWED_IPS:
       return "FailedToFetchFromAllowedIPs";
+    case PMA_SQL::ErrorT::FAILED_TO_FETCH_FROM_ID_TO_PORT:
+      return "FailedToFetchFromIDToPort";
     default:
       return "Unknown error";
   }
@@ -205,8 +207,17 @@ PMA_SQL::init_sqlite(std::string filepath) {
 
   sql_ret = internal_exec_sqlite_statement(
       ctx,
-      "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTORS ( ID INTEGER PRIMARY KEY, "
-      "FACTORS TEXT NOT NULL, IP TEXT NOT NULL, PORT INT NOT NULL, GEN_TIME "
+      "CREATE TABLE IF NOT EXISTS ID_TO_PORT (ID INT UNSIGNED NOT NULL PRIMARY "
+      "KEY, PORT INT UNSIGNED NOT NULL, ON_TIME TEXT DEFAULT ( datetime() ) )");
+
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
+  }
+
+  sql_ret = internal_exec_sqlite_statement(
+      ctx,
+      "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTOR ( ID INTEGER PRIMARY KEY, "
+      "FACTORS TEXT NOT NULL, IP TEXT NOT NULL, PORT INT NOT NULL, ON_TIME "
       "TEXT DEFAULT ( datetime() ) )");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
@@ -215,7 +226,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
   // TODO Verify if this is needed
   // sql_ret = internal_exec_sqlite_statement(
   //     ctx,
-  //     "CREATE INDEX IF NOT EXISTS CHALLENGE_F_P ON CHALLENGE_FACTORS
+  //     "CREATE INDEX IF NOT EXISTS CHALLENGE_F_P ON CHALLENGE_FACTOR
   //     (FACTORS, " "PORT)");
   // if (sql_ret.has_value()) {
   //   return std::move(sql_ret.value());
@@ -223,7 +234,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
 
   sql_ret = internal_exec_sqlite_statement(
       ctx,
-      "CREATE TABLE IF NOT EXISTS ALLOWED_IPS ( ID INTEGER PRIMARY KEY "
+      "CREATE TABLE IF NOT EXISTS ALLOWED_IP ( ID INTEGER PRIMARY KEY "
       "AUTOINCREMENT, IP TEXT NOT NULL, PORT INTEGER NOT NULL, ON_TIME TEXT "
       "NOT NULL DEFAULT ( datetime() ) )");
   if (sql_ret.has_value()) {
@@ -231,20 +242,43 @@ PMA_SQL::init_sqlite(std::string filepath) {
   }
 
   sql_ret = internal_exec_sqlite_statement(
-      ctx, "CREATE INDEX IF NOT EXISTS ALLOWED_IPS_IP ON ALLOWED_IPS (IP)");
+      ctx, "CREATE INDEX IF NOT EXISTS ALLOWED_IP_IP ON ALLOWED_IP (IP)");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
 
   sql_ret = internal_exec_sqlite_statement(
       ctx,
-      "CREATE INDEX IF NOT EXISTS ALLOWED_IPS_TIME ON ALLOWED_IPS (ON_TIME)");
+      "CREATE INDEX IF NOT EXISTS ALLOWED_IP_TIME ON ALLOWED_IP (ON_TIME)");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
 
   return std::make_tuple<SQLITECtx, ErrorT, std::string>(std::move(ctx),
                                                          ErrorT::SUCCESS, {});
+}
+
+std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
+    const PMA_SQL::SQLITECtx &ctx) {
+  sqlite3 *db = ctx.get_sqlite_ctx();
+  if (!db) {
+    return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
+  }
+
+  std::string stmt = std::format(
+      "DELETE FROM ID_TO_PORT WHERE timediff(datetime(), ON_TIME) > "
+      "'+0000-00-00 00:{:02}:00.000'",
+      CHALLENGE_TIMEOUT_MINUTES);
+
+  {
+    auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
+    if (opt_tuple.has_value()) {
+      const auto [unused, err_enum, err_msg] = std::move(opt_tuple.value());
+      return {err_enum, err_msg};
+    }
+  }
+
+  return {ErrorT::SUCCESS, {}};
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
@@ -255,7 +289,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM CHALLENGE_FACTORS WHERE timediff(datetime(), GEN_TIME) > "
+      "DELETE FROM CHALLENGE_FACTOR WHERE timediff(datetime(), ON_TIME) > "
       "'+0000-00-00 00:{:02}:00.000'",
       CHALLENGE_TIMEOUT_MINUTES);
 
@@ -278,7 +312,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM ALLOWED_IPS WHERE timediff(datetime(), ON_TIME) > "
+      "DELETE FROM ALLOWED_IP WHERE timediff(datetime(), ON_TIME) > "
       "'+0000-00-00 00:{:02}:00.000'",
       ALLOWED_IP_TIMEOUT_MINUTES);
 
@@ -293,9 +327,72 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
   return {ErrorT::SUCCESS, {}};
 }
 
+std::tuple<PMA_SQL::ErrorT, std::string, uint64_t> PMA_SQL::init_id_to_port(
+    SQLITECtx &ctx, uint16_t port) {
+  uint64_t unique_id = 0;
+  bool exists_with_id = true;
+  while (exists_with_id) {
+    {
+      const auto [optv, err_type, err_msg] = internal_increment_seq_id(ctx);
+      if (err_type != ErrorT::SUCCESS) {
+        return {err_type, err_msg, 0};
+      } else if (!optv.has_value()) {
+        return {ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID,
+                "SEQ_ID optv does not have value", 0};
+      }
+
+      unique_id = internal_next_id(optv.value());
+    }
+
+    const auto [err_type, err_msg, opt_vec] =
+        SqliteStmtRow<uint64_t>::exec_sqlite_stmt_with_rows<0, uint64_t>(
+            ctx, "SELECT ID FROM ID_TO_PORT WHERE ID = ?", std::nullopt,
+            unique_id);
+    if (err_type != ErrorT::SUCCESS) {
+      return {err_type, err_msg, 0};
+    } else if (opt_vec.has_value() && !opt_vec.value().empty()) {
+      exists_with_id = true;
+    } else {
+      exists_with_id = false;
+    }
+  }
+
+  const auto [err_enum, err_msg] = exec_sqlite_statement<0>(
+      ctx, "INSERT INTO ID_TO_PORT (ID, PORT) VALUES (?, ?)", std::nullopt,
+      unique_id, port);
+
+  if (err_enum != ErrorT::SUCCESS) {
+    return {err_enum, err_msg, 0};
+  }
+
+  return {ErrorT::SUCCESS, {}, unique_id};
+}
+
 std::tuple<PMA_SQL::ErrorT, std::string, std::string, uint64_t>
 PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
-                            std::string client_ip, uint16_t port) {
+                            std::string client_ip, uint64_t id) {
+  uint16_t port = 0;
+  {
+    const auto [err_enum, err_msg, opt_vec] =
+        SqliteStmtRow<uint16_t>::exec_sqlite_stmt_with_rows<0>(
+            ctx, "SELECT PORT FROM ID_TO_PORT WHERE ID = ?", std::nullopt, id);
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, {}, 0};
+    } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
+      return {
+          ErrorT::FAILED_TO_FETCH_FROM_ID_TO_PORT, "ID does not exist", {}, 0};
+    } else if (!std::get<0>(opt_vec.value().at(0).row).has_value()) {
+      return {ErrorT::FAILED_TO_FETCH_FROM_ID_TO_PORT,
+              "Invalid row fetching via ID",
+              {},
+              0};
+    }
+
+    port = std::get<0>(opt_vec.value().at(0).row).value();
+    exec_sqlite_statement<0>(ctx, "DELETE FROM ID_TO_PORT WHERE ID = ?",
+                             std::nullopt, id);
+  }
+
   Work_Factors factors = work_generate_target_factors(digits);
   GenericCleanup<Work_Factors> factors_cleanup(
       factors, [](Work_Factors *ptr) { work_cleanup_factors(ptr); });
@@ -311,7 +408,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
   // Acquire a mutex lock_guard.
   auto lock = ctx.get_mutex_lock_guard();
 
-  // Get a unique identifier for CHALLENGE_FACTORS.
+  // Get a unique identifier for CHALLENGE_FACTOR.
   uint64_t unique_id = 0;
   bool exists_with_id = true;
   while (exists_with_id) {
@@ -320,7 +417,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
       return {error_type, error_msg, {}, 0};
     } else if (!optv.has_value()) {
       return {ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID,
-              "optv does not have value",
+              "SEQ_ID optv does not have value",
               {},
               0};
     }
@@ -329,7 +426,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
 
     const auto [err_enum, err_msg, opt_vec] =
         SqliteStmtRow<uint64_t>::exec_sqlite_stmt_with_rows<0, uint64_t>(
-            ctx, "SELECT ID FROM CHALLENGE_FACTORS WHERE ID = ?", std::nullopt,
+            ctx, "SELECT ID FROM CHALLENGE_FACTOR WHERE ID = ?", std::nullopt,
             unique_id);
 
     if (err_enum != ErrorT::SUCCESS) {
@@ -361,7 +458,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
         SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t, std::string,
                                                     std::string, int>(
             ctx,
-            "INSERT INTO CHALLENGE_FACTORS (ID, FACTORS, IP, PORT) VALUES (?, "
+            "INSERT INTO CHALLENGE_FACTOR (ID, FACTORS, IP, PORT) VALUES (?, "
             "?, ?, ?)",
             std::nullopt, unique_id, hash, client_ip, port);
 
@@ -398,14 +495,14 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
         std::string, int>::exec_sqlite_stmt_with_rows<0, uint64_t,
                                                       std::string>(
         ctx,
-        "SELECT IP, PORT FROM CHALLENGE_FACTORS WHERE ID = ? AND FACTORS = ?",
+        "SELECT IP, PORT FROM CHALLENGE_FACTOR WHERE ID = ? AND FACTORS = ?",
         std::nullopt, id, hash);
 
     if (err_enum != ErrorT::SUCCESS) {
       return {err_enum, err_msg, 0};
     } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
       return {ErrorT::EXEC_GENERIC_INVALID_STATE,
-              "Failed to get IP, PORT from CHALLENGE_FACTORS", 0};
+              "Failed to get IP, PORT from CHALLENGE_FACTOR", 0};
     }
 
     stored_ip = std::get<0>(opt_vec.value().at(0).row).value();
@@ -419,7 +516,7 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
 
   {
     const auto [err_enum, err_msg] = exec_sqlite_statement<0, uint64_t>(
-        ctx, "DELETE FROM CHALLENGE_FACTORS WHERE ID = ?", std::nullopt, id);
+        ctx, "DELETE FROM CHALLENGE_FACTOR WHERE ID = ?", std::nullopt, id);
     if (err_enum != ErrorT::SUCCESS) {
       return {err_enum, err_msg, 0};
     }
@@ -427,7 +524,7 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
 
   {
     const auto [err_enum, err_msg] = exec_sqlite_statement<0>(
-        ctx, "INSERT INTO ALLOWED_IPS (IP, PORT) VALUES (?, ?)", std::nullopt,
+        ctx, "INSERT INTO ALLOWED_IP (IP, PORT) VALUES (?, ?)", std::nullopt,
         ipaddr, port);
 
     if (err_enum != ErrorT::SUCCESS) {
@@ -444,7 +541,7 @@ PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr) {
 
   const auto [err_enum, err_msg, opt_vec] =
       SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string>(
-          ctx, "SELECT PORT FROM ALLOWED_IPS WHERE IP = ?", std::nullopt,
+          ctx, "SELECT PORT FROM ALLOWED_IP WHERE IP = ?", std::nullopt,
           ipaddr);
 
   if (err_enum != ErrorT::SUCCESS) {

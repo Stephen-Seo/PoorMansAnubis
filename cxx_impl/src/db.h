@@ -46,7 +46,8 @@ enum class ErrorT {
   FAILED_TO_PREPARE_EXEC_GENERIC,
   EXEC_GENERIC_INVALID_STATE,
   CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
-  FAILED_TO_FETCH_FROM_ALLOWED_IPS
+  FAILED_TO_FETCH_FROM_ALLOWED_IPS,
+  FAILED_TO_FETCH_FROM_ID_TO_PORT
 };
 
 std::string error_t_to_string(ErrorT err);
@@ -127,16 +128,23 @@ struct SqliteStmtRow {
 std::tuple<SQLITECtx, ErrorT, std::string> init_sqlite(std::string filepath);
 
 // string is err message.
+std::tuple<ErrorT, std::string> cleanup_stale_id_to_ports(const SQLITECtx &ctx);
+
+// string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_challenges(const SQLITECtx &ctx);
 
 // string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
 
+// uint64_t is id.
+std::tuple<ErrorT, std::string, uint64_t> init_id_to_port(SQLITECtx &ctx,
+                                                          uint16_t port);
+
 // On error, first string is err message. On SUCCESS, first string is challenge
 // in base64 and second string is hashed answer.
 // uint64_t is id.
 std::tuple<ErrorT, std::string, std::string, uint64_t> generate_challenge(
-    SQLITECtx &ctx, uint64_t digits, std::string client_ip, uint16_t port);
+    SQLITECtx &ctx, uint64_t digits, std::string client_ip, uint64_t id);
 
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.
