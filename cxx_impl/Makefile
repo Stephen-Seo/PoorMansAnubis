@@ -28,7 +28,10 @@ COMMON_CFLAGS := -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
 	-Wbidi-chars=any \
 	-fPIE -pie
 
-ifdef RELEASE
+ifdef CI_BUILD
+FINAL_COMMON_FLAGS := -Og -g $(filter-out -fzero-init-padding-bits=all,${COMMON_FLAGS})
+FINAL_COMMON_CFLAGS := -Og -g $(filter-out -fzero-init-padding-bits=all,${COMMON_CFLAGS})
+else ifdef RELEASE
 FINAL_COMMON_FLAGS := -DNDEBUG -O2 ${COMMON_FLAGS} \
 	-fno-delete-null-pointer-checks -fno-strict-overflow -fno-strict-aliasing \
 	-ftrivial-auto-var-init=zero
