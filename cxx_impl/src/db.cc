@@ -533,7 +533,8 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
     }
 
     stored_ip = std::get<0>(opt_vec.value().at(0).row).value();
-    port = std::get<1>(opt_vec.value().at(0).row).value();
+    port =
+        static_cast<uint16_t>(std::get<1>(opt_vec.value().at(0).row).value());
   }
 
   if (stored_ip != ipaddr) {

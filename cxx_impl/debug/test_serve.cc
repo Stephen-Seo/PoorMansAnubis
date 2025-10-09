@@ -56,7 +56,13 @@ int main(int argc, char **argv) {
   uint16_t port = 0;
 
   if (std::strncmp(argv[2], "--port=", 7) == 0) {
-    port = std::atoi(argv[2] + 7);
+    int to_port = std::atoi(argv[2] + 7);
+    if (to_port <= 0 || to_port > 0xFFFF) {
+      std::println("Invalid --port={} !", to_port);
+      print_usage();
+      return 1;
+    }
+    port = static_cast<uint16_t>(to_port);
   } else {
     std::println("Expected --port=... for second argument.");
     print_usage();

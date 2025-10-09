@@ -214,7 +214,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
     } else if constexpr (std::is_same_v<Arg, std::string>) {
       char *buf = new char[arg.size() + 1];
       std::memcpy(buf, arg.c_str(), arg.size() + 1);
-      int ret = sqlite3_bind_text(sqli3_stmt.value(), IDX, buf, arg.size(),
+      int ret = sqlite3_bind_text(sqli3_stmt.value(), IDX, buf,
+                                  static_cast<int>(arg.size()),
                                   exec_sqlite_stmt_str_cleanup);
       if (ret != SQLITE_OK) {
         sqlite3_finalize(sqli3_stmt.value());
@@ -237,7 +238,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::exec_sqlite_statement(
   } else {
     sqli3_stmt = nullptr;
     int ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx(), stmt.c_str(),
-                                 stmt.size(), &sqli3_stmt.value(), nullptr);
+                                 static_cast<int>(stmt.size()),
+                                 &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
               "sqlite3_prepare_v2 failed"};
@@ -325,7 +327,8 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
   if (!sqli3_stmt.has_value()) {
     sqli3_stmt = nullptr;
     int ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx(), stmt.c_str(),
-                                 stmt.size(), &sqli3_stmt.value(), nullptr);
+                                 static_cast<int>(stmt.size()),
+                                 &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
               "sqlite3_prepare_v2 failed", std::nullopt};
@@ -379,7 +382,8 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
     } else if constexpr (std::is_same_v<Arg, std::string>) {
       char *buf = new char[arg.size() + 1];
       std::memcpy(buf, arg.c_str(), arg.size() + 1);
-      int ret = sqlite3_bind_text(sqli3_stmt.value(), IDX, buf, arg.size(),
+      int ret = sqlite3_bind_text(sqli3_stmt.value(), IDX, buf,
+                                  static_cast<int>(arg.size()),
                                   exec_sqlite_stmt_str_cleanup);
       if (ret != SQLITE_OK) {
         sqlite3_finalize(sqli3_stmt.value());
@@ -402,7 +406,8 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_with_rows(
   } else {
     sqli3_stmt = nullptr;
     int ret = sqlite3_prepare_v2(ctx.get_sqlite_ctx(), stmt.c_str(),
-                                 stmt.size(), &sqli3_stmt.value(), nullptr);
+                                 static_cast<int>(stmt.size()),
+                                 &sqli3_stmt.value(), nullptr);
     if (ret != SQLITE_OK) {
       return {PMA_SQL::ErrorT::FAILED_TO_PREPARE_EXEC_GENERIC,
               "sqlite3_prepare_v2 failed", std::nullopt};

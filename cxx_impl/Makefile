@@ -1,15 +1,43 @@
 CWD != pwd
 
 LINKER_FLAGS := -lsqlite3 -lblake3
-COMMON_FLAGS := -std=c++23 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
-COMMON_CFLAGS := -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src
+COMMON_FLAGS := -std=c++23 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
+	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
+	-Werror=format-security \
+	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
+	-D_GLIBCXX_ASSERTIONS \
+	-fstrict-flex-arrays=3 \
+	-fstack-clash-protection -fstack-protector-strong \
+	-Wl,-z,nodlopen -Wl,-z,noexecstack \
+	-Wl,-z,relro -Wl,-z,now \
+	-Wl,--as-needed -Wl,--no-copy-dt-needed-entries \
+	-Wtrampolines -fzero-init-padding-bits=all \
+	-Wbidi-chars=any \
+	-fPIE -pie
+COMMON_CFLAGS := -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
+	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
+	-Werror=format-security \
+	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
+	-D_GLIBCXX_ASSERTIONS \
+	-fstrict-flex-arrays=3 \
+	-fstack-clash-protection -fstack-protector-strong \
+	-Wl,-z,nodlopen -Wl,-z,noexecstack \
+	-Wl,-z,relro -Wl,-z,now \
+	-Wl,--as-needed -Wl,--no-copy-dt-needed-entries \
+	-Wtrampolines -fzero-init-padding-bits=all \
+	-Wbidi-chars=any \
+	-fPIE -pie
 
 ifdef RELEASE
-FINAL_COMMON_FLAGS := -DNDEBUG -O2 ${COMMON_FLAGS}
-FINAL_COMMON_CFLAGS := -DNDEBUG -O2 ${COMMON_CFLAGS}
+FINAL_COMMON_FLAGS := -DNDEBUG -O2 ${COMMON_FLAGS} \
+	-fno-delete-null-pointer-checks -fno-strict-overflow -fno-strict-aliasing \
+	-ftrivial-auto-var-init=zero
+FINAL_COMMON_CFLAGS := -DNDEBUG -O2 ${COMMON_CFLAGS} \
+	-fno-delete-null-pointer-checks -fno-strict-overflow -fno-strict-aliasing \
+	-ftrivial-auto-var-init=zero
 else
-FINAL_COMMON_FLAGS := -O0 -g ${COMMON_FLAGS}
-FINAL_COMMON_CFLAGS := -O0 -g ${COMMON_CFLAGS}
+FINAL_COMMON_FLAGS := -Og -g ${COMMON_FLAGS} -Werror
+FINAL_COMMON_CFLAGS := -Og -g ${COMMON_CFLAGS} -Werror
 endif
 
 OBJDIR := objdir
