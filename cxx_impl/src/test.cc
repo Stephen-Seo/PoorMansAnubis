@@ -618,11 +618,8 @@ int main() {
       uint32_t u32;
       std::array<uint8_t, 4> u8_arr;
     } addr_u, addr_u_res;
-    addr_u.u8_arr.at(0) = 1;
-    addr_u.u8_arr.at(1) = 0;
-    addr_u.u8_arr.at(2) = 0;
-    addr_u.u8_arr.at(3) = 0x7F;
-    uint32_t ipv4_addr = PMA_HELPER::be_swap_u32(addr_u.u32);
+
+    uint32_t ipv4_addr = PMA_HELPER::be_swap_u32(0x7F000001);
     std::string ret = PMA_HTTP::ipv4_addr_to_str(ipv4_addr);
     CHECK_TRUE(ret == "127.0.0.1");
 
