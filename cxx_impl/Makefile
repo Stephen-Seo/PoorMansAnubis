@@ -70,7 +70,7 @@ C_IMPL_OBJECTS := $(subst ../c_impl,${OBJDIR}/dotdot,$(subst .c,.c.o,${C_IMPL_SO
 
 OBJECTS := $(addprefix ${OBJDIR_ABS}/,$(subst .cc,.cc.o,${SOURCES}))
 
-all: cxx_backend_impl
+all: cxx_backend_impl test debug_serve debug_client
 
 cxx_backend_impl: ${OBJECTS} ${C_IMPL_OBJECTS}
 	${CXX} -o cxx_backend_impl ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
