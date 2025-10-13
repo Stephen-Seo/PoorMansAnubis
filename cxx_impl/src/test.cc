@@ -579,7 +579,7 @@ int main() {
       res = PMA_HTTP::ipv6_addr_to_str(ipv6);
       ipv6_result = PMA_HTTP::str_to_ipv6_addr(res);
       CHECK_TRUE(ipv6_result == ipv6);
-      if (ipv6_result == ipv6) {
+      if (ipv6_result != ipv6) {
         std::println("Started with {}, ended with {}",
                      PMA_HELPER::array_to_str<uint8_t, 16>(ipv6),
                      PMA_HELPER::array_to_str<uint8_t, 16>(ipv6_result));
