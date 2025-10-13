@@ -50,7 +50,8 @@ std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
   }
 }
 
-std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(const std::string &addr) {
+std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
+    const std::string &addr) noexcept(false) {
   std::array<uint8_t, 16> ipv6_addr;
   // Memset to zero first.
   std::memset(ipv6_addr.data(), 0, 16);
@@ -650,7 +651,8 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(const std::string &addr) {
   return ipv6_addr;
 }
 
-std::string PMA_HTTP::ipv6_addr_to_str(const std::array<uint8_t, 16> &ipv6) {
+std::string PMA_HTTP::ipv6_addr_to_str(
+    const std::array<uint8_t, 16> &ipv6) noexcept {
   // Check for a region of zeroes
   int zidx_0 = -1;
   int zidx_1 = -1;
@@ -742,7 +744,7 @@ std::string PMA_HTTP::ipv6_addr_to_str(const std::array<uint8_t, 16> &ipv6) {
   return addr_str;
 }
 
-uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) {
+uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) noexcept(false) {
   union {
     uint32_t u32;
     std::array<uint8_t, 4> u8_arr;
@@ -771,7 +773,7 @@ uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) {
   return PMA_HELPER::be_swap_u32(addr_u.u32);
 }
 
-std::string PMA_HTTP::ipv4_addr_to_str(uint32_t ipv4) {
+std::string PMA_HTTP::ipv4_addr_to_str(uint32_t ipv4) noexcept {
   std::string ret;
 
   union {
