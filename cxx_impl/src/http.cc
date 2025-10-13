@@ -771,6 +771,26 @@ uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) {
   return PMA_HELPER::be_swap_u32(addr_u.u32);
 }
 
+std::string PMA_HTTP::ipv4_addr_to_str(uint32_t ipv4) {
+  std::string ret;
+
+  union {
+    uint32_t u32;
+    std::array<uint8_t, 4> u8_arr;
+  } addr_u;
+
+  addr_u.u32 = PMA_HELPER::be_swap_u32(ipv4);
+
+  for (int idx = 4; idx-- > 0;) {
+    ret.append(std::format("{}", addr_u.u8_arr.at(idx)));
+    if (idx > 0) {
+      ret.push_back('.');
+    }
+  }
+
+  return ret;
+}
+
 std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket_server(
     std::string addr, uint16_t port) {
   int socket_fd = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 6);

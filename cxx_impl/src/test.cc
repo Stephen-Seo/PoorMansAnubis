@@ -589,14 +589,12 @@ int main() {
 
   // test str_to_ipv4_addr
   {
-    uint32_t ipv4_addr = PMA_HTTP::str_to_ipv4_addr("10.123.45.6");
-    // To native byte order.
-    ipv4_addr = PMA_HELPER::be_swap_u32(ipv4_addr);
+    uint32_t ipv4_addr =
+        PMA_HELPER::be_swap_u32(PMA_HTTP::str_to_ipv4_addr("10.123.45.6"));
     CHECK_TRUE(ipv4_addr == 0x0A7B2D06);
 
-    ipv4_addr = PMA_HTTP::str_to_ipv4_addr("192.168.0.1");
-    // To native byte order.
-    ipv4_addr = PMA_HELPER::be_swap_u32(ipv4_addr);
+    ipv4_addr =
+        PMA_HELPER::be_swap_u32(PMA_HTTP::str_to_ipv4_addr("192.168.0.1"));
     CHECK_TRUE(ipv4_addr == 0xC0A80001);
 
     try {
@@ -611,6 +609,39 @@ int main() {
       CHECK_TRUE(!"Should have failed to parse \"1.2.3.1111\"!");
     } catch (const std::exception &e) {
       CHECK_TRUE("Expected to fail to parse \"1.2.3.1111\"!");
+    }
+  }
+
+  // test ipv4_addr_to_str
+  {
+    union {
+      uint32_t u32;
+      std::array<uint8_t, 4> u8_arr;
+    } addr_u, addr_u_res;
+    addr_u.u8_arr.at(0) = 1;
+    addr_u.u8_arr.at(1) = 0;
+    addr_u.u8_arr.at(2) = 0;
+    addr_u.u8_arr.at(3) = 0x7F;
+    uint32_t ipv4_addr = PMA_HELPER::be_swap_u32(addr_u.u32);
+    std::string ret = PMA_HTTP::ipv4_addr_to_str(ipv4_addr);
+    CHECK_TRUE(ret == "127.0.0.1");
+
+    // Some fuzzing with deterministic psuedo-random values
+    std::default_random_engine re{0};
+    std::uniform_int_distribution int_dist(0, 0xFF);
+
+    for (int idx = 0; idx < 10000; ++idx) {
+      for (int addr_idx = 0; addr_idx < 4; ++addr_idx) {
+        addr_u.u8_arr.at(addr_idx) = static_cast<uint8_t>(int_dist(re));
+      }
+      ret = PMA_HTTP::ipv4_addr_to_str(PMA_HELPER::be_swap_u32(addr_u.u32));
+      addr_u_res.u32 = PMA_HELPER::be_swap_u32(PMA_HTTP::str_to_ipv4_addr(ret));
+      CHECK_TRUE(addr_u.u32 == addr_u_res.u32);
+      if (addr_u.u32 != addr_u_res.u32) {
+        std::println("Started with {}, ended with {}",
+                     PMA_HELPER::array_to_str<uint8_t, 4>(addr_u.u8_arr),
+                     PMA_HELPER::array_to_str<uint8_t, 4>(addr_u_res.u8_arr));
+      }
     }
   }
 

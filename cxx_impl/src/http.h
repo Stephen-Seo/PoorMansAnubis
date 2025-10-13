@@ -38,8 +38,10 @@ std::string error_t_to_str(ErrorT err_enum);
 std::array<uint8_t, 16> str_to_ipv6_addr(const std::string &addr);
 std::string ipv6_addr_to_str(const std::array<uint8_t, 16> &ipv6);
 
-// The returned value should be in big-endian.
+/// The returned value should be in big-endian.
 uint32_t str_to_ipv4_addr(const std::string &addr);
+/// The given parameter should be in big-endian.
+std::string ipv4_addr_to_str(uint32_t ipv4);
 
 std::tuple<ErrorT, std::string, int> get_ipv6_socket_server(std::string addr,
                                                             uint16_t port);
