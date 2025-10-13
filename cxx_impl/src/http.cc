@@ -650,6 +650,98 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(const std::string &addr) {
   return ipv6_addr;
 }
 
+std::string PMA_HTTP::ipv6_addr_to_str(const std::array<uint8_t, 16> &ipv6) {
+  // Check for a region of zeroes
+  int zidx_0 = -1;
+  int zidx_1 = -1;
+  int hold = -2;
+  for (int idx = 0; idx < static_cast<int>(ipv6.size()); ++idx) {
+    if (idx % 2 == 0) {
+      if (ipv6.at(idx) == 0) {
+        hold = idx;
+      } else {
+        hold = -2;
+      }
+    }
+
+    if (hold + 1 == idx && ipv6.at(idx) == 0) {
+      if (zidx_0 == -1) {
+        zidx_0 = hold;
+        zidx_1 = idx + 1;
+      } else if (zidx_1 + 1 == idx) {
+        zidx_1 = idx + 1;
+      }
+    }
+  }
+
+  if (zidx_0 == 0 && zidx_1 == static_cast<int>(ipv6.size())) {
+    return "::";
+  }
+
+  // left side
+  std::string addr_str;
+  bool prev_has_colon = true;
+  bool prev_had_value = false;
+  for (int idx = 0; idx < zidx_0; ++idx) {
+    std::string byte_str = PMA_HELPER::byte_to_hex(ipv6.at(idx));
+    if (byte_str != "0" || idx % 2 == 1) {
+      if (prev_had_value && byte_str.size() == 1) {
+        addr_str.push_back('0');
+      }
+      addr_str.append(byte_str);
+      if (idx % 2 == 0) {
+        prev_had_value = true;
+      } else {
+        prev_had_value = false;
+      }
+    } else {
+      prev_had_value = false;
+    }
+
+    if (!prev_has_colon && idx + 1 != static_cast<int>(ipv6.size()) &&
+        (zidx_0 < 0 || zidx_0 != idx + 1)) {
+      addr_str.push_back(':');
+    }
+
+    prev_has_colon = idx % 2 == 1;
+  }
+
+  // middle
+  if (zidx_0 >= 0) {
+    addr_str.push_back(':');
+    addr_str.push_back(':');
+  }
+
+  // right side
+  prev_has_colon = true;
+  prev_had_value = false;
+  for (int idx = zidx_1 > 0 ? zidx_1 : 0; idx < static_cast<int>(ipv6.size());
+       ++idx) {
+    std::string byte_str = PMA_HELPER::byte_to_hex(ipv6.at(idx));
+    if (byte_str != "0" || idx % 2 == 1) {
+      if (prev_had_value && byte_str.size() == 1) {
+        addr_str.push_back('0');
+      }
+      addr_str.append(byte_str);
+      if (idx % 2 == 0) {
+        prev_had_value = true;
+      } else {
+        prev_had_value = false;
+      }
+    } else {
+      prev_had_value = false;
+    }
+
+    if (!prev_has_colon && idx + 1 != static_cast<int>(ipv6.size())) {
+      addr_str.push_back(':');
+    }
+
+    prev_has_colon = idx % 2 == 1;
+  }
+
+  return addr_str;
+}
+
 uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) {
   union {
     uint32_t u32;

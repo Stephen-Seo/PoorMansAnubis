@@ -16,6 +16,9 @@
 
 #include "helpers.h"
 
+// Standard library includes
+#include <cstdio>
+
 uint16_t PMA_HELPER::endian_swap_u16(uint16_t u16) {
   uint8_t *u16_ptr = reinterpret_cast<uint8_t *>(&u16);
   uint16_t result;
@@ -67,4 +70,13 @@ uint32_t PMA_HELPER::be_swap_u32(uint32_t u32) {
 
 uint64_t PMA_HELPER::be_swap_u64(uint64_t u64) {
   return is_big_endian() ? u64 : endian_swap_u64(u64);
+}
+
+std::string PMA_HELPER::byte_to_hex(uint8_t byte) {
+  std::array<char, 3> buf;
+
+  std::snprintf(buf.data(), buf.size(), "%X", byte);
+
+  buf.at(2) = 0;
+  return buf.data();
 }

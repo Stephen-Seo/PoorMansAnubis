@@ -36,6 +36,7 @@ enum class ErrorT {
 std::string error_t_to_str(ErrorT err_enum);
 
 std::array<uint8_t, 16> str_to_ipv6_addr(const std::string &addr);
+std::string ipv6_addr_to_str(const std::array<uint8_t, 16> &ipv6);
 
 // The returned value should be in big-endian.
 uint32_t str_to_ipv4_addr(const std::string &addr);

@@ -16,7 +16,9 @@
 
 // standard library includes
 #include <atomic>
+#include <cstring>
 #include <print>
+#include <random>
 
 // local includes
 #include "helpers.h"
@@ -71,6 +73,16 @@ int main() {
     ASSERT_TRUE(u64 == 0xddefcdab78563412);
     u64 = PMA_HELPER::endian_swap_u64(u64);
     ASSERT_TRUE(u64 == 0x12345678abcdefdd);
+  }
+
+  // test byte_to_hex
+  {
+    CHECK_TRUE(PMA_HELPER::byte_to_hex(0x4A) == "4A");
+    CHECK_TRUE(PMA_HELPER::byte_to_hex(0xd4) == "D4");
+    CHECK_TRUE(PMA_HELPER::byte_to_hex(10) == "A");
+    CHECK_TRUE(PMA_HELPER::byte_to_hex(0x90) == "90");
+    CHECK_TRUE(PMA_HELPER::byte_to_hex(0xb) == "B");
+    CHECK_TRUE(PMA_HELPER::byte_to_hex(0) == "0");
   }
 
   // test str_to_ipv6_addr
@@ -490,6 +502,78 @@ int main() {
           !"Should have failed to parse \"1:2:3:4:5:6:7:8:9::\" as ipv6");
     } catch (const std::exception &e) {
       CHECK_TRUE("Successfully caught expected exception");
+    }
+  }
+
+  // test ipv6_addr_to_str
+  {
+    std::array<uint8_t, 16> ipv6;
+    std::memset(ipv6.data(), 0, ipv6.size());
+
+    std::string res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "::");
+
+    ipv6.at(15) = 1;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "::1");
+
+    ipv6.at(14) = 0xf;
+    ipv6.at(0) = 0xab;
+    ipv6.at(1) = 0xcd;
+    ipv6.at(3) = 0xe;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "ABCD:E::F01");
+
+    std::memset(ipv6.data(), 0, ipv6.size());
+    ipv6.at(1) = 1;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "1::");
+
+    ipv6.at(2) = 0xf;
+    ipv6.at(3) = 0xa;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "1:F0A::");
+
+    std::memset(ipv6.data(), 0, ipv6.size());
+    ipv6.at(4) = 0x12;
+    ipv6.at(5) = 3;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "::1203:0:0:0:0:0");
+
+    std::memset(ipv6.data(), 0, ipv6.size());
+    ipv6.at(6) = 4;
+    ipv6.at(7) = 7;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "::407:0:0:0:0");
+
+    std::memset(ipv6.data(), 0, ipv6.size());
+    ipv6.at(8) = 0xa;
+    ipv6.at(9) = 0xbc;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "::ABC:0:0:0");
+
+    std::memset(ipv6.data(), 0, ipv6.size());
+    ipv6.at(10) = 0xed;
+    ipv6.at(11) = 0;
+    res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+    CHECK_TRUE(res == "::ED00:0:0");
+
+    // Some fuzzing with deterministic psuedo-random values
+    std::default_random_engine re{0};
+    std::uniform_int_distribution int_dist(0, 0xFF);
+
+    std::array<uint8_t, 16> ipv6_result;
+    for (int idx = 0; idx < 10000; ++idx) {
+      for (int ipv6_idx = 0; ipv6_idx < static_cast<int>(ipv6.size());
+           ++ipv6_idx) {
+        ipv6.at(ipv6_idx) = static_cast<uint8_t>(int_dist(re));
+      }
+      res = PMA_HTTP::ipv6_addr_to_str(ipv6);
+      ipv6_result = PMA_HTTP::str_to_ipv6_addr(res);
+      CHECK_TRUE(ipv6_result == ipv6);
+      if (ipv6_result != ipv6) {
+        std::println("Started with {}, ended with {}", ipv6, ipv6_result);
+      }
     }
   }
 
