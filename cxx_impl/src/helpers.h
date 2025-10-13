@@ -19,6 +19,7 @@
 
 // Standard library includes
 #include <cstdint>
+#include <format>
 #include <functional>
 #include <optional>
 #include <string>
@@ -66,6 +67,9 @@ uint32_t be_swap_u32(uint32_t);
 uint64_t be_swap_u64(uint64_t);
 
 std::string byte_to_hex(uint8_t byte);
+
+template <typename T, unsigned long long SIZE>
+std::string array_to_str(const std::array<T, SIZE> &arr);
 
 }  // namespace PMA_HELPER
 
@@ -134,4 +138,23 @@ std::string PMA_HELPER::raw_to_hexadecimal(
 
   return hexadecimal;
 }
+
+template <typename T, unsigned long long SIZE>
+std::string PMA_HELPER::array_to_str(const std::array<T, SIZE> &arr) {
+  std::string ret("[");
+
+  for (unsigned long long idx = 0; idx < SIZE; ++idx) {
+    std::string f = std::format("{}", arr.at(idx));
+    ret.append(f);
+    if (idx + 1 >= SIZE) {
+      ret.push_back(']');
+    } else {
+      ret.push_back(',');
+      ret.push_back(' ');
+    }
+  }
+
+  return ret;
+}
+
 #endif

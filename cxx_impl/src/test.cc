@@ -568,11 +568,21 @@ int main() {
            ++ipv6_idx) {
         ipv6.at(ipv6_idx) = static_cast<uint8_t>(int_dist(re));
       }
+      if (idx > 5000) {
+        int zero_size = (idx - 5000) * 8 / 5000;
+        int idx = int_dist(re) % 15;
+        if (idx + zero_size >= 15) {
+          zero_size = 15 - idx;
+        }
+        std::memset(ipv6.data() + idx, 0, zero_size);
+      }
       res = PMA_HTTP::ipv6_addr_to_str(ipv6);
       ipv6_result = PMA_HTTP::str_to_ipv6_addr(res);
       CHECK_TRUE(ipv6_result == ipv6);
-      if (ipv6_result != ipv6) {
-        std::println("Started with {}, ended with {}", ipv6, ipv6_result);
+      if (ipv6_result == ipv6) {
+        std::println("Started with {}, ended with {}",
+                     PMA_HELPER::array_to_str<uint8_t, 16>(ipv6),
+                     PMA_HELPER::array_to_str<uint8_t, 16>(ipv6_result));
       }
     }
   }
