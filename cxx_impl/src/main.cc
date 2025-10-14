@@ -18,6 +18,7 @@
 #include <chrono>
 #include <optional>
 #include <thread>
+#include <unordered_map>
 
 // Unix includes
 #include <signal.h>
@@ -49,14 +50,14 @@ int main(int argc, char **argv) {
     return 3;
   }
 
-  std::deque<int> sockets;
-  GenericCleanup<std::deque<int> *> cleanup_sockets(
-      &sockets, [](std::deque<int> **s) {
+  // Mapping is a socket-fd to port
+  std::unordered_map<int, uint16_t> sockets;
+  GenericCleanup<std::unordered_map<int, uint16_t> *> cleanup_sockets(
+      &sockets, [](std::unordered_map<int, uint16_t> **s) {
         PMA_Println("Cleaning up sockets...");
-        for (int &fd : **s) {
-          if (fd >= 0) {
-            close(fd);
-            fd = -1;
+        for (auto iter = (*s)->begin(); iter != (*s)->end(); ++iter) {
+          if (iter->first >= 0) {
+            close(iter->first);
           }
         }
       });
@@ -82,7 +83,7 @@ int main(int argc, char **argv) {
     }
 
     if (socket_fd_opt.has_value() && socket_fd_opt.value() >= 0) {
-      sockets.push_back(socket_fd_opt.value());
+      sockets.emplace(socket_fd_opt.value(), std::get<1>(a));
       PMA_Println("Listening on {}:{}", std::get<0>(a), std::get<1>(a));
     } else {
       PMA_EPrintln(
@@ -97,14 +98,14 @@ int main(int argc, char **argv) {
     return 4;
   }
 
-  std::deque<int> connections;
-  GenericCleanup<std::deque<int> *> cleanup_connections(
-      &connections, [](std::deque<int> **s) {
+  // Mapping is a connection-fd to socket-fd
+  std::unordered_map<int, int> connections;
+  GenericCleanup<std::unordered_map<int, int> *> cleanup_connections(
+      &connections, [](std::unordered_map<int, int> **s) {
         PMA_Println("Cleaning up connections...");
-        for (int &fd : **s) {
-          if (fd >= 0) {
-            close(fd);
-            fd = -1;
+        for (auto iter = (*s)->begin(); iter != (*s)->end(); ++iter) {
+          if (iter->first >= 0) {
+            close(iter->first);
           }
         }
       });
