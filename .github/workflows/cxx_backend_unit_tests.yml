@@ -14,7 +14,7 @@ jobs:
       - name: Get Sources
         run: git clone --depth=1 --no-single-branch https://github.com/Stephen-Seo/PoorMansAnubis.git PMA && cd PMA && git checkout $GITHUB_REF_NAME && git submodule update --init --recursive
       - name: Use Sed for fixes due to lack of C++23 support
-        run: cd PMA/cxx_impl && find . -regex '.*\.\(cc\|h\)$' -not -wholename './src/poor_mans_print.h' -not -wholename './src/poor_mans_print.cc' -execdir sed -i -e 's/std::print/poormansprint/g' -e 's/#include <print>/#include "poor_mans_print.h"/g' -e 's/poormansprintln()/std::println()/g' -e 's/poormansprintln(stderr, /poormansprintln(/g' '{}' ';'
+        run: cd PMA/cxx_impl && find . -regex '.*\.\(cc\|h\)$' -not -wholename './src/poor_mans_print.h' -not -wholename './src/poor_mans_print.cc' -execdir sed -i -e 's/std::print/poormansprint/g' -e 's/#include <print>/#include "poor_mans_print.h"/g' -e 's/poormansprintln()/std::println()/g' -e 's/poormansprintln(stderr, /poormansprintln(/g' '{}' ';' && sed -i -e 's/stderr,//' src/args.cc
       - name: Use Sed to depend on blake3 header/lib in alternate directories
         run: sed -i -e "/^COMMON_FLAGS/s|:=|:= -I$HOME/git/BLAKE3/c |" -e "/^LINKER_FLAGS/s|-lblake3|-L$HOME/BLAKE3_BUILD -lblake3|" PMA/cxx_impl/Makefile
       - name: Build UnitTests (CI_BUILD mode to turn off -Werror)
