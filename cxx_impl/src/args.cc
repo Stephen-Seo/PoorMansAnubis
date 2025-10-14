@@ -125,10 +125,23 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       std::string port_temp;
       uint16_t port;
 
+      // Find last colon as colons are used in ipv6
+      size_t last_colon_idx = 0;
+      for (size_t idx = 12; argv[0][idx] != 0; ++idx) {
+        if (argv[0][idx] == ':') {
+          last_colon_idx = idx;
+        }
+      }
+      if (last_colon_idx == 0) {
+        PMA_EPrintln("ERROR: Invalid address for --addr-port=... !");
+        flags.set(2);
+        return;
+      }
+
       bool first = true;
       for (size_t idx = 12; argv[0][idx] != 0; ++idx) {
         if (first) {
-          if (argv[0][idx] == ':') {
+          if (idx == last_colon_idx) {
             first = false;
             continue;
           } else {
