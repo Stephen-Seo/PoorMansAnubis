@@ -27,7 +27,6 @@
 // Standard library includes
 #include <cstring>
 #include <format>
-#include <print>
 #include <stdexcept>
 
 // Local includes
