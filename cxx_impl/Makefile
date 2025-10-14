@@ -52,13 +52,15 @@ SOURCES := \
 	src/constants.cc \
 	src/http.cc \
 	src/helpers.cc \
-	src/poor_mans_print.cc
+	src/poor_mans_print.cc \
+	src/args.cc
 HEADERS := \
 	src/db.h \
 	src/constants.h \
 	src/http.h \
 	src/helpers.h \
-	src/poor_mans_print.h
+	src/poor_mans_print.h \
+	src/args.h
 
 C_IMPL_SOURCES := \
 	../c_impl/src/work.c \

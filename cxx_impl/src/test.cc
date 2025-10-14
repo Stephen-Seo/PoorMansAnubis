@@ -21,6 +21,7 @@
 #include <random>
 
 // local includes
+#include "args.h"
 #include "helpers.h"
 #include "http.h"
 
@@ -640,6 +641,45 @@ int main() {
                      PMA_HELPER::array_to_str<uint8_t, 4>(addr_u_res.u8_arr));
       }
     }
+  }
+
+  // test Arg parsing
+  {
+    const char *argv[] = {"program",
+                          "--factors=10",
+                          "--dest-url=http://127.0.0.1:9000/",
+                          "--addr-port=127.0.0.1:8088",
+                          "--port-to-dest-url=8088:http://127.0.0.1:9001/",
+                          "--enable-x-real-ip-header",
+                          "--api-url=/pma_api_url",
+                          "--js-factors-url=/pma_factors_url.js",
+                          "--challenge-timeout=2",
+                          "--allowed-timeout=30",
+                          nullptr};
+    PMA_ARGS::Args args(10, const_cast<char **>(argv));
+    ASSERT_TRUE(!args.flags.test(2));
+    CHECK_TRUE(args.factors == 10);
+    CHECK_TRUE(args.default_dest_url == "http://127.0.0.1:9000/");
+    {
+      PMA_ARGS::AddrPort addr_port = {"127.0.0.1", 8088};
+      CHECK_TRUE(args.addr_ports.size() == 1);
+      CHECK_TRUE(std::get<0>(args.addr_ports.at(0)) == std::get<0>(addr_port));
+      CHECK_TRUE(std::get<1>(args.addr_ports.at(0)) == std::get<1>(addr_port));
+    }
+    {
+      auto iter = args.port_to_dest_urls.find(8088);
+      CHECK_TRUE(iter != args.port_to_dest_urls.end());
+      if (iter != args.port_to_dest_urls.end()) {
+        CHECK_TRUE(iter->second == "http://127.0.0.1:9001/");
+      }
+    }
+    CHECK_TRUE(args.flags.test(0));
+    CHECK_TRUE(!args.flags.test(1));
+    CHECK_TRUE(!args.flags.test(3));
+    CHECK_TRUE(args.api_url == "/pma_api_url");
+    CHECK_TRUE(args.js_factors_url == "/pma_factors_url.js");
+    CHECK_TRUE(args.challenge_timeout == 2);
+    CHECK_TRUE(args.allowed_timeout == 30);
   }
 
   std::println("{} out of {} tests succeeded", test_succeeded.load(),
