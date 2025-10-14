@@ -51,9 +51,9 @@ int main(int argc, char **argv) {
   }
 
   // Mapping is a socket-fd to port
-  std::unordered_map<int, uint16_t> sockets;
-  GenericCleanup<std::unordered_map<int, uint16_t> *> cleanup_sockets(
-      &sockets, [](std::unordered_map<int, uint16_t> **s) {
+  std::unordered_map<int, PMA_ARGS::AddrPort> sockets;
+  GenericCleanup<std::unordered_map<int, PMA_ARGS::AddrPort> *> cleanup_sockets(
+      &sockets, [](std::unordered_map<int, PMA_ARGS::AddrPort> **s) {
         PMA_Println("Cleaning up sockets...");
         for (auto iter = (*s)->begin(); iter != (*s)->end(); ++iter) {
           if (iter->first >= 0) {
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     }
 
     if (socket_fd_opt.has_value() && socket_fd_opt.value() >= 0) {
-      sockets.emplace(socket_fd_opt.value(), std::get<1>(a));
+      sockets.emplace(socket_fd_opt.value(), a);
       PMA_Println("Listening on {}:{}", std::get<0>(a), std::get<1>(a));
     } else {
       PMA_EPrintln(
