@@ -14,106 +14,108 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-// Local includes.
-#include "db.h"
-#include "helpers.h"
-#include "poor_mans_print.h"
-
-// Standard library includes.
+// Standard library includes
 #include <chrono>
+#include <optional>
 #include <thread>
 
+// Unix includes
+#include <signal.h>
+#include <unistd.h>
+
+// Local includes.
+#include "args.h"
+#include "helpers.h"
+#include "http.h"
+#include "poor_mans_print.h"
+
+constexpr unsigned int SLEEP_MILLISECONDS = 10;
+
+volatile int interrupt_received = 0;
+
+void receive_signal(int sig) {
+  PMA_Println("Interupt received...");
+  // SIGHUP, SIGINT, SIGTERM
+  // if (sig == 1 || sig == 2 || sig == 15) {
+  //}
+  interrupt_received = 1;
+}
+
 int main(int argc, char **argv) {
-  PMA_Println("This system is {}",
-              PMA_HELPER::is_big_endian() ? "big endian" : "little endian");
+  const PMA_ARGS::Args args(argc, argv);
 
-  // Test init sqlite3.
-  auto [ctx, error, cxx_string] = PMA_SQL::init_sqlite("./sqlite_db");
-
-  {
-    const auto [cleanup_error, error_str] = PMA_SQL::cleanup_stale_entries(ctx);
-    if (cleanup_error != PMA_SQL::ErrorT::SUCCESS) {
-      PMA_EPrintln("Cleanup Stale Entries ErrorT: {}, ERROR: {}",
-                   PMA_SQL::error_t_to_string(cleanup_error), error_str);
-      return 1;
-    }
-  }
-  {
-    const auto [cleanup_error, error_str] =
-        PMA_SQL::cleanup_stale_challenges(ctx);
-    if (cleanup_error != PMA_SQL::ErrorT::SUCCESS) {
-      PMA_EPrintln("Cleanup Stale Challenges ErrorT: {}, ERROR: {}",
-                   PMA_SQL::error_t_to_string(cleanup_error), error_str);
-      return 1;
-    }
-  }
-  {
-    const auto [err_enum, err_str] = PMA_SQL::cleanup_stale_id_to_ports(ctx);
-    if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
-      PMA_EPrintln("Cleanup Stale IDToPort: {}, ERROR: {}",
-                   PMA_SQL::error_t_to_string(err_enum), err_str);
-      return 1;
-    }
+  if (args.flags.test(2)) {
+    PMA_EPrintln("ERROR: Failed to parse args!");
+    return 3;
   }
 
-  if (argc == 4) {
-    const auto [err_enum, err_msg, ports_set] =
-        PMA_SQL::get_allowed_ip_ports(ctx, "127.0.0.1");
-    if (err_enum == PMA_SQL::ErrorT::SUCCESS) {
-      PMA_Print("Allowed ports for IP: ");
-      for (uint16_t port : ports_set) {
-        PMA_Print("{} ", port);
-      }
-      PMA_Println_e();
+  std::deque<int> sockets;
+  GenericCleanup<std::deque<int> *> cleanup_sockets(
+      &sockets, [](std::deque<int> **s) {
+        PMA_Println("Cleaning up sockets...");
+        for (int &fd : **s) {
+          if (fd >= 0) {
+            close(fd);
+            fd = -1;
+          }
+        }
+      });
+
+  for (const PMA_ARGS::AddrPort &a : args.addr_ports) {
+    std::optional<int> socket_fd_opt;
+    const auto [err, msg, socket_fd] =
+        PMA_HTTP::get_ipv6_socket_server(std::get<0>(a), std::get<1>(a));
+    if (err == PMA_HTTP::ErrorT::SUCCESS) {
+      socket_fd_opt = socket_fd;
     } else {
-      PMA_Println("err_enum {}, err_msg {}",
-                  PMA_SQL::error_t_to_string(err_enum), err_msg);
-      return 1;
-    }
-  } else if (argc == 3) {
-    const auto [err_enum, err_msg, opt_vec] =
-        PMA_SQL::SqliteStmtRow<uint64_t, std::string, int, std::string>::
-            exec_sqlite_stmt_with_rows<0>(
-                ctx, "SELECT ID, IP, PORT, ON_TIME FROM ALLOWED_IP",
-                std::nullopt);
-    if (opt_vec.has_value()) {
-      for (auto row : opt_vec.value()) {
-        row.print_row<0>();
-      }
-    }
-  } else {
-    std::string id_to_port_ID;
-    {
-      const auto [err_enum, err_msg, id] = PMA_SQL::init_id_to_port(ctx, 10000);
-      if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
-        PMA_Println("Failed to init_id_to_port: Err {}, Msg {}",
-                    PMA_SQL::error_t_to_string(err_enum), err_msg);
+      const auto [err, msg, socket_fd] =
+          PMA_HTTP::get_ipv4_socket_server(std::get<0>(a), std::get<1>(a));
+      if (err == PMA_HTTP::ErrorT::SUCCESS) {
+        socket_fd_opt = socket_fd;
+      } else {
+        PMA_EPrintln(
+            "ERROR: Failed to get listening socket for addr \"{}\" on port "
+            "\"{}\"!",
+            std::get<0>(a), std::get<1>(a));
         return 1;
       }
-      id_to_port_ID = id;
     }
 
-    PMA_Println("Post insert to ID_TO_PORT...");
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    const auto [error, challenge_str, answer_str, id] =
-        PMA_SQL::generate_challenge(ctx, 1000, "127.0.0.1", id_to_port_ID);
-    if (error == PMA_SQL::ErrorT::SUCCESS) {
-      PMA_Println("Challenge str: {}", challenge_str);
-      PMA_Println("Answer str: {}", answer_str);
+    if (socket_fd_opt.has_value() && socket_fd_opt.value() >= 0) {
+      sockets.push_back(socket_fd_opt.value());
+      PMA_Println("Listening on {}:{}", std::get<0>(a), std::get<1>(a));
     } else {
-      PMA_EPrintln("ERROR: ErrorT: {}, message: {}",
-                   PMA_SQL::error_t_to_string(error), challenge_str);
-      return 1;
+      PMA_EPrintln(
+          "ERROR: Invalid internal state with addr \"{}\" and port \"{}\"!",
+          std::get<0>(a), std::get<1>(a));
+      return 2;
     }
+  }
 
-    if (argc == 2) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(200));
-      const auto [error_enum, err_str, port] =
-          PMA_SQL::verify_answer(ctx, answer_str, "127.0.0.1", id);
-      PMA_EPrintln("Got error_enum {}, err_str {}, port {}",
-                   PMA_SQL::error_t_to_string(error_enum), err_str, port);
-    }
+  if (sockets.empty()) {
+    PMA_EPrintln("ERROR: Not listening to any sockets!");
+    return 4;
+  }
+
+  std::deque<int> connections;
+  GenericCleanup<std::deque<int> *> cleanup_connections(
+      &connections, [](std::deque<int> **s) {
+        PMA_Println("Cleaning up connections...");
+        for (int &fd : **s) {
+          if (fd >= 0) {
+            close(fd);
+            fd = -1;
+          }
+        }
+      });
+
+  signal(SIGINT, receive_signal);
+  signal(SIGHUP, receive_signal);
+  signal(SIGTERM, receive_signal);
+
+  const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
+  while (!interrupt_received) {
+    std::this_thread::sleep_for(sleep_duration);
   }
 
   return 0;

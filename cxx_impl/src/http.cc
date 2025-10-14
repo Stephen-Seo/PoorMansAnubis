@@ -44,6 +44,10 @@ std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
       return "FailedToConnectIPV6Socket";
     case ErrorT::FAILED_TO_CONNECT_IPV4_SOCKET:
       return "FailedToConnectIPV4Socket";
+    case ErrorT::FAILED_TO_PARSE_IPV6:
+      return "FailedToParseIPV6";
+    case ErrorT::FAILED_TO_PARSE_IPV4:
+      return "FailedToParseIPV4";
     default:
       return "UnknownError";
   }
@@ -802,7 +806,12 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket_server(
 
   // bind to "addr", with port
   {
-    std::array<uint8_t, 16> ipv6_addr = str_to_ipv6_addr(addr);
+    std::array<uint8_t, 16> ipv6_addr;
+    try {
+      ipv6_addr = str_to_ipv6_addr(addr);
+    } catch (const std::exception &e) {
+      return {ErrorT::FAILED_TO_PARSE_IPV6, "Failed to parse ipv6 address", -1};
+    }
 
     struct sockaddr_in6 sain6;
     sain6.sin6_family = AF_INET6;
@@ -847,7 +856,11 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket_server(
     struct sockaddr_in sain;
     sain.sin_family = AF_INET;
     sain.sin_port = PMA_HELPER::be_swap_u16(port);
-    sain.sin_addr.s_addr = str_to_ipv4_addr(addr);
+    try {
+      sain.sin_addr.s_addr = str_to_ipv4_addr(addr);
+    } catch (const std::exception &e) {
+      return {ErrorT::FAILED_TO_PARSE_IPV4, "Failed to parse ipv4 address", -1};
+    }
 
     int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain),
                    sizeof(struct sockaddr_in));

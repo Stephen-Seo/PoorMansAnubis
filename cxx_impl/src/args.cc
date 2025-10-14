@@ -24,6 +24,68 @@
 // local includes
 #include "poor_mans_print.h"
 
+void pma_print_usage() {
+  PMA_Println("Args:");
+  PMA_Println(
+      "  --factors=<digits> : Generate factors challenge with <digits> digits");
+  PMA_Println("  --dest-url=<url> : Destination URL for verified clients;");
+  PMA_Println("    example: \"--dest-url=http://127.0.0.1:9999\"");
+  PMA_Println("  --addr-port=<addr>:<port> : Listening addr/port;");
+  PMA_Println("    example: \"--addr-port=127.0.0.1:8080\"");
+  PMA_Println(
+      "  NOTICE: Specify --addr-port=... multiple times to listen on multiple "
+      "ports");
+  PMA_Println(
+      "  NOTE: There is no longer a hard limit on the number of ports one can "
+      "listen to");
+  PMA_Println(
+      "  --port-to-dest-url=<port>:<url> : Ensure requests from listening on "
+      "<port> is forwarded to <url>");
+  PMA_Println("  example: \"--port-to-dest-url=9001:https://example.com\"");
+  PMA_Println(
+      "  NOTICE: Specify --port-to-dest-url=... multiple times to add more "
+      "mappings");
+  PMA_Println(
+      "  --mysql-conf=<config_file> : Set path to config file for mysql "
+      "settings");
+  PMA_Println(
+      "  --enable-x-real-ip-header : Enable trusting \"x-real-ip\" header as "
+      "client ip addr");
+  PMA_Println(
+      "  --api-url=<url> : Set endpoint for client to POST to this software;");
+  PMA_Println("    example: \"--api-url=/pma_api\"");
+  PMA_Println(
+      "  --js-factors-url=<url> : Set endpoint for client to request "
+      "factors.js from this software;");
+  PMA_Println("    example: \"--js-factors-url=/pma_factors.js\"");
+  PMA_Println(
+      "  --challenge-timeout=<minutes> : Set minutes for how long challenge "
+      "answers are stored in db");
+  PMA_Println(
+      "  --allowed-timeout=<minutes> : Set how long a client is allowed to "
+      "access before requiring challenge again");
+  PMA_Println(
+      "  --enable-override-dest-url : Enable \"override-dest-url\" request "
+      "header to determine where to forward;");
+  PMA_Println(
+      "    example header: \"override-dest-url: http://127.0.0.1:8888\"");
+  PMA_Println(
+      "  WARNING: If --enable-override-dest-url is used, you must ensure that");
+  PMA_Println(
+      "    PoorMansAnubis always receives this header as set by your server. "
+      "If you");
+  PMA_Println(
+      "    don't then anyone accessing your server may be able to set this "
+      "header and");
+  PMA_Println("    direct PoorMansAnubis to load any website!");
+  PMA_Println(
+      "    If you are going to use this anyway, you must ensure that a proper "
+      "firewall is configured!");
+  PMA_Println(
+      "  --important-warning-has-been-read : Use this option to enable "
+      "potentially dangerous options");
+}
+
 PMA_ARGS::Args::Args(int argc, char **argv)
     : factors(DEFAULT_FACTORS_DIGITS),
       default_dest_url("https://seodisparate.com"),
@@ -38,7 +100,12 @@ PMA_ARGS::Args::Args(int argc, char **argv)
   ++argv;
 
   while (argc > 0) {
-    if (std::strncmp(argv[0], "--factors=", 10) == 0) {
+    if (std::strcmp(argv[0], "-h") == 0 ||
+        std::strcmp(argv[0], "--help") == 0) {
+      pma_print_usage();
+      flags.set(2);
+      return;
+    } else if (std::strncmp(argv[0], "--factors=", 10) == 0) {
       this->factors = std::strtoull(argv[0] + 10, nullptr, 10);
       if (factors == 0 || factors == ULLONG_MAX) {
         PMA_EPrintln(
