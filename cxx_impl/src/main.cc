@@ -25,6 +25,7 @@
 
 // Unix includes
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -197,6 +198,18 @@ int main(int argc, char **argv) {
         PMA_Println("New connection from {}:{} on port {}", client_ipv4,
                     PMA_HELPER::be_swap_u16(sain4.sin_port),
                     std::get<3>(iter->second));
+
+        // Set nonblocking-IO on received connection fd
+        int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
+        if (fcntl_ret < 0) {
+          PMA_EPrintln(
+              "WARNING: Failed to set NONBLOCK on new connection (errno {}), "
+              "closing connection...",
+              errno);
+          close(ret);
+          continue;
+        }
+
         std::get<1>(iter->second) = std::move(client_ipv4);
         connections.emplace(ret, iter->second);
       } else {
@@ -207,6 +220,18 @@ int main(int argc, char **argv) {
         PMA_Println("New connection from {}:{} on port {}", client_ipv6,
                     PMA_HELPER::be_swap_u16(sain6.sin6_port),
                     std::get<3>(iter->second));
+
+        // Set nonblocking-IO on received connection fd
+        int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
+        if (fcntl_ret < 0) {
+          PMA_EPrintln(
+              "WARNING: Failed to set NONBLOCK on new connection (errno {}), "
+              "closing connection...",
+              errno);
+          close(ret);
+          continue;
+        }
+
         std::get<1>(iter->second) = std::move(client_ipv6);
         connections.emplace(ret, iter->second);
       }
