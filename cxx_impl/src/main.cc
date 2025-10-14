@@ -17,13 +17,17 @@
 // Standard library includes
 #include <bitset>
 #include <chrono>
+#include <cstring>
 #include <optional>
 #include <thread>
 #include <tuple>
 #include <unordered_map>
 
 // Unix includes
+#include <errno.h>
+#include <netinet/in.h>
 #include <signal.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 // Local includes.
@@ -33,6 +37,8 @@
 #include "poor_mans_print.h"
 
 constexpr unsigned int SLEEP_MILLISECONDS = 10;
+// 5 seconds
+constexpr unsigned int TIMEOUT_ITER_TICKS = 5000 / SLEEP_MILLISECONDS;
 
 volatile int interrupt_received = 0;
 
@@ -44,15 +50,19 @@ void receive_signal(int sig) {
   interrupt_received = 1;
 }
 
+// First string is host addr, second string is client addr (to be filled in)
+// First uint16_t is port, second uint16_t is iteration tick count
 // Bitset flags:
 // 0 - is ipv4
-using AddrPortInfo = std::tuple<std::string, uint16_t, std::bitset<16>>;
+using AddrPortInfo =
+    std::tuple<std::string, std::string, std::bitset<16>, uint16_t, uint16_t>;
 
 AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
-  auto tuple = std::make_tuple(std::get<0>(addr_port), std::get<1>(addr_port),
-                               std::bitset<16>{});
+  AddrPortInfo tuple =
+      std::make_tuple(std::get<0>(addr_port), std::string{}, std::bitset<16>{},
+                      std::get<1>(addr_port), 0);
 
-  std::get<2>(tuple).set(0, is_ipv4);
+  std::get<std::bitset<16> >(tuple).set(0, is_ipv4);
 
   return tuple;
 }
@@ -65,7 +75,7 @@ int main(int argc, char **argv) {
     return 3;
   }
 
-  // Mapping is a socket-fd to port
+  // Mapping is a socket-fd to AddrPortInfo
   std::unordered_map<int, AddrPortInfo> sockets;
   GenericCleanup<std::unordered_map<int, AddrPortInfo> *> cleanup_sockets(
       &sockets, [](std::unordered_map<int, AddrPortInfo> **s) {
@@ -116,7 +126,7 @@ int main(int argc, char **argv) {
     return 4;
   }
 
-  // Mapping is a connection-fd to socket-fd
+  // Mapping is a connection-fd to AddrPortInfo of host/server
   std::unordered_map<int, AddrPortInfo> connections;
   GenericCleanup<std::unordered_map<int, AddrPortInfo> *> cleanup_connections(
       &connections, [](std::unordered_map<int, AddrPortInfo> **s) {
@@ -132,12 +142,95 @@ int main(int argc, char **argv) {
   signal(SIGHUP, receive_signal);
   signal(SIGTERM, receive_signal);
 
+  struct sockaddr_in sain4;
+  std::memset(&sain4, 0, sizeof(struct sockaddr_in));
+  struct sockaddr_in6 sain6;
+  std::memset(&sain6, 0, sizeof(struct sockaddr_in6));
+  socklen_t sain_len;
+
+  std::deque<int> to_remove_connections;
+
+  int ret;
   const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
   while (!interrupt_received) {
     std::this_thread::sleep_for(sleep_duration);
-    // TODO: Receive connections from sockets and handle each connection here.
-    // Also figure out fetching the addr of the incoming connection.
-    // Probably will use the output-parameters of "accept()" to get this.
+
+    // Fetch new connections
+    for (auto iter = sockets.begin(); iter != sockets.end(); ++iter) {
+      if (std::get<std::bitset<16> >(iter->second).test(0)) {
+        // IPV4
+        sain_len = sizeof(struct sockaddr_in);
+        ret = accept(iter->first, reinterpret_cast<sockaddr *>(&sain4),
+                     &sain_len);
+
+        if (sain_len != sizeof(struct sockaddr_in)) {
+          PMA_EPrintln("WARNING: sockaddr return length {}, but should be {}",
+                       sain_len, sizeof(struct sockaddr_in));
+        }
+      } else {
+        // IPV6
+        sain_len = sizeof(struct sockaddr_in6);
+        ret = accept(iter->first, reinterpret_cast<sockaddr *>(&sain6),
+                     &sain_len);
+
+        if (sain_len != sizeof(struct sockaddr_in6)) {
+          PMA_EPrintln("WARNING: sockaddr return length {}, but should be {}",
+                       sain_len, sizeof(struct sockaddr_in));
+        }
+      }
+
+      if (ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // Nonblocking-IO indicating no connection to accept
+          continue;
+        } else {
+          PMA_EPrintln(
+              "WARNING: Failed to accept connection from socket {} (errno "
+              "{})",
+              iter->first, errno);
+          continue;
+        }
+      } else if (std::get<std::bitset<16> >(iter->second).test(0)) {
+        // IPV4 new connection
+        std::string client_ipv4 =
+            PMA_HTTP::ipv4_addr_to_str(sain4.sin_addr.s_addr);
+        PMA_Println("New connection from {}:{} on port {}", client_ipv4,
+                    PMA_HELPER::be_swap_u16(sain4.sin_port),
+                    std::get<3>(iter->second));
+        std::get<1>(iter->second) = std::move(client_ipv4);
+        connections.emplace(ret, iter->second);
+      } else {
+        // IPV6 new connection
+        std::string client_ipv6 = PMA_HTTP::ipv6_addr_to_str(
+            *reinterpret_cast<std::array<uint8_t, 16> *>(
+                sain6.sin6_addr.s6_addr));
+        PMA_Println("New connection from {}:{} on port {}", client_ipv6,
+                    PMA_HELPER::be_swap_u16(sain6.sin6_port),
+                    std::get<3>(iter->second));
+        std::get<1>(iter->second) = std::move(client_ipv6);
+        connections.emplace(ret, iter->second);
+      }
+    }
+
+    // Handle connections
+    for (auto iter = connections.begin(); iter != connections.end(); ++iter) {
+      std::get<4>(iter->second) += 1;
+      if (std::get<4>(iter->second) >= TIMEOUT_ITER_TICKS) {
+        PMA_Println("Timed out connection from {} on port {}",
+                    std::get<1>(iter->second), std::get<3>(iter->second));
+        to_remove_connections.push_back(iter->first);
+        continue;
+      }
+
+      // TODO: Receive/Send data from/to connections
+    }
+
+    // Remove connections
+    for (int connection_fd : to_remove_connections) {
+      close(connection_fd);
+      connections.erase(connection_fd);
+    }
+    to_remove_connections.clear();
   }
 
   return 0;
