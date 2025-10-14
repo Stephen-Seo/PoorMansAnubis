@@ -2,7 +2,6 @@
 
 #include <thread>
 #include <chrono>
-#include <print>
 #include <unordered_set>
 #include <cstring>
 #include <cstdlib>
@@ -11,6 +10,8 @@
 #include <errno.h>
 
 #include <netinet/in.h>
+
+#include "../src/poor_mans_print.h"
 
 static bool do_run = true;
 
@@ -27,12 +28,12 @@ std::unordered_set<int> update_connections(const std::unordered_set<int> &connec
     if (read_ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {}
       else {
-        std::println("ERROR: read on fd {} returned -1 with errno {}!", fd, errno);
+        PMA_Println("ERROR: read on fd {} returned -1 with errno {}!", fd, errno);
         to_remove.insert(fd);
       }
     } else if (read_ret > 0) {
       buf.at(read_ret) = 0;
-      std::println("READ fd {}: {}", fd, reinterpret_cast<char*>(buf.data()));
+      PMA_Println("READ fd {}: {}", fd, reinterpret_cast<char*>(buf.data()));
       to_remove.insert(fd);
     }
   }
@@ -40,7 +41,7 @@ std::unordered_set<int> update_connections(const std::unordered_set<int> &connec
 }
 
 void print_usage() {
-  std::println("./program ( --ipv4=0.0.0.0 | --ipv6=:: ) --port=9000");
+  PMA_Println("./program ( --ipv4=0.0.0.0 | --ipv6=:: ) --port=9000");
 }
 
 int main(int argc, char **argv) {
@@ -58,25 +59,25 @@ int main(int argc, char **argv) {
   if (std::strncmp(argv[2], "--port=", 7) == 0) {
     int to_port = std::atoi(argv[2] + 7);
     if (to_port <= 0 || to_port > 0xFFFF) {
-      std::println("Invalid --port={} !", to_port);
+      PMA_Println("Invalid --port={} !", to_port);
       print_usage();
       return 1;
     }
     port = static_cast<uint16_t>(to_port);
   } else {
-    std::println("Expected --port=... for second argument.");
+    PMA_Println("Expected --port=... for second argument.");
     print_usage();
     return 1;
   }
 
-  std::println("Using port {}", port);
+  PMA_Println("Using port {}", port);
 
   if (std::strncmp(argv[1], "--ipv4=", 7) == 0) {
-    std::println("Using ipv4 addr {}", argv[1] + 7);
+    PMA_Println("Using ipv4 addr {}", argv[1] + 7);
     const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv4_socket_server(argv[1] + 7, port);
 
     if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
-      std::println(stderr, "Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
+      PMA_EPrintln("Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
       if (ret_socket_fd >= 0) {
         close(ret_socket_fd);
       }
@@ -85,12 +86,12 @@ int main(int argc, char **argv) {
     socket_fd = ret_socket_fd;
     is_ipv6 = false;
   } else if (std::strncmp(argv[1], "--ipv6=", 7) == 0) {
-    std::println("Using ipv6 addr {}", argv[1] + 7);
+    PMA_Println("Using ipv6 addr {}", argv[1] + 7);
 
     const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::get_ipv6_socket_server(argv[1] + 7, port);
 
     if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
-      std::println(stderr, "Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
+      PMA_EPrintln("Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
       if (ret_socket_fd >= 0) {
         close(ret_socket_fd);
       }
@@ -99,7 +100,7 @@ int main(int argc, char **argv) {
     socket_fd = ret_socket_fd;
     is_ipv6 = true;
   } else {
-    std::println("Expected --ipv4=... or --ipv6=... as first argument.");
+    PMA_Println("Expected --ipv4=... or --ipv6=... as first argument.");
     print_usage();
     return 0;
   }
@@ -123,7 +124,7 @@ int main(int argc, char **argv) {
     if (ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {}
       else {
-        std::println("ERROR: accept returned -1 with errno {}!", errno);
+        PMA_Println("ERROR: accept returned -1 with errno {}!", errno);
         do_run = false;
       }
     } else {
@@ -132,7 +133,7 @@ int main(int argc, char **argv) {
 
     auto to_close = update_connections(connections);
     for (int fd : to_close) {
-      std::println("Closing connection {}...", fd);
+      PMA_Println("Closing connection {}...", fd);
       close(fd);
       connections.erase(fd);
     }

@@ -25,10 +25,26 @@
 #include <format>
 #include <string>
 
-#define poormansprintln(fmt, ...) \
-  PoorMans::println_actual(std::format(fmt __VA_OPT__(, ) __VA_ARGS__))
-#define poormansprint(fmt, ...) \
+#if __cplusplus >= 202302L
+#include <print>
+#define PMA_Print(fmt, ...) std::print(fmt __VA_OPT__(, ) __VA_ARGS__)
+#define PMA_Println(fmt, ...) std::println(fmt __VA_OPT__(, ) __VA_ARGS__)
+#define PMA_Println_e() std::println()
+#define PMA_EPrint(fmt, ...) std::print(stderr, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define PMA_EPrintln(fmt, ...) \
+  std::println(stderr, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define PMA_EPrintln_e() std::println(stderr, "")
+#else
+#define PMA_Print(fmt, ...) \
   PoorMans::print_actual(std::format(fmt __VA_OPT__(, ) __VA_ARGS__))
+#define PMA_Println(fmt, ...) \
+  PoorMans::println_actual(std::format(fmt __VA_OPT__(, ) __VA_ARGS__))
+#define PMA_Println_e() PoorMans::println_actual()
+#define PMA_EPrint(fmt, ...) \
+  PoorMans::eprint_actual(std::format(fmt __VA_OPT__(, ) __VA_ARGS__))
+#define PMA_EPrintln(fmt, ...) \
+  PoorMans::eprintln_actual(std::format(fmt __VA_OPT__(, ) __VA_ARGS__))
+#define PMA_EPrintln_e() PoorMans::eprintln_actual()
 
 namespace std {
 void println();
@@ -37,11 +53,16 @@ void println();
 namespace PoorMans {
 
 void print_actual(std::string);
-
 void println_actual(std::string);
 
+void eprint_actual(std::string);
+void eprintln_actual(std::string);
+
 void println_actual();
+void eprintln_actual();
 
 }  // namespace PoorMans
+
+#endif
 
 #endif

@@ -23,7 +23,6 @@
 #include <format>
 #include <mutex>
 #include <optional>
-#include <print>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -32,6 +31,9 @@
 
 // third party includes
 #include <sqlite3.h>
+
+// local includes
+#include "poor_mans_print.h"
 
 constexpr int ALLOWED_IP_TIMEOUT_MINUTES = 30;
 constexpr int CHALLENGE_TIMEOUT_MINUTES = 3;
@@ -253,13 +255,13 @@ template <typename... Args>
 template <unsigned long long IDX>
 void PMA_SQL::SqliteStmtRow<Args...>::print_row() const {
   if constexpr (IDX >= std::tuple_size_v<decltype(row)>) {
-    std::println();
+    PMA_Println_e();
     return;
   } else {
     if (std::get<IDX>(row).has_value()) {
-      std::print("Col {}: {}  ", IDX, std::get<IDX>(row).value());
+      PMA_Print("Col {}: {}  ", IDX, std::get<IDX>(row).value());
     } else {
-      std::print("Col {}: NULL  ", IDX);
+      PMA_Print("Col {}: NULL  ", IDX);
     }
     print_row<IDX + 1>();
   }

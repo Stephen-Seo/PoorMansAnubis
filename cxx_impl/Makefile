@@ -1,7 +1,7 @@
 CWD != pwd
 
 LINKER_FLAGS := -lsqlite3 -lblake3
-COMMON_FLAGS := -std=c++23 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
+COMMON_FLAGS := -std=c++20 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \

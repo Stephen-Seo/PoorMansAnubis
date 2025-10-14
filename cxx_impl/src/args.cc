@@ -20,7 +20,9 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
-#include <print>
+
+// local includes
+#include "poor_mans_print.h"
 
 PMA_ARGS::Args::Args(int argc, char **argv)
     : factors(DEFAULT_FACTORS_DIGITS),
@@ -39,15 +41,15 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     if (std::strncmp(argv[0], "--factors=", 10) == 0) {
       this->factors = std::strtoull(argv[0] + 10, nullptr, 10);
       if (factors == 0 || factors == ULLONG_MAX) {
-        std::println(
-            stderr, "ERROR: Failed to parse args! Invalid --factors=<digits>!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse args! Invalid --factors=<digits>!");
         flags.set(2);
         return;
       }
     } else if (std::strncmp(argv[0], "--dest-url=", 11) == 0) {
       this->default_dest_url = std::string(argv[0] + 11);
       if (this->default_dest_url.empty()) {
-        std::println(stderr, "ERROR: Got empty --dest-url=<url>!");
+        PMA_EPrintln("ERROR: Got empty --dest-url=<url>!");
         flags.set(2);
         return;
       }
@@ -71,8 +73,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
 
       if (first || port_temp.empty() || addr.empty()) {
-        std::println(stderr,
-                     "ERROR: Failed to parse --addr-port=<addr>:<port> !");
+        PMA_EPrintln("ERROR: Failed to parse --addr-port=<addr>:<port> !");
         flags.set(2);
         return;
       }
@@ -80,23 +81,23 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       try {
         unsigned long parsed = std::stoul(port_temp);
         if (parsed > 0xFFFF) {
-          std::println(stderr,
-                       "ERROR: Failed to parse port from "
-                       "--addr-port=<addr>:<port> (port number too large)!");
+          PMA_EPrintln(
+              "ERROR: Failed to parse port from "
+              "--addr-port=<addr>:<port> (port number too large)!");
           flags.set(2);
           return;
         }
         port = static_cast<uint16_t>(parsed);
       } catch (const std::invalid_argument &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse port from "
-                     "--addr-port=<addr>:<port> (invalid argument)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse port from "
+            "--addr-port=<addr>:<port> (invalid argument)!");
         flags.set(2);
         return;
       } catch (const std::out_of_range &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse port from "
-                     "--addr-port=<addr>:<port> (out of range)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse port from "
+            "--addr-port=<addr>:<port> (out of range)!");
         flags.set(2);
         return;
       }
@@ -122,8 +123,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
 
       if (first || url.empty() || port_temp.empty()) {
-        std::println(
-            stderr, "ERROR: Failed to parse --port-to-dest-url=<port>:<url> !");
+        PMA_EPrintln(
+            "ERROR: Failed to parse --port-to-dest-url=<port>:<url> !");
         flags.set(2);
         return;
       }
@@ -131,8 +132,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       try {
         unsigned long parsed = std::stoul(port_temp);
         if (parsed > 0xFFFF) {
-          std::println(
-              stderr,
+          PMA_EPrintln(
               "ERROR: Failed to parse port from "
               "--port-to-dest-url=<port>:<url> (port number too large)!");
           flags.set(2);
@@ -140,15 +140,15 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         }
         port = static_cast<uint16_t>(parsed);
       } catch (const std::invalid_argument &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse port from "
-                     "--port-to-dest-url=<port>:<url> (invalid argument)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse port from "
+            "--port-to-dest-url=<port>:<url> (invalid argument)!");
         flags.set(2);
         return;
       } catch (const std::out_of_range &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse port from "
-                     "--port-to-dest-url=<port>:<url> (out of range)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse port from "
+            "--port-to-dest-url=<port>:<url> (out of range)!");
         flags.set(2);
         return;
       }
@@ -159,16 +159,14 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     } else if (std::strncmp(argv[0], "--api-url=", 10) == 0) {
       this->api_url = std::string(argv[0] + 10);
       if (this->api_url.empty()) {
-        std::println(stderr,
-                     "ERROR: Failed to parse --api-url=<url> (url is empty)!");
+        PMA_EPrintln("ERROR: Failed to parse --api-url=<url> (url is empty)!");
         flags.set(2);
         return;
       }
     } else if (std::strncmp(argv[0], "--js-factors-url=", 17) == 0) {
       this->js_factors_url = std::string(argv[0] + 17);
       if (this->js_factors_url.empty()) {
-        std::println(
-            stderr,
+        PMA_EPrintln(
             "ERROR: Failed to parse --js-factors-url=<url> (url is empty)!");
         flags.set(2);
         return;
@@ -177,23 +175,23 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       try {
         unsigned long parsed = std::stoul(std::string(argv[0] + 20));
         if (parsed > 0xFFFFFFFF) {
-          std::println(stderr,
-                       "ERROR: Failed to parse timeout from "
-                       "--challenge-timeout=<minutes> (timeout too large)!");
+          PMA_EPrintln(
+              "ERROR: Failed to parse timeout from "
+              "--challenge-timeout=<minutes> (timeout too large)!");
           flags.set(2);
           return;
         }
         this->challenge_timeout = static_cast<uint32_t>(parsed);
       } catch (const std::invalid_argument &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse timeout from "
-                     "--challenge-timeout=<minutes> (invalid argument)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse timeout from "
+            "--challenge-timeout=<minutes> (invalid argument)!");
         flags.set(2);
         return;
       } catch (const std::out_of_range &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse timeout from "
-                     "--challenge-timeout=<minutes> (out of range)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse timeout from "
+            "--challenge-timeout=<minutes> (out of range)!");
         flags.set(2);
         return;
       }
@@ -201,23 +199,23 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       try {
         unsigned long parsed = std::stoul(std::string(argv[0] + 18));
         if (parsed > 0xFFFFFFFF) {
-          std::println(stderr,
-                       "ERROR: Failed to parse timeout from "
-                       "--allowed-timeout=<minutes> (timeout too large)!");
+          PMA_EPrintln(
+              "ERROR: Failed to parse timeout from "
+              "--allowed-timeout=<minutes> (timeout too large)!");
           flags.set(2);
           return;
         }
         this->allowed_timeout = static_cast<uint32_t>(parsed);
       } catch (const std::invalid_argument &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse timeout from "
-                     "--allowed-timeout=<minutes> (invalid argument)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse timeout from "
+            "--allowed-timeout=<minutes> (invalid argument)!");
         flags.set(2);
         return;
       } catch (const std::out_of_range &e) {
-        std::println(stderr,
-                     "ERROR: Failed to parse timeout from "
-                     "--allowed-timeout=<minutes> (out of range)!");
+        PMA_EPrintln(
+            "ERROR: Failed to parse timeout from "
+            "--allowed-timeout=<minutes> (out of range)!");
         flags.set(2);
         return;
       }
@@ -225,8 +223,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       if (flags.test(3)) {
         flags.set(1);
       } else {
-        std::println(
-            stderr,
+        PMA_EPrintln(
             "ERROR: You must first use \"--important-warning-has-hbeen-read\" "
             "option to enable this option! Please read the documentation to "
             "understand the security implications of this option! It may be "
@@ -238,7 +235,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     } else if (std::strcmp(argv[0], "--important-warning-has-been-read") == 0) {
       flags.set(3);
     } else {
-      std::println(stderr, "ERROR Invalid argument: {}", argv[0]);
+      PMA_EPrintln("ERROR Invalid argument: {}", argv[0]);
       flags.set(2);
       return;
     }

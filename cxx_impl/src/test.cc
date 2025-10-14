@@ -17,31 +17,31 @@
 // standard library includes
 #include <atomic>
 #include <cstring>
-#include <print>
 #include <random>
 
 // local includes
 #include "args.h"
 #include "helpers.h"
 #include "http.h"
+#include "poor_mans_print.h"
 
-#define ASSERT_TRUE(x)                                                        \
-  test_count.fetch_add(1);                                                    \
-  if (!(x)) {                                                                 \
-    std::println(stderr, "ERROR: \"{}\" failed assert at {}!", #x, __LINE__); \
-    std::println("{} out of {} tests succeeded", test_succeeded.load(),       \
-                 test_count.load());                                          \
-    return 1;                                                                 \
-  } else {                                                                    \
-    test_succeeded.fetch_add(1);                                              \
+#define ASSERT_TRUE(x)                                                 \
+  test_count.fetch_add(1);                                             \
+  if (!(x)) {                                                          \
+    PMA_EPrintln("ERROR: \"{}\" failed assert at {}!", #x, __LINE__);  \
+    PMA_Println("{} out of {} tests succeeded", test_succeeded.load(), \
+                test_count.load());                                    \
+    return 1;                                                          \
+  } else {                                                             \
+    test_succeeded.fetch_add(1);                                       \
   }
 
-#define CHECK_TRUE(x)                                                         \
-  test_count.fetch_add(1);                                                    \
-  if (!(x)) {                                                                 \
-    std::println(stderr, "ERROR: \"{}\" failed assert at {}!", #x, __LINE__); \
-  } else {                                                                    \
-    test_succeeded.fetch_add(1);                                              \
+#define CHECK_TRUE(x)                                                 \
+  test_count.fetch_add(1);                                            \
+  if (!(x)) {                                                         \
+    PMA_EPrintln("ERROR: \"{}\" failed assert at {}!", #x, __LINE__); \
+  } else {                                                            \
+    test_succeeded.fetch_add(1);                                      \
   }
 
 std::atomic_uint64_t test_count(0);
@@ -581,9 +581,9 @@ int main() {
       ipv6_result = PMA_HTTP::str_to_ipv6_addr(res);
       CHECK_TRUE(ipv6_result == ipv6);
       if (ipv6_result != ipv6) {
-        std::println("Started with {}, ended with {}",
-                     PMA_HELPER::array_to_str<uint8_t, 16>(ipv6),
-                     PMA_HELPER::array_to_str<uint8_t, 16>(ipv6_result));
+        PMA_Println("Started with {}, ended with {}",
+                    PMA_HELPER::array_to_str<uint8_t, 16>(ipv6),
+                    PMA_HELPER::array_to_str<uint8_t, 16>(ipv6_result));
       }
     }
   }
@@ -636,9 +636,9 @@ int main() {
       addr_u_res.u32 = PMA_HELPER::be_swap_u32(PMA_HTTP::str_to_ipv4_addr(ret));
       CHECK_TRUE(addr_u.u32 == addr_u_res.u32);
       if (addr_u.u32 != addr_u_res.u32) {
-        std::println("Started with {}, ended with {}",
-                     PMA_HELPER::array_to_str<uint8_t, 4>(addr_u.u8_arr),
-                     PMA_HELPER::array_to_str<uint8_t, 4>(addr_u_res.u8_arr));
+        PMA_Println("Started with {}, ended with {}",
+                    PMA_HELPER::array_to_str<uint8_t, 4>(addr_u.u8_arr),
+                    PMA_HELPER::array_to_str<uint8_t, 4>(addr_u_res.u8_arr));
       }
     }
   }
@@ -682,7 +682,7 @@ int main() {
     CHECK_TRUE(args.allowed_timeout == 30);
   }
 
-  std::println("{} out of {} tests succeeded", test_succeeded.load(),
-               test_count.load());
+  PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
+              test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;
 }

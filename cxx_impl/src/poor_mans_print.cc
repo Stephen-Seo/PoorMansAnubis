@@ -16,6 +16,8 @@
 
 #include "poor_mans_print.h"
 
+#if __cplusplus < 202302L
+
 #include <cstdio>
 
 void std::println() { std::printf("\n"); }
@@ -26,4 +28,15 @@ void PoorMans::println_actual(std::string str) {
   std::printf("%s\n", str.c_str());
 }
 
+void PoorMans::eprint_actual(std::string str) {
+  std::fprintf(stderr, "%s", str.c_str());
+}
+
+void PoorMans::eprintln_actual(std::string str) {
+  std::fprintf(stderr, "%s\n", str.c_str());
+}
+
 void PoorMans::println_actual() { std::printf("\n"); }
+void PoorMans::eprintln_actual() { std::fprintf(stderr, "\n"); }
+
+#endif
