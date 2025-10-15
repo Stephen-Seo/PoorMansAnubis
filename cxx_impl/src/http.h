@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 
 namespace PMA_HTTP {
 constexpr int SOCKET_BACKLOG_SIZE = 32;
@@ -32,7 +33,9 @@ enum class ErrorT {
   FAILED_TO_CONNECT_IPV6_SOCKET,
   FAILED_TO_CONNECT_IPV4_SOCKET,
   FAILED_TO_PARSE_IPV6,
-  FAILED_TO_PARSE_IPV4
+  FAILED_TO_PARSE_IPV4,
+  NOT_GET_NOR_POST_REQ,
+  INVALID_STATE
 };
 
 std::string error_t_to_str(ErrorT err_enum);
@@ -57,6 +60,12 @@ std::tuple<ErrorT, std::string, int> connect_ipv6_socket_client(
     std::string client_addr, std::string server_addr, uint16_t port);
 std::tuple<ErrorT, std::string, int> connect_ipv4_socket_client(
     std::string client_addr, std::string server_addr, uint16_t port);
+
+/// Only parses first line of request to get url and query params.
+/// On error, string is err message. On SUCCESS, string is request url
+/// Map is key/value pairs of query parameters (NOT headers)
+std::tuple<ErrorT, std::string, std::unordered_map<std::string, std::string> >
+handle_request_parse(std::string req);
 }  // namespace PMA_HTTP
 
 #endif

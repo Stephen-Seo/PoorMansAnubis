@@ -247,6 +247,47 @@ int main(int argc, char **argv) {
         continue;
       }
 
+      char buf[4096];
+      ssize_t read_ret = read(iter->first, buf, 4095);
+      if (read_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // Nonblocking-IO indicating no bytes to read
+          continue;
+        } else {
+          PMA_Println("Failed to read from client {} (errno {})",
+                      std::get<1>(iter->second), errno);
+          to_remove_connections.push_back(iter->first);
+          continue;
+        }
+      }
+      if (read_ret > 0) {
+        buf[read_ret] = 0;
+        const auto [err, msg_or_url, q_params] =
+            PMA_HTTP::handle_request_parse(buf);
+        if (err == PMA_HTTP::ErrorT::SUCCESS) {
+          PMA_Println("URL: {}, Params:", msg_or_url);
+          for (auto qiter = q_params.begin(); qiter != q_params.end();
+               ++qiter) {
+            PMA_Println("  {}={}", qiter->first, qiter->second);
+          }
+          std::string body = "<html>Test</html>\n";
+          std::string full = std::format(
+              "HTTP/1.0 200 OK\r\nContent-type: text/html; "
+              "charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
+              body.size(), body);
+          ssize_t write_ret = write(iter->first, full.c_str(), full.size());
+          if (write_ret != static_cast<ssize_t>(full.size())) {
+            PMA_EPrintln(
+                "ERROR: Failed to send response to client {} (write_ret {})!",
+                std::get<1>(iter->second), write_ret);
+            to_remove_connections.push_back(iter->first);
+          }
+        } else {
+          PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(err),
+                       msg_or_url);
+          to_remove_connections.push_back(iter->first);
+        }
+      }
       // TODO: Receive/Send data from/to connections
     }
 

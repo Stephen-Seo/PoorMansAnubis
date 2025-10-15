@@ -31,6 +31,7 @@
 
 // Local includes
 #include "helpers.h"
+#include "poor_mans_print.h"
 
 std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
   switch (err_enum) {
@@ -48,6 +49,10 @@ std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
       return "FailedToParseIPV6";
     case ErrorT::FAILED_TO_PARSE_IPV4:
       return "FailedToParseIPV4";
+    case ErrorT::NOT_GET_NOR_POST_REQ:
+      return "NotGETNorPOSTRequest";
+    case ErrorT::INVALID_STATE:
+      return "InvalidState";
     default:
       return "UnknownError";
   }
@@ -1031,4 +1036,78 @@ PMA_HTTP::connect_ipv4_socket_client(std::string server_addr,
   }
 
   return {ErrorT::SUCCESS, {}, socket_fd};
+}
+
+std::tuple<PMA_HTTP::ErrorT, std::string,
+           std::unordered_map<std::string, std::string> >
+PMA_HTTP::handle_request_parse(std::string req) {
+  if (!req.starts_with("GET") && !req.starts_with("POST")) {
+    return {ErrorT::NOT_GET_NOR_POST_REQ, "Not a GET nor POST request", {}};
+  }
+
+  bool start = true;
+  bool getting_url = false;
+  bool fetching_key = false;
+  std::string url, key, val;
+  std::unordered_map<std::string, std::string> query_params;
+  for (size_t idx = 4; idx < req.size(); ++idx) {
+    if (req.at(idx) == '\n' || req.at(idx) == '\r') {
+      break;
+    } else if (req.at(idx) == ' ' && start) {
+      continue;
+    } else if (start && req.at(idx) == '/') {
+      start = false;
+      getting_url = true;
+      url.push_back('/');
+    } else if (getting_url) {
+      if (req.at(idx) != '?' && req.at(idx) != ' ') {
+        url.push_back(req.at(idx));
+      } else if (req.at(idx) == ' ') {
+        break;
+      } else {
+        getting_url = false;
+        fetching_key = true;
+      }
+    } else if (fetching_key) {
+      if (req.at(idx) != '=' && req.at(idx) != ' ') {
+        key.push_back(req.at(idx));
+      } else if (req.at(idx) == ' ') {
+        break;
+      } else {
+        fetching_key = false;
+      }
+    } else {
+      if (req.at(idx) != '&' && req.at(idx) != ' ') {
+        val.push_back(req.at(idx));
+      } else if (req.at(idx) == ' ') {
+        if (!key.empty() && !val.empty()) {
+          query_params.emplace(key, val);
+          key.clear();
+          val.clear();
+        }
+        break;
+      } else {
+        if (!key.empty() && !val.empty()) {
+          query_params.emplace(key, val);
+          key.clear();
+          val.clear();
+          fetching_key = true;
+        }
+      }
+    }
+  }
+  if (!start && getting_url) {
+    return {ErrorT::SUCCESS, url, query_params};
+  } else if (!start && !getting_url && !fetching_key) {
+    if (!key.empty() && !val.empty()) {
+      query_params.emplace(key, val);
+    }
+    return {ErrorT::SUCCESS, url, query_params};
+  } else if (!start && !getting_url && fetching_key) {
+    PMA_Println("WARNING: Partial url query param key: {}", key);
+    query_params.emplace(key, std::string{});
+    return {ErrorT::SUCCESS, url, query_params};
+  } else {
+    return {ErrorT::INVALID_STATE, "Invalid state parsing req", {}};
+  }
 }
