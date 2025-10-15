@@ -287,8 +287,11 @@ int main(int argc, char **argv) {
                        msg_or_url);
           to_remove_connections.push_back(iter->first);
         }
+      } else if (read_ret == 0) {
+        PMA_Println("EOF From client {} (port {}), closing...",
+                    std::get<1>(iter->second), std::get<3>(iter->second));
+        to_remove_connections.push_back(iter->first);
       }
-      // TODO: Receive/Send data from/to connections
     }
 
     // Remove connections
