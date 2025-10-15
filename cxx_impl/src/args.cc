@@ -99,6 +99,12 @@ PMA_ARGS::Args::Args(int argc, char **argv)
   --argc;
   ++argv;
 
+  if (argc == 0) {
+    pma_print_usage();
+    flags.set(2);
+    return;
+  }
+
   while (argc > 0) {
     if (std::strcmp(argv[0], "-h") == 0 ||
         std::strcmp(argv[0], "--help") == 0) {
@@ -304,7 +310,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         flags.set(1);
       } else {
         PMA_EPrintln(
-            "ERROR: You must first use \"--important-warning-has-hbeen-read\" "
+            "ERROR: You must first use \"--important-warning-has-been-read\" "
             "option to enable this option! Please read the documentation to "
             "understand the security implications of this option! It may be "
             "better to just use mulitple \"--addr-port=...\" and "
@@ -313,10 +319,14 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         return;
       }
     } else if (std::strcmp(argv[0], "--important-warning-has-been-read") == 0) {
+      PMA_Println(
+          "NOTICE: Enabling potentially dangerous options with "
+          "--important-warning-has-been-read !");
       flags.set(3);
     } else {
       PMA_EPrintln("ERROR Invalid argument: {}", argv[0]);
       flags.set(2);
+      pma_print_usage();
       return;
     }
 
