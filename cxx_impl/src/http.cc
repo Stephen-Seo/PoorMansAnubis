@@ -1095,17 +1095,74 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     }
   }
   if (!start && getting_url) {
-    return {query_params, {}, url, ErrorT::SUCCESS};
+    // Intentionally left blank, no return here, continue.
   } else if (!start && !getting_url && !fetching_key) {
     if (!key.empty() && !val.empty()) {
       query_params.emplace(key, val);
     }
-    return {query_params, {}, url, ErrorT::SUCCESS};
+    // No return here, continue.
   } else if (!start && !getting_url && fetching_key) {
     PMA_Println("WARNING: Partial url query param key: {}", key);
     query_params.emplace(key, std::string{});
-    return {query_params, {}, url, ErrorT::SUCCESS};
+    // No return here, continue.
   } else {
     return {{}, {}, "Invalid state parsing req", ErrorT::INVALID_STATE};
   }
+
+  std::unordered_map<std::string, std::string> headers;
+
+  decltype(req)::size_type idx = req.find("\r\n");
+  if (idx == std::string::npos) {
+    return {{}, {}, "No CRNL in request", ErrorT::INVALID_STATE};
+  } else {
+    idx += 2;
+  }
+  const decltype(req)::size_type end_idx = req.find("\r\n\r\n");
+  if (idx == std::string::npos) {
+    return {{}, {}, "No double CRNL in request", ErrorT::INVALID_STATE};
+  }
+
+  key.clear();
+  val.clear();
+  fetching_key = true;
+  for (; idx < req.size() && idx < end_idx; ++idx) {
+    if (fetching_key) {
+      if (req.at(idx) == ':') {
+        fetching_key = false;
+      } else if (req.at(idx) == '\r' || req.at(idx) == '\n') {
+        return {{},
+                {},
+                "Reach CRNL while parsing header key",
+                ErrorT::INVALID_STATE};
+      } else if (req.at(idx) == ' ') {
+        // Intentionally left blank
+      } else {
+        key.push_back(req.at(idx));
+      }
+    } else {
+      if (req.at(idx) == '\r' || req.at(idx) == '\n') {
+        if (val.empty()) {
+          return {{}, {}, "No value for key in header", ErrorT::INVALID_STATE};
+        } else {
+          headers.emplace(key, val);
+          key.clear();
+          val.clear();
+          fetching_key = true;
+          if (idx + 1 < end_idx && idx + 1 < req.size() &&
+              req.at(idx) == '\r' && req.at(idx + 1) == '\n') {
+            ++idx;
+          }
+        }
+      } else if (req.at(idx) == ' ') {
+        // Intentionally left blank
+      } else {
+        val.push_back(req.at(idx));
+      }
+    }
+  }
+  if (!fetching_key && !key.empty() && !val.empty()) {
+    headers.emplace(key, val);
+  }
+
+  return {query_params, headers, url, ErrorT::SUCCESS};
 }

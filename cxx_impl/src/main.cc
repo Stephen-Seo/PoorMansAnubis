@@ -269,6 +269,11 @@ int main(int argc, char **argv) {
                ++qiter) {
             PMA_Println("  {}={}", qiter->first, qiter->second);
           }
+          PMA_Println("Headers:");
+          for (auto hiter = req.headers.begin(); hiter != req.headers.end();
+               ++hiter) {
+            PMA_Println("  {}: {}", hiter->first, hiter->second);
+          }
           std::string body = "<html>Test</html>\n";
           std::string full = std::format(
               "HTTP/1.0 200 OK\r\nContent-type: text/html; "
