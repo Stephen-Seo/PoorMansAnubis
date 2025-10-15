@@ -1144,7 +1144,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
         if (val.empty()) {
           return {{}, {}, "No value for key in header", ErrorT::INVALID_STATE};
         } else {
-          headers.emplace(key, val);
+          headers.emplace(PMA_HELPER::ascii_str_to_lower(key), val);
           key.clear();
           val.clear();
           fetching_key = true;
@@ -1161,7 +1161,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     }
   }
   if (!fetching_key && !key.empty() && !val.empty()) {
-    headers.emplace(key, val);
+    headers.emplace(PMA_HELPER::ascii_str_to_lower(key), val);
   }
 
   return {query_params, headers, url, ErrorT::SUCCESS};

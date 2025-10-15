@@ -274,6 +274,14 @@ int main(int argc, char **argv) {
                ++hiter) {
             PMA_Println("  {}: {}", hiter->first, hiter->second);
           }
+          if (args.flags.test(0)) {
+            if (auto fiter = req.headers.find("x-real-ip");
+                fiter != req.headers.end()) {
+              PMA_Println("x-real-ip header found, changing client addr: {}",
+                          fiter->second);
+              iter->second.client_addr = fiter->second;
+            }
+          }
           std::string body = "<html>Test</html>\n";
           std::string full = std::format(
               "HTTP/1.0 200 OK\r\nContent-type: text/html; "
