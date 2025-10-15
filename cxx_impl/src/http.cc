@@ -1038,9 +1038,14 @@ PMA_HTTP::connect_ipv4_socket_client(std::string server_addr,
   return {ErrorT::SUCCESS, {}, socket_fd};
 }
 
+PMA_HTTP::Request PMA_HTTP::Request::from_error(ErrorT err, std::string msg) {
+  return {{}, {}, msg, {}, err};
+}
+
 PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
   if (!req.starts_with("GET") && !req.starts_with("POST")) {
-    return {{}, {}, "Not a GET nor POST request", ErrorT::NOT_GET_NOR_POST_REQ};
+    Request::from_error(ErrorT::NOT_GET_NOR_POST_REQ,
+                        "Not a GET nor POST request");
   }
 
   bool start = true;
@@ -1106,20 +1111,22 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     query_params.emplace(key, std::string{});
     // No return here, continue.
   } else {
-    return {{}, {}, "Invalid state parsing req", ErrorT::INVALID_STATE};
+    return Request::from_error(ErrorT::INVALID_STATE,
+                               "Invalid state parsing req");
   }
 
   std::unordered_map<std::string, std::string> headers;
 
   decltype(req)::size_type idx = req.find("\r\n");
   if (idx == std::string::npos) {
-    return {{}, {}, "No CRNL in request", ErrorT::INVALID_STATE};
+    return Request::from_error(ErrorT::INVALID_STATE, "No CRNL in request");
   } else {
     idx += 2;
   }
   const decltype(req)::size_type end_idx = req.find("\r\n\r\n");
   if (idx == std::string::npos) {
-    return {{}, {}, "No double CRNL in request", ErrorT::INVALID_STATE};
+    return Request::from_error(ErrorT::INVALID_STATE,
+                               "No double CRNL in request");
   }
 
   key.clear();
@@ -1130,10 +1137,8 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
       if (req.at(idx) == ':') {
         fetching_key = false;
       } else if (req.at(idx) == '\r' || req.at(idx) == '\n') {
-        return {{},
-                {},
-                "Reach CRNL while parsing header key",
-                ErrorT::INVALID_STATE};
+        return Request::from_error(ErrorT::INVALID_STATE,
+                                   "Reach CRNL while parsing header key");
       } else if (req.at(idx) == ' ') {
         // Intentionally left blank
       } else {
@@ -1142,7 +1147,8 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     } else {
       if (req.at(idx) == '\r' || req.at(idx) == '\n') {
         if (val.empty()) {
-          return {{}, {}, "No value for key in header", ErrorT::INVALID_STATE};
+          return Request::from_error(ErrorT::INVALID_STATE,
+                                     "No value for key in header");
         } else {
           headers.emplace(PMA_HELPER::ascii_str_to_lower(key), val);
           key.clear();
@@ -1164,5 +1170,12 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     headers.emplace(PMA_HELPER::ascii_str_to_lower(key), val);
   }
 
-  return {query_params, headers, url, ErrorT::SUCCESS};
+  std::string body;
+  try {
+    body = req.substr(end_idx + 4);
+  } catch (const std::out_of_range &e) {
+    // Intentionally left blank.
+  }
+
+  return {query_params, headers, url, body, ErrorT::SUCCESS};
 }
