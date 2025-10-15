@@ -71,6 +71,8 @@ std::string byte_to_hex(uint8_t byte);
 template <typename T, unsigned long long SIZE>
 std::string array_to_str(const std::array<T, SIZE> &arr);
 
+std::string ascii_str_to_lower(std::string);
+
 }  // namespace PMA_HELPER
 
 ////////////////////////////////////////////////////////////////////////////////

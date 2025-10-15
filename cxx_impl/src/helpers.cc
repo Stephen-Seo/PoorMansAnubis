@@ -80,3 +80,17 @@ std::string PMA_HELPER::byte_to_hex(uint8_t byte) {
   buf.at(2) = 0;
   return buf.data();
 }
+
+std::string PMA_HELPER::ascii_str_to_lower(std::string other) {
+  std::string ret;
+
+  for (auto iter = other.begin(); iter != other.end(); ++iter) {
+    if (*iter >= 'A' && *iter <= 'Z') {
+      ret.push_back((*iter) + 32);
+    } else {
+      ret.push_back(*iter);
+    }
+  }
+
+  return ret;
+}

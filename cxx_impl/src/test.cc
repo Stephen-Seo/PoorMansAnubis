@@ -682,6 +682,12 @@ int main() {
     CHECK_TRUE(args.allowed_timeout == 30);
   }
 
+  // Test PMA_HELPER::ascii_str_to_lower(...)
+  {
+    CHECK_TRUE("apple_banana_zebra" ==
+               PMA_HELPER::ascii_str_to_lower("APPLE_BANANA_ZEBRA"));
+  }
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;
