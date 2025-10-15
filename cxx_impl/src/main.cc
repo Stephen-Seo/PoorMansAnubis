@@ -51,21 +51,22 @@ void receive_signal(int sig) {
   interrupt_received = 1;
 }
 
-// First string is host addr, second string is client addr (to be filled in)
-// First uint16_t is port, second uint16_t is iteration tick count
-// Bitset flags:
-// 0 - is ipv4
-using AddrPortInfo =
-    std::tuple<std::string, std::string, std::bitset<16>, uint16_t, uint16_t>;
+struct AddrPortInfo {
+  std::string host_addr;
+  std::string client_addr;
+  // 0 - is ipv4
+  std::bitset<16> flags;
+  uint16_t port;
+  uint16_t ticks;
+};
 
 AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
-  AddrPortInfo tuple =
-      std::make_tuple(std::get<0>(addr_port), std::string{}, std::bitset<16>{},
-                      std::get<1>(addr_port), 0);
+  AddrPortInfo info = {std::get<0>(addr_port), std::string{}, std::bitset<16>{},
+                       std::get<1>(addr_port), 0};
 
-  std::get<std::bitset<16> >(tuple).set(0, is_ipv4);
+  info.flags.set(0, is_ipv4);
 
-  return tuple;
+  return info;
 }
 
 int main(int argc, char **argv) {
@@ -158,7 +159,7 @@ int main(int argc, char **argv) {
 
     // Fetch new connections
     for (auto iter = sockets.begin(); iter != sockets.end(); ++iter) {
-      if (std::get<std::bitset<16> >(iter->second).test(0)) {
+      if (iter->second.flags.test(0)) {
         // IPV4
         sain_len = sizeof(struct sockaddr_in);
         ret = accept(iter->first, reinterpret_cast<sockaddr *>(&sain4),
@@ -191,13 +192,12 @@ int main(int argc, char **argv) {
               iter->first, errno);
           continue;
         }
-      } else if (std::get<std::bitset<16> >(iter->second).test(0)) {
+      } else if (iter->second.flags.test(0)) {
         // IPV4 new connection
         std::string client_ipv4 =
             PMA_HTTP::ipv4_addr_to_str(sain4.sin_addr.s_addr);
         PMA_Println("New connection from {}:{} on port {}", client_ipv4,
-                    PMA_HELPER::be_swap_u16(sain4.sin_port),
-                    std::get<3>(iter->second));
+                    PMA_HELPER::be_swap_u16(sain4.sin_port), iter->second.port);
 
         // Set nonblocking-IO on received connection fd
         int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
           continue;
         }
 
-        std::get<1>(iter->second) = std::move(client_ipv4);
+        iter->second.client_addr = std::move(client_ipv4);
         connections.emplace(ret, iter->second);
       } else {
         // IPV6 new connection
@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
                 sain6.sin6_addr.s6_addr));
         PMA_Println("New connection from {}:{} on port {}", client_ipv6,
                     PMA_HELPER::be_swap_u16(sain6.sin6_port),
-                    std::get<3>(iter->second));
+                    iter->second.port);
 
         // Set nonblocking-IO on received connection fd
         int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
@@ -232,17 +232,17 @@ int main(int argc, char **argv) {
           continue;
         }
 
-        std::get<1>(iter->second) = std::move(client_ipv6);
+        iter->second.client_addr = client_ipv6;
         connections.emplace(ret, iter->second);
       }
     }
 
     // Handle connections
     for (auto iter = connections.begin(); iter != connections.end(); ++iter) {
-      std::get<4>(iter->second) += 1;
-      if (std::get<4>(iter->second) >= TIMEOUT_ITER_TICKS) {
+      iter->second.ticks += 1;
+      if (iter->second.ticks >= TIMEOUT_ITER_TICKS) {
         PMA_Println("Timed out connection from {} on port {}",
-                    std::get<1>(iter->second), std::get<3>(iter->second));
+                    iter->second.client_addr, iter->second.port);
         to_remove_connections.push_back(iter->first);
         continue;
       }
@@ -255,18 +255,17 @@ int main(int argc, char **argv) {
           continue;
         } else {
           PMA_Println("Failed to read from client {} (errno {})",
-                      std::get<1>(iter->second), errno);
+                      iter->second.client_addr, errno);
           to_remove_connections.push_back(iter->first);
           continue;
         }
       }
       if (read_ret > 0) {
         buf[read_ret] = 0;
-        const auto [err, msg_or_url, q_params] =
-            PMA_HTTP::handle_request_parse(buf);
-        if (err == PMA_HTTP::ErrorT::SUCCESS) {
-          PMA_Println("URL: {}, Params:", msg_or_url);
-          for (auto qiter = q_params.begin(); qiter != q_params.end();
+        PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(buf);
+        if (req.error_enum == PMA_HTTP::ErrorT::SUCCESS) {
+          PMA_Println("URL: {}, Params:", req.url_or_err_msg);
+          for (auto qiter = req.queries.begin(); qiter != req.queries.end();
                ++qiter) {
             PMA_Println("  {}={}", qiter->first, qiter->second);
           }
@@ -279,17 +278,17 @@ int main(int argc, char **argv) {
           if (write_ret != static_cast<ssize_t>(full.size())) {
             PMA_EPrintln(
                 "ERROR: Failed to send response to client {} (write_ret {})!",
-                std::get<1>(iter->second), write_ret);
+                iter->second.client_addr, write_ret);
             to_remove_connections.push_back(iter->first);
           }
         } else {
-          PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(err),
-                       msg_or_url);
+          PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
+                       req.url_or_err_msg);
           to_remove_connections.push_back(iter->first);
         }
       } else if (read_ret == 0) {
         PMA_Println("EOF From client {} (port {}), closing...",
-                    std::get<1>(iter->second), std::get<3>(iter->second));
+                    iter->second.client_addr, iter->second.port);
         to_remove_connections.push_back(iter->first);
       }
     }

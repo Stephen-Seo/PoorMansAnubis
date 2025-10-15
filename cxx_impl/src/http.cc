@@ -1038,11 +1038,9 @@ PMA_HTTP::connect_ipv4_socket_client(std::string server_addr,
   return {ErrorT::SUCCESS, {}, socket_fd};
 }
 
-std::tuple<PMA_HTTP::ErrorT, std::string,
-           std::unordered_map<std::string, std::string> >
-PMA_HTTP::handle_request_parse(std::string req) {
+PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
   if (!req.starts_with("GET") && !req.starts_with("POST")) {
-    return {ErrorT::NOT_GET_NOR_POST_REQ, "Not a GET nor POST request", {}};
+    return {{}, {}, "Not a GET nor POST request", ErrorT::NOT_GET_NOR_POST_REQ};
   }
 
   bool start = true;
@@ -1097,17 +1095,17 @@ PMA_HTTP::handle_request_parse(std::string req) {
     }
   }
   if (!start && getting_url) {
-    return {ErrorT::SUCCESS, url, query_params};
+    return {query_params, {}, url, ErrorT::SUCCESS};
   } else if (!start && !getting_url && !fetching_key) {
     if (!key.empty() && !val.empty()) {
       query_params.emplace(key, val);
     }
-    return {ErrorT::SUCCESS, url, query_params};
+    return {query_params, {}, url, ErrorT::SUCCESS};
   } else if (!start && !getting_url && fetching_key) {
     PMA_Println("WARNING: Partial url query param key: {}", key);
     query_params.emplace(key, std::string{});
-    return {ErrorT::SUCCESS, url, query_params};
+    return {query_params, {}, url, ErrorT::SUCCESS};
   } else {
-    return {ErrorT::INVALID_STATE, "Invalid state parsing req", {}};
+    return {{}, {}, "Invalid state parsing req", ErrorT::INVALID_STATE};
   }
 }

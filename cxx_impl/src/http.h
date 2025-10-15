@@ -61,11 +61,18 @@ std::tuple<ErrorT, std::string, int> connect_ipv6_socket_client(
 std::tuple<ErrorT, std::string, int> connect_ipv4_socket_client(
     std::string client_addr, std::string server_addr, uint16_t port);
 
-/// Only parses first line of request to get url and query params.
+struct Request {
+  std::unordered_map<std::string, std::string> queries;
+  std::unordered_map<std::string, std::string> headers;
+  std::string url_or_err_msg;
+  ErrorT error_enum;
+};
+
+/// Parses request to get url, query params, and headers.
 /// On error, string is err message. On SUCCESS, string is request url
-/// Map is key/value pairs of query parameters (NOT headers)
-std::tuple<ErrorT, std::string, std::unordered_map<std::string, std::string> >
-handle_request_parse(std::string req);
+/// First map is key/value pairs of query parameters
+/// Second map is key/value headers
+Request handle_request_parse(std::string req);
 }  // namespace PMA_HTTP
 
 #endif
