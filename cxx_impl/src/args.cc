@@ -124,6 +124,10 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln("ERROR: Got empty --dest-url=<url>!");
         flags.set(2);
         return;
+      } else if (!this->default_dest_url.starts_with("http")) {
+        PMA_EPrintln("ERROR: --dest-url=<url> must start with \"http\"!");
+        flags.set(2);
+        return;
       }
     } else if (std::strncmp(argv[0], "--addr-port=", 12) == 0) {
       std::string addr;
@@ -210,6 +214,12 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       if (first || url.empty() || port_temp.empty()) {
         PMA_EPrintln(
             "ERROR: Failed to parse --port-to-dest-url=<port>:<url> !");
+        flags.set(2);
+        return;
+      } else if (!url.starts_with("http")) {
+        PMA_EPrintln(
+            "ERROR: --port-to-dest-url=<port>:<url>, url must start with "
+            "\"http\"!");
         flags.set(2);
         return;
       }
