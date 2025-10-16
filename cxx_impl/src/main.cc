@@ -198,8 +198,10 @@ int main(int argc, char **argv) {
         // IPV4 new connection
         std::string client_ipv4 =
             PMA_HTTP::ipv4_addr_to_str(sain4.sin_addr.s_addr);
+#ifndef NDEBUG
         PMA_Println("New connection from {}:{} on port {}", client_ipv4,
                     PMA_HELPER::be_swap_u16(sain4.sin_port), iter->second.port);
+#endif
 
         // Set nonblocking-IO on received connection fd
         int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
@@ -219,9 +221,11 @@ int main(int argc, char **argv) {
         std::string client_ipv6 = PMA_HTTP::ipv6_addr_to_str(
             *reinterpret_cast<std::array<uint8_t, 16> *>(
                 sain6.sin6_addr.s6_addr));
+#ifndef NDEBUG
         PMA_Println("New connection from {}:{} on port {}", client_ipv6,
                     PMA_HELPER::be_swap_u16(sain6.sin6_port),
                     iter->second.port);
+#endif
 
         // Set nonblocking-IO on received connection fd
         int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
@@ -243,8 +247,10 @@ int main(int argc, char **argv) {
     for (auto iter = connections.begin(); iter != connections.end(); ++iter) {
       iter->second.ticks += 1;
       if (iter->second.ticks >= TIMEOUT_ITER_TICKS) {
+#ifndef NDEBUG
         PMA_Println("Timed out connection from {} on port {}",
                     iter->second.client_addr, iter->second.port);
+#endif
         to_remove_connections.push_back(iter->first);
         continue;
       }
@@ -266,6 +272,7 @@ int main(int argc, char **argv) {
         buf[read_ret] = 0;
         PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(buf);
         if (req.error_enum == PMA_HTTP::ErrorT::SUCCESS) {
+#ifndef NDEBUG
           PMA_Println("URL: {}, Params:", req.url_or_err_msg);
           for (auto qiter = req.queries.begin(); qiter != req.queries.end();
                ++qiter) {
@@ -276,11 +283,14 @@ int main(int argc, char **argv) {
                ++hiter) {
             PMA_Println("  {}: {}", hiter->first, hiter->second);
           }
+#endif
           if (args.flags.test(0)) {
             if (auto fiter = req.headers.find("x-real-ip");
                 fiter != req.headers.end()) {
+#ifndef NDEBUG
               PMA_Println("x-real-ip header found, changing client addr: {}",
                           fiter->second);
+#endif
               iter->second.client_addr = fiter->second;
             }
           }
@@ -318,12 +328,15 @@ int main(int argc, char **argv) {
                   sqliteCtx, json_keyvals.find("factors")->second,
                   iter->second.client_addr, json_keyvals.find("id")->second);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
-                PMA_EPrintln("ERROR: Challenge failed! {}, {}",
+                PMA_EPrintln("ERROR: Challenge failed from {}! {}, {}",
+                             iter->second.client_addr,
                              PMA_SQL::error_t_to_string(err), msg);
                 status = "HTTP/1.0 400 Bad Request";
                 content_type = "Content-type: text/plain";
                 body = "Incorrect";
               } else {
+                PMA_Println("Challenge success from {}",
+                            iter->second.client_addr);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
               }
@@ -391,8 +404,10 @@ int main(int argc, char **argv) {
           to_remove_connections.push_back(iter->first);
         }
       } else if (read_ret == 0) {
+#ifndef NDEBUG
         PMA_Println("EOF From client {} (port {}), closing...",
                     iter->second.client_addr, iter->second.port);
+#endif
         to_remove_connections.push_back(iter->first);
       }
     }
