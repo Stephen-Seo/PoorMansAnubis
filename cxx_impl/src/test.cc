@@ -676,7 +676,7 @@ int main() {
     CHECK_TRUE(args.flags.test(0));
     CHECK_TRUE(!args.flags.test(1));
     CHECK_TRUE(!args.flags.test(3));
-    CHECK_TRUE(args.api_url == "/pma_api_url");
+    CHECK_TRUE(args.api_url == "/pma_api_url/");
     CHECK_TRUE(args.js_factors_url == "/pma_factors_url.js");
     CHECK_TRUE(args.challenge_timeout == 2);
     CHECK_TRUE(args.allowed_timeout == 30);
