@@ -1117,6 +1117,22 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
                                "Invalid state parsing req");
   }
 
+  // Check url
+  if (!url.ends_with('/')) {
+    bool needs_slash = true;
+    for (auto url_iter = url.rbegin(); url_iter != url.rend(); ++url_iter) {
+      if (*url_iter == '.' || *url_iter == '?') {
+        needs_slash = false;
+        break;
+      } else if (*url_iter == '/') {
+        break;
+      }
+    }
+    if (needs_slash) {
+      url.push_back('/');
+    }
+  }
+
   std::unordered_map<std::string, std::string> headers;
 
   decltype(req)::size_type idx = req.find("\r\n");

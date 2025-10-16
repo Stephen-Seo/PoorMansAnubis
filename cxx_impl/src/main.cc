@@ -32,6 +32,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+// Third party includes
+#include <curl/curl.h>
+
 // Local includes.
 #include "args.h"
 #include "constants.h"
@@ -72,6 +75,45 @@ AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
   return info;
 }
 
+size_t pma_curl_data_callback(void *buf, size_t size, size_t nmemb, void *ud) {
+  std::string *res = reinterpret_cast<std::string *>(ud);
+  res->append(reinterpret_cast<char *>(buf), size * nmemb);
+  return size * nmemb;
+}
+
+size_t pma_curl_header_callback(void *buf, size_t size, size_t nitems,
+                                void *ud) {
+  std::unordered_map<std::string, std::string> *header_map =
+      reinterpret_cast<std::unordered_map<std::string, std::string> *>(ud);
+  const char *char_buf = reinterpret_cast<char *>(buf);
+  std::string key, val;
+  bool get_key = true;
+  bool get_val = false;
+  for (size_t idx = 0; idx < size * nitems; ++idx) {
+    if (get_key) {
+      if (char_buf[idx] == ':') {
+        get_key = false;
+        get_val = true;
+      } else {
+        key.push_back(char_buf[idx]);
+      }
+    } else if (get_val) {
+      if (char_buf[idx] == ' ' || char_buf[idx] == '\n' ||
+          char_buf[idx] == '\r') {
+        continue;
+      } else {
+        val.push_back(char_buf[idx]);
+      }
+    }
+  }
+
+  if (!key.empty() && !val.empty()) {
+    header_map->emplace(PMA_HELPER::ascii_str_to_lower(key), val);
+  }
+
+  return size * nitems;
+}
+
 int main(int argc, char **argv) {
   const PMA_ARGS::Args args(argc, argv);
 
@@ -79,6 +121,8 @@ int main(int argc, char **argv) {
     PMA_EPrintln("ERROR: Failed to parse args!");
     return 3;
   }
+
+  curl_global_init(CURL_GLOBAL_SSL);
 
   // Mapping is a socket-fd to AddrPortInfo
   std::unordered_map<int, AddrPortInfo> sockets;
@@ -384,11 +428,198 @@ int main(int argc, char **argv) {
                   body, "{JS_FACTORS_URL}",
                   std::format("{}?id={}", args.js_factors_url, id));
             } else {
-              // TODO fetch destination and return it to client here
-              body = "<html>Accepted</html>";
+              CURLcode pma_curl_ret;
+              CURL *curl_handle = curl_easy_init();
+              GenericCleanup<CURL *> pma_curl_cleanup(
+                  curl_handle,
+                  [](CURL **handle) { curl_easy_cleanup(*handle); });
+
+#ifndef NDEBUG
+              pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set curl verbose (client {}, port "
+                    "{})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "curl verbose</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+#endif
+
+              // Set curl destination
+              if (auto url_iter =
+                      args.port_to_dest_urls.find(iter->second.port);
+                  url_iter != args.port_to_dest_urls.end()) {
+                std::string req_url;
+                if (url_iter->second.ends_with('/')) {
+                  req_url =
+                      std::format("{}{}", url_iter->second, req.url_or_err_msg);
+                } else {
+                  req_url = std::format("{}/{}", url_iter->second,
+                                        req.url_or_err_msg);
+                }
+                pma_curl_ret =
+                    curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl destination (client {}, port "
+                      "{})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl url</p></html>";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+              } else {
+                std::string req_url;
+                if (args.default_dest_url.ends_with('/')) {
+                  req_url = std::format("{}{}", args.default_dest_url,
+                                        req.url_or_err_msg);
+                } else {
+                  req_url = std::format("{}/{}", args.default_dest_url,
+                                        req.url_or_err_msg);
+                }
+                pma_curl_ret =
+                    curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl destination (client {}, port "
+                      "{})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl url</p></html>";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+              }
+
+              // Set curl http headers
+              struct curl_slist *headers_list = nullptr;
+              for (const auto &pair : req.headers) {
+                if (pair.first == "host") {
+                  continue;
+                }
+                headers_list = curl_slist_append(
+                    headers_list,
+                    std::format("{}: {}", pair.first, pair.second).c_str());
+              }
+              pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER,
+                                              headers_list);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set curl headers (client {}, port {})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "curl headers</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
+              // Set callback for fetched data
+              body.clear();
+              pma_curl_ret = curl_easy_setopt(
+                  curl_handle, CURLOPT_WRITEFUNCTION, pma_curl_data_callback);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set curl write callback (client {}, port "
+                    "{})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "callback write function</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+              pma_curl_ret =
+                  curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &body);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set curl write callback user-data "
+                    "(client {}, port {})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "callback write function user-data</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
+              // Set callback for fetched headers
+              std::unordered_map<std::string, std::string> resp_headers;
+              pma_curl_ret =
+                  curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION,
+                                   pma_curl_header_callback);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set header callback (client {}, port "
+                    "{})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "curl header callback</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
+              pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA,
+                                              &resp_headers);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set header callback user-data (client "
+                    "{}, port {})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "curl header callback user-data</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
+              // Fetch
+              pma_curl_ret = curl_easy_perform(curl_handle);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to fetch with curl (client {}, port {})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to fetch "
+                    "with curl</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
+              // DEBUG
+              // PMA_Println("Result headers:");
+              // for (auto header_iter = resp_headers.begin();
+              //      header_iter != resp_headers.end(); ++header_iter) {
+              //   PMA_Println("  {}: {}", header_iter->first,
+              //               header_iter->second);
+              // }
+              // PMA_Println("Result data: {}", result);
+
+              content_type.clear();
+              for (auto header_iter = resp_headers.begin();
+                   header_iter != resp_headers.end(); ++header_iter) {
+                if (header_iter->first == "content-length") {
+                  continue;
+                }
+                content_type.append(std::format(
+                    "{}: {}\r\n", header_iter->first, header_iter->second));
+              }
+              content_type.resize(content_type.size() - 2);
+
+              // Cleanup
+              curl_slist_free_all(headers_list);
             }
           }
 
+        PMA_RESPONSE_SEND_LOCATION:
           std::string full =
               std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
                           content_type, body.size(), body);

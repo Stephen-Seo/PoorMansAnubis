@@ -90,7 +90,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       addr_ports(),
       port_to_dest_urls(),
       flags(),
-      api_url("/pma_api"),
+      api_url("/pma_api/"),
       js_factors_url("/pma_factors.js"),
       sqlite_path("sqlite_db"),
       challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
@@ -264,6 +264,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln("ERROR: Failed to parse --api-url=<url> (url is empty)!");
         flags.set(2);
         return;
+      }
+      if (!this->api_url.ends_with('/')) {
+        this->api_url.push_back('/');
       }
     } else if (std::strncmp(argv[0], "--js-factors-url=", 17) == 0) {
       this->js_factors_url = std::string(argv[0] + 17);
