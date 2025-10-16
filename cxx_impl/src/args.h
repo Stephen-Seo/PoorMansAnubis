@@ -56,6 +56,7 @@ struct Args {
   std::bitset<32> flags;
   std::string api_url;
   std::string js_factors_url;
+  std::string sqlite_path;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;
 };

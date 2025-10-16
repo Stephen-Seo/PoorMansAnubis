@@ -94,3 +94,14 @@ std::string PMA_HELPER::ascii_str_to_lower(std::string other) {
 
   return ret;
 }
+
+void PMA_HELPER::str_replace_all(std::string &body, std::string target,
+                                 std::string result) {
+  std::string::size_type idx;
+  do {
+    idx = body.find(target);
+    if (idx != std::string::npos) {
+      body.replace(idx, target.size(), result);
+    }
+  } while (idx != std::string::npos);
+}

@@ -73,6 +73,8 @@ std::string array_to_str(const std::array<T, SIZE> &arr);
 
 std::string ascii_str_to_lower(std::string);
 
+void str_replace_all(std::string &body, std::string target, std::string result);
+
 }  // namespace PMA_HELPER
 
 ////////////////////////////////////////////////////////////////////////////////

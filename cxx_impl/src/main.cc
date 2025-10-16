@@ -33,6 +33,8 @@
 
 // Local includes.
 #include "args.h"
+#include "constants.h"
+#include "db.h"
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
@@ -282,11 +284,100 @@ int main(int argc, char **argv) {
               iter->second.client_addr = fiter->second;
             }
           }
-          std::string body = "<html>Test</html>\n";
-          std::string full = std::format(
-              "HTTP/1.0 200 OK\r\nContent-type: text/html; "
-              "charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
-              body.size(), body);
+
+          std::string status = "HTTP/1.0 200 OK";
+          std::string content_type = "Content-type: text/html; charset=utf-8";
+          std::string body;
+          auto [sqliteCtx, err, msg] = PMA_SQL::init_sqlite(args.sqlite_path);
+          if (err != PMA_SQL::ErrorT::SUCCESS) {
+            PMA_EPrintln("ERROR: Failed to initialize sqlite: {}, {}",
+                         PMA_SQL::error_t_to_string(err), msg);
+            status = "HTTP/1.0 500 Internal Server Error";
+            body =
+                "<html><p>500 Internal Server Error</p><p>Failed to init "
+                "db</p></html>";
+          } else if (req.url_or_err_msg == args.api_url) {
+            const auto [err, json_keyvals] =
+                PMA_HTTP::parse_simple_json(req.body);
+            if (err != PMA_HTTP::ErrorT::SUCCESS) {
+              PMA_EPrintln("ERROR: Failed to parse json from client {}!",
+                           iter->second.client_addr);
+              status = "HTTP/1.0 500 Internal Server Error";
+              body =
+                  "<html><p>500 Internal Server Error</p><p>Failed to parse "
+                  "json</p></html>";
+            } else if (json_keyvals.find("type") == json_keyvals.end() ||
+                       json_keyvals.find("id") == json_keyvals.end() ||
+                       json_keyvals.find("factors") == json_keyvals.end()) {
+              PMA_EPrintln("ERROR: Client {} omitted necessary info!",
+                           iter->second.client_addr);
+              status = "HTTP/1.0 400 Bad Request";
+              body = "<html><p>400 Bad Request</p><p>Missing info</p></html>";
+            } else {
+              const auto [err, msg, port] = PMA_SQL::verify_answer(
+                  sqliteCtx, json_keyvals.find("factors")->second,
+                  iter->second.client_addr, json_keyvals.find("id")->second);
+              if (err != PMA_SQL::ErrorT::SUCCESS) {
+                PMA_EPrintln("ERROR: Challenge failed! {}, {}",
+                             PMA_SQL::error_t_to_string(err), msg);
+                status = "HTTP/1.0 400 Bad Request";
+                content_type = "Content-type: text/plain";
+                body = "Incorrect";
+              } else {
+                content_type = "Content-type: text/plain";
+                body = "Correct";
+              }
+            }
+          } else if (req.url_or_err_msg == args.js_factors_url) {
+            if (auto id_iter = req.queries.find("id");
+                id_iter != req.queries.end()) {
+              PMA_SQL::cleanup_stale_challenges(sqliteCtx,
+                                                args.challenge_timeout);
+              const auto [err, msg_or_chal, answ, id] =
+                  PMA_SQL::generate_challenge(sqliteCtx, args.factors,
+                                              iter->second.client_addr,
+                                              id_iter->second);
+              if (err != PMA_SQL::ErrorT::SUCCESS) {
+                PMA_EPrintln("ERROR: Failed to prepare challenge: {}, {}",
+                             PMA_SQL::error_t_to_string(err), msg_or_chal);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to "
+                    "prepare challenge</p></html>";
+              } else {
+                body = JS_FACTORS_WORKER;
+                PMA_HELPER::str_replace_all(body, "{API_URL}", args.api_url);
+                PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}",
+                                            msg_or_chal);
+                PMA_HELPER::str_replace_all(body, "{UUID}", id);
+                content_type = "Content-type: text/javascript";
+              }
+            } else {
+              status = "HTTP/1.0 400 Bad Request";
+              body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
+            }
+          } else {
+            PMA_SQL::cleanup_stale_entries(sqliteCtx, args.allowed_timeout);
+            const auto [err, msg, unordset] = PMA_SQL::get_allowed_ip_ports(
+                sqliteCtx, iter->second.client_addr);
+            if (unordset.find(iter->second.port) == unordset.end()) {
+              PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
+                                                 args.challenge_timeout);
+              const auto [err, msg, id] =
+                  PMA_SQL::init_id_to_port(sqliteCtx, iter->second.port);
+              body = HTML_BODY_FACTORS;
+              PMA_HELPER::str_replace_all(
+                  body, "{JS_FACTORS_URL}",
+                  std::format("{}?id={}", args.js_factors_url, id));
+            } else {
+              // TODO fetch destination and return it to client here
+              body = "<html>Accepted</html>";
+            }
+          }
+
+          std::string full =
+              std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
+                          content_type, body.size(), body);
           ssize_t write_ret = write(iter->first, full.c_str(), full.size());
           if (write_ret != static_cast<ssize_t>(full.size())) {
             PMA_EPrintln(

@@ -45,9 +45,7 @@ void pma_print_usage() {
   PMA_Println(
       "  NOTICE: Specify --port-to-dest-url=... multiple times to add more "
       "mappings");
-  PMA_Println(
-      "  --mysql-conf=<config_file> : Set path to config file for mysql "
-      "settings");
+  PMA_Println("  --sqlite-path=<path> : Set filename for sqlite db");
   PMA_Println(
       "  --enable-x-real-ip-header : Enable trusting \"x-real-ip\" header as "
       "client ip addr");
@@ -94,6 +92,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       flags(),
       api_url("/pma_api"),
       js_factors_url("/pma_factors.js"),
+      sqlite_path("sqlite_db"),
       challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES) {
   --argc;
@@ -240,6 +239,13 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
 
       this->port_to_dest_urls.insert(std::make_pair(port, url));
+    } else if (std::strncmp(argv[0], "--sqlite-path=", 14) == 0) {
+      this->sqlite_path = argv[0] + 14;
+      if (this->sqlite_path.empty()) {
+        PMA_EPrintln("ERROR: Failed to set sqlite db filename!");
+        flags.set(2);
+        return;
+      }
     } else if (std::strcmp(argv[0], "--enable-x-real-ip-header") == 0) {
       flags.set(0);
     } else if (std::strncmp(argv[0], "--api-url=", 10) == 0) {

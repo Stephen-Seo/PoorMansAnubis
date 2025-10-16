@@ -44,7 +44,7 @@ const char *HTML_BODY_FACTORS =
     "        <script>\n"
     "            \"use strict\";\n"
     "\n"
-    "            const progress_values = [\"-\", \"\\\", \"|\", \"/\"];\n"
+    "            const progress_values = [\"-\", \"\\\\\", \"|\", \"/\"];\n"
     "            let progress_idx = 0;\n"
     "            let progress_text = document.getElementById(\"progress\");\n"
     "            function update_anim() {\n"

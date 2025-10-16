@@ -281,7 +281,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
-    const PMA_SQL::SQLITECtx &ctx) {
+    const PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -290,7 +290,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
   std::string stmt = std::format(
       "DELETE FROM ID_TO_PORT WHERE timediff(datetime(), ON_TIME) > "
       "'+0000-00-00 00:{:02}:00.000'",
-      CHALLENGE_TIMEOUT_MINUTES);
+      challenge_timeout);
 
   {
     auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
@@ -304,7 +304,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
-    const PMA_SQL::SQLITECtx &ctx) {
+    const PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -313,7 +313,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
   std::string stmt = std::format(
       "DELETE FROM CHALLENGE_FACTOR WHERE timediff(datetime(), ON_TIME) > "
       "'+0000-00-00 00:{:02}:00.000'",
-      CHALLENGE_TIMEOUT_MINUTES);
+      challenge_timeout);
 
   {
     auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
@@ -327,7 +327,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
-    const PMA_SQL::SQLITECtx &ctx) {
+    const PMA_SQL::SQLITECtx &ctx, uint32_t allowed_timeout) {
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -336,7 +336,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
   std::string stmt = std::format(
       "DELETE FROM ALLOWED_IP WHERE timediff(datetime(), ON_TIME) > "
       "'+0000-00-00 00:{:02}:00.000'",
-      ALLOWED_IP_TIMEOUT_MINUTES);
+      allowed_timeout);
 
   {
     auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);

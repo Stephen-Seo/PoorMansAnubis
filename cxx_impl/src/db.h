@@ -35,9 +35,6 @@
 // local includes
 #include "poor_mans_print.h"
 
-constexpr int ALLOWED_IP_TIMEOUT_MINUTES = 30;
-constexpr int CHALLENGE_TIMEOUT_MINUTES = 3;
-
 namespace PMA_SQL {
 enum class ErrorT {
   SUCCESS,
@@ -130,13 +127,16 @@ struct SqliteStmtRow {
 std::tuple<SQLITECtx, ErrorT, std::string> init_sqlite(std::string filepath);
 
 // string is err message.
-std::tuple<ErrorT, std::string> cleanup_stale_id_to_ports(const SQLITECtx &ctx);
+std::tuple<ErrorT, std::string> cleanup_stale_id_to_ports(const SQLITECtx &ctx,
+                                                          uint32_t timeout);
 
 // string is err message.
-std::tuple<ErrorT, std::string> cleanup_stale_challenges(const SQLITECtx &ctx);
+std::tuple<ErrorT, std::string> cleanup_stale_challenges(const SQLITECtx &ctx,
+                                                         uint32_t timeout);
 
 // string is err message.
-std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx);
+std::tuple<ErrorT, std::string> cleanup_stale_entries(const SQLITECtx &ctx,
+                                                      uint32_t timeout);
 
 // last string is id.
 std::tuple<ErrorT, std::string, std::string> init_id_to_port(SQLITECtx &ctx,

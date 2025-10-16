@@ -688,6 +688,29 @@ int main() {
                PMA_HELPER::ascii_str_to_lower("APPLE_BANANA_ZEBRA"));
   }
 
+  // Test PMA_HTTP::parse_simple_json(...)
+  {
+    const auto [err, unordmap] = PMA_HTTP::parse_simple_json(
+        "{ \"key\":\"value\", \"one\": \"1\", \"left\" : \"right\" }");
+    auto iter = unordmap.find("key");
+    CHECK_TRUE(iter != unordmap.end());
+    if (iter != unordmap.end()) {
+      CHECK_TRUE(iter->second == "value");
+    }
+
+    iter = unordmap.find("one");
+    CHECK_TRUE(iter != unordmap.end());
+    if (iter != unordmap.end()) {
+      CHECK_TRUE(iter->second == "1");
+    }
+
+    iter = unordmap.find("left");
+    CHECK_TRUE(iter != unordmap.end());
+    if (iter != unordmap.end()) {
+      CHECK_TRUE(iter->second == "right");
+    }
+  }
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;

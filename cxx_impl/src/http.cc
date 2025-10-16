@@ -53,6 +53,8 @@ std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
       return "NotGETNorPOSTRequest";
     case ErrorT::INVALID_STATE:
       return "InvalidState";
+    case ErrorT::FAILED_TO_PARSE_JSON:
+      return "FailedToParseJSON";
     default:
       return "UnknownError";
   }
@@ -1178,4 +1180,62 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
   }
 
   return {query_params, headers, url, body, ErrorT::SUCCESS};
+}
+
+std::tuple<PMA_HTTP::ErrorT, std::unordered_map<std::string, std::string> >
+PMA_HTTP::parse_simple_json(std::string json) {
+  bool pre_get_key = true;
+  bool get_key = false;
+  bool get_middle = false;
+  bool pre_get_value = false;
+  bool get_value = false;
+  std::string key, val;
+  std::unordered_map<std::string, std::string> unordmap;
+  for (size_t idx = 0; idx < json.size(); ++idx) {
+    if (pre_get_key) {
+      if (json.at(idx) == '"') {
+        pre_get_key = false;
+        get_key = true;
+      }
+    } else if (get_key) {
+      if (json.at(idx) == '"') {
+        if (key.empty()) {
+          return {ErrorT::INVALID_STATE, {}};
+        } else {
+          get_key = false;
+          get_middle = true;
+        }
+      } else {
+        key.push_back(json.at(idx));
+      }
+    } else if (get_middle) {
+      if (json.at(idx) == ':') {
+        get_middle = false;
+        pre_get_value = true;
+      }
+    } else if (pre_get_value) {
+      if (json.at(idx) == '"') {
+        pre_get_value = false;
+        get_value = true;
+      }
+    } else if (get_value) {
+      if (json.at(idx) == '"') {
+        if (val.empty()) {
+          return {ErrorT::INVALID_STATE, {}};
+        } else {
+          unordmap.emplace(key, val);
+          key.clear();
+          val.clear();
+          get_value = false;
+          pre_get_key = true;
+        }
+      } else {
+        val.push_back(json.at(idx));
+      }
+    } else {
+      return {ErrorT::INVALID_STATE, {}};
+    }
+  }
+
+  return {ErrorT::SUCCESS, unordmap};
 }

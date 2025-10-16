@@ -35,7 +35,8 @@ enum class ErrorT {
   FAILED_TO_PARSE_IPV6,
   FAILED_TO_PARSE_IPV4,
   NOT_GET_NOR_POST_REQ,
-  INVALID_STATE
+  INVALID_STATE,
+  FAILED_TO_PARSE_JSON
 };
 
 std::string error_t_to_str(ErrorT err_enum);
@@ -76,6 +77,10 @@ struct Request {
 /// First map is key/value pairs of query parameters
 /// Second map is key/value headers
 Request handle_request_parse(std::string req);
+
+std::tuple<ErrorT, std::unordered_map<std::string, std::string> >
+    parse_simple_json(std::string);
+
 }  // namespace PMA_HTTP
 
 #endif
