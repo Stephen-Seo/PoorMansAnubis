@@ -238,9 +238,24 @@ PMA_SQL::init_sqlite(std::string filepath) {
 
   sql_ret = internal_exec_sqlite_statement(
       ctx,
+      "CREATE INDEX IF NOT EXISTS ID_TO_PORT_TIME ON ID_TO_PORT (ON_TIME)");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
+  }
+
+  sql_ret = internal_exec_sqlite_statement(
+      ctx,
       "CREATE TABLE IF NOT EXISTS CHALLENGE_FACTOR ( ID TEXT NOT NULL PRIMARY "
       "KEY, FACTORS TEXT NOT NULL, IP TEXT NOT NULL, PORT INT NOT NULL, "
       "ON_TIME TEXT DEFAULT ( datetime() ) )");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
+  }
+
+  sql_ret = internal_exec_sqlite_statement(
+      ctx,
+      "CREATE INDEX IF NOT EXISTS CHALLENGE_FACTOR_TIME ON CHALLENGE_FACTOR "
+      "(ON_TIME)");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
