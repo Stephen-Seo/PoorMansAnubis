@@ -18,6 +18,7 @@
 #include <bitset>
 #include <chrono>
 #include <cstring>
+#include <iostream>
 #include <optional>
 #include <thread>
 #include <tuple>
@@ -418,6 +419,8 @@ int main(int argc, char **argv) {
       connections.erase(connection_fd);
     }
     to_remove_connections.clear();
+
+    std::cout << std::flush;
   }
 
   return 0;
