@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Dependencies
-        run: sudo /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install git g++ sed libsqlite3-dev
+        run: sudo /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install git g++ sed libsqlite3-dev libcurl4-gnutls-dev
       - name: Fetch BLAKE3
         run: cd && mkdir git && cd git && git clone https://github.com/BLAKE3-team/BLAKE3 --depth=1 --no-single-branch && cd BLAKE3 && git checkout 1.8.2
       - name: Build dependency blake3
