@@ -58,6 +58,7 @@ void receive_signal(int sig) {
 }
 
 struct AddrPortInfo {
+  std::optional<std::string> remaining_buffer;
   std::string host_addr;
   std::string client_addr;
   // 0 - is ipv4
@@ -67,8 +68,8 @@ struct AddrPortInfo {
 };
 
 AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
-  AddrPortInfo info = {std::get<0>(addr_port), std::string{}, std::bitset<16>{},
-                       std::get<1>(addr_port), 0};
+  AddrPortInfo info = {std::nullopt,      std::get<0>(addr_port), std::string{},
+                       std::bitset<16>{}, std::get<1>(addr_port), 0};
 
   info.flags.set(0, is_ipv4);
 
@@ -297,6 +298,41 @@ int main(int argc, char **argv) {
                     iter->second.client_addr, iter->second.port);
 #endif
         to_remove_connections.push_back(iter->first);
+        continue;
+      }
+
+      if (iter->second.remaining_buffer.has_value()) {
+        ssize_t write_ret =
+            write(iter->first, iter->second.remaining_buffer.value().data(),
+                  iter->second.remaining_buffer.value().size());
+        if (write_ret == -1) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // Nonblocking-IO indicating to write later, intentionally left
+            // blank.
+          } else {
+            PMA_EPrintln(
+                "ERROR: Failed to send partial response to client {} "
+                "(write_ret {}, errno {})!",
+                iter->second.client_addr, write_ret, errno);
+            to_remove_connections.push_back(iter->first);
+          }
+        } else if (write_ret !=
+                   static_cast<ssize_t>(
+                       iter->second.remaining_buffer.value().size())) {
+          if (write_ret > 0) {
+            iter->second.remaining_buffer =
+                iter->second.remaining_buffer.value().substr(
+                    static_cast<size_t>(write_ret));
+          } else {
+            PMA_EPrintln(
+                "ERROR: Failed to send partial response to client {} "
+                "(write_ret {}, errno {})!",
+                iter->second.client_addr, write_ret, errno);
+            to_remove_connections.push_back(iter->first);
+          }
+        } else {
+          iter->second.remaining_buffer = std::nullopt;
+        }
         continue;
       }
 
@@ -623,12 +659,17 @@ int main(int argc, char **argv) {
           std::string full =
               std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
                           content_type, body.size(), body);
-          ssize_t write_ret = write(iter->first, full.c_str(), full.size());
+          ssize_t write_ret = write(iter->first, full.data(), full.size());
           if (write_ret != static_cast<ssize_t>(full.size())) {
-            PMA_EPrintln(
-                "ERROR: Failed to send response to client {} (write_ret {})!",
-                iter->second.client_addr, write_ret);
-            to_remove_connections.push_back(iter->first);
+            if (write_ret > 0) {
+              iter->second.remaining_buffer =
+                  full.substr(static_cast<size_t>(write_ret));
+            } else {
+              PMA_EPrintln(
+                  "ERROR: Failed to send response to client {} (write_ret {})!",
+                  iter->second.client_addr, write_ret);
+              to_remove_connections.push_back(iter->first);
+            }
           }
         } else {
           PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
