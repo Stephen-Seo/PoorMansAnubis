@@ -707,7 +707,7 @@ int main(int argc, char **argv) {
           }
         } else {
           PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
-                       req.full_url);
+                       req.url_or_err_msg);
           to_remove_connections.push_back(iter->first);
         }
       } else if (read_ret == 0) {
