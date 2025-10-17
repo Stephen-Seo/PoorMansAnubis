@@ -664,12 +664,13 @@ int main(int argc, char **argv) {
               //   PMA_Println("  {}: {}", header_iter->first,
               //               header_iter->second);
               // }
-              // PMA_Println("Result data: {}", result);
+              // PMA_Println("Result data: {}", body);
 
               content_type.clear();
               for (auto header_iter = resp_headers.begin();
                    header_iter != resp_headers.end(); ++header_iter) {
-                if (header_iter->first == "content-length") {
+                if (header_iter->first == "content-length" ||
+                    header_iter->first == "transfer-encoding") {
                   continue;
                 }
                 content_type.append(std::format(
@@ -694,6 +695,12 @@ int main(int argc, char **argv) {
                   iter->second.client_addr, write_ret);
               to_remove_connections.push_back(iter->first);
             }
+          } else if (write_ret == -1) {
+            PMA_EPrintln("ERROR: Failed to write to client {}, errno {}!",
+                         iter->second.client_addr, errno);
+            to_remove_connections.push_back(iter->first);
+          } else {
+            // Success, intentionally left blank.
           }
         } else {
           PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
