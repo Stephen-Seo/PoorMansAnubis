@@ -212,6 +212,7 @@ int main(int argc, char **argv) {
   socklen_t sain_len;
 
   std::deque<int> to_remove_connections;
+  std::array<char, REQ_READ_BUF_SIZE> buf;
 
   int ret;
   const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
@@ -349,7 +350,6 @@ int main(int argc, char **argv) {
         continue;
       }
 
-      std::array<char, REQ_READ_BUF_SIZE> buf;
       ssize_t read_ret = read(iter->first, buf.data(), buf.size() - 1);
       if (read_ret == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
