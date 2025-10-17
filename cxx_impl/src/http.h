@@ -66,6 +66,7 @@ struct Request {
   std::unordered_map<std::string, std::string> queries;
   std::unordered_map<std::string, std::string> headers;
   std::string url_or_err_msg;
+  std::string full_url;
   std::string body;
   ErrorT error_enum;
 

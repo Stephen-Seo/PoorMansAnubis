@@ -1041,7 +1041,7 @@ PMA_HTTP::connect_ipv4_socket_client(std::string server_addr,
 }
 
 PMA_HTTP::Request PMA_HTTP::Request::from_error(ErrorT err, std::string msg) {
-  return {{}, {}, msg, {}, err};
+  return {{}, {}, msg, {}, {}, err};
 }
 
 PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
@@ -1053,7 +1053,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
   bool start = true;
   bool getting_url = false;
   bool fetching_key = false;
-  std::string url, key, val;
+  std::string url, full_url, key, val;
   std::unordered_map<std::string, std::string> query_params;
   for (size_t idx = 4; idx < req.size(); ++idx) {
     if (req.at(idx) == '\n' || req.at(idx) == '\r') {
@@ -1064,7 +1064,12 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
       start = false;
       getting_url = true;
       url.push_back('/');
+      full_url.push_back('/');
     } else if (getting_url) {
+      if (req.at(idx) != ' ' && req.at(idx) != '\n' && req.at(idx) != '\r') {
+        full_url.push_back(req.at(idx));
+      }
+
       if (req.at(idx) != '?' && req.at(idx) != ' ') {
         url.push_back(req.at(idx));
       } else if (req.at(idx) == ' ') {
@@ -1074,6 +1079,10 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
         fetching_key = true;
       }
     } else if (fetching_key) {
+      if (req.at(idx) != ' ' && req.at(idx) != '\n' && req.at(idx) != '\r') {
+        full_url.push_back(req.at(idx));
+      }
+
       if (req.at(idx) != '=' && req.at(idx) != ' ') {
         key.push_back(req.at(idx));
       } else if (req.at(idx) == ' ') {
@@ -1082,6 +1091,10 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
         fetching_key = false;
       }
     } else {
+      if (req.at(idx) != ' ' && req.at(idx) != '\n' && req.at(idx) != '\r') {
+        full_url.push_back(req.at(idx));
+      }
+
       if (req.at(idx) != '&' && req.at(idx) != ' ') {
         val.push_back(req.at(idx));
       } else if (req.at(idx) == ' ') {
@@ -1195,7 +1208,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     // Intentionally left blank.
   }
 
-  return {query_params, headers, url, body, ErrorT::SUCCESS};
+  return {query_params, headers, url, full_url, body, ErrorT::SUCCESS};
 }
 
 std::tuple<PMA_HTTP::ErrorT, std::unordered_map<std::string, std::string> >

@@ -354,7 +354,8 @@ int main(int argc, char **argv) {
         PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(buf);
         if (req.error_enum == PMA_HTTP::ErrorT::SUCCESS) {
 #ifndef NDEBUG
-          PMA_Println("URL: {}, Params:", req.url_or_err_msg);
+          PMA_Println("URL: {}, FULL URL: {}, Params:", req.url_or_err_msg,
+                      req.full_url);
           for (auto qiter = req.queries.begin(); qiter != req.queries.end();
                ++qiter) {
             PMA_Println("  {}={}", qiter->first, qiter->second);
@@ -490,11 +491,11 @@ int main(int argc, char **argv) {
                   header_iter != req.headers.end() && args.flags.test(1)) {
                 std::string req_url;
                 if (header_iter->second.ends_with('/')) {
-                  req_url = std::format("{}{}", header_iter->second,
-                                        req.url_or_err_msg);
+                  req_url =
+                      std::format("{}{}", header_iter->second, req.full_url);
                 } else {
-                  req_url = std::format("{}/{}", header_iter->second,
-                                        req.url_or_err_msg);
+                  req_url =
+                      std::format("{}/{}", header_iter->second, req.full_url);
                 }
                 pma_curl_ret =
                     curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
@@ -514,11 +515,10 @@ int main(int argc, char **argv) {
                          url_iter != args.port_to_dest_urls.end()) {
                 std::string req_url;
                 if (url_iter->second.ends_with('/')) {
-                  req_url =
-                      std::format("{}{}", url_iter->second, req.url_or_err_msg);
+                  req_url = std::format("{}{}", url_iter->second, req.full_url);
                 } else {
-                  req_url = std::format("{}/{}", url_iter->second,
-                                        req.url_or_err_msg);
+                  req_url =
+                      std::format("{}/{}", url_iter->second, req.full_url);
                 }
                 pma_curl_ret =
                     curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
@@ -536,11 +536,11 @@ int main(int argc, char **argv) {
               } else {
                 std::string req_url;
                 if (args.default_dest_url.ends_with('/')) {
-                  req_url = std::format("{}{}", args.default_dest_url,
-                                        req.url_or_err_msg);
+                  req_url =
+                      std::format("{}{}", args.default_dest_url, req.full_url);
                 } else {
-                  req_url = std::format("{}/{}", args.default_dest_url,
-                                        req.url_or_err_msg);
+                  req_url =
+                      std::format("{}/{}", args.default_dest_url, req.full_url);
                 }
                 pma_curl_ret =
                     curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
@@ -704,7 +704,7 @@ int main(int argc, char **argv) {
           }
         } else {
           PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
-                       req.url_or_err_msg);
+                       req.full_url);
           to_remove_connections.push_back(iter->first);
         }
       } else if (read_ret == 0) {
