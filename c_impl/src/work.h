@@ -23,6 +23,10 @@
 // Third party includes.
 #include <data_structures/priority_heap.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Work_Factors {
   SDArchiverChunkedArr *value;
   SDArchiverPHeap *factors;
@@ -54,5 +58,8 @@ char *work_factors_factors_to_str(Work_Factors work_factors, uint64_t *len_out);
 // Same as previous fn, but format is "2x5 3x9 5x4..." instead of "2 2 2 2...".
 char *work_factors_factors_to_str2(Work_Factors work_factors,
                                    uint64_t *len_out);
+#ifdef __cplusplus
+}
+#endif
 
 #endif

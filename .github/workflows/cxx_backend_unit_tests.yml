@@ -1,0 +1,21 @@
+name: cxx_backend Unit Tests
+run-name: PoorMansAnubs cxx_backend Unit Tests run
+on: [push]
+jobs:
+  Build-and-Test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Dependencies
+        run: sudo /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install git g++ sed libsqlite3-dev libcurl4-gnutls-dev
+      - name: Fetch BLAKE3
+        run: cd && mkdir git && cd git && git clone https://github.com/BLAKE3-team/BLAKE3 --depth=1 --no-single-branch && cd BLAKE3 && git checkout 1.8.2
+      - name: Build dependency blake3
+        run: cd && cmake -S $HOME/git/BLAKE3/c -B BLAKE3_BUILD -DCMAKE_BUILD_TYPE=Release && make -C BLAKE3_BUILD
+      - name: Get Sources
+        run: git clone --depth=1 --no-single-branch https://github.com/Stephen-Seo/PoorMansAnubis.git PMA && cd PMA && git checkout $GITHUB_REF_NAME && git submodule update --init --recursive
+      - name: Use Sed to depend on blake3 header/lib in alternate directories
+        run: sed -i -e "/^COMMON_FLAGS/s|:=|:= -I$HOME/git/BLAKE3/c |" -e "/^LINKER_FLAGS/s|-lblake3|-L$HOME/BLAKE3_BUILD -lblake3|" PMA/cxx_impl/Makefile
+      - name: Build UnitTests (CI_BUILD mode to turn off -Werror)
+        run: /usr/bin/env CI_BUILD=1 make -C PMA/cxx_impl test
+      - name: Run UnitTests
+        run: ./PMA/cxx_impl/test

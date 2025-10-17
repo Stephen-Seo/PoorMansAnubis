@@ -1,0 +1,10 @@
+/buildDebug/
+/buildRelease/
+/.cache/
+/build*/
+compile_commands.json
+/objdir/
+/cxx_backend_impl
+/test
+/debug_serve
+/debug_client

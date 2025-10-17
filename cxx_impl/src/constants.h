@@ -1,11 +1,11 @@
 // ISC License
-// 
+//
 // Copyright (c) 2025 Stephen Seo
-// 
+//
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
 // copyright notice and this permission notice appear in all copies.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
 // REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
 // AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -14,25 +14,13 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-#ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_BASE64_H_
-#define SEODISPARATE_COM_POOR_MANS_ANUBIS_BASE64_H_
+#ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_CONSTANTS_H_
+#define SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_CONSTANTS_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+extern const char *HTML_BODY_FACTORS;
 
-unsigned char base64_value_to_base64(unsigned char value);
+extern const char *JS_FACTORS_WORKER;
 
-unsigned char base64_base64_to_value(unsigned char b64);
-
-// Returned ptr must be free'd.
-char *base64_number_str_to_base64_str(const char *);
-
-// Returned ptr must be free'd.
-char *base64_base64_str_to_number_str(const char *);
-
-#ifdef __cplusplus
-}
-#endif
+constexpr unsigned long long REQ_READ_BUF_SIZE = 1024 * 40;
 
 #endif

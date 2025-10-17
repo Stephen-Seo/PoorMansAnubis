@@ -1,11 +1,11 @@
 // ISC License
-// 
+//
 // Copyright (c) 2025 Stephen Seo
-// 
+//
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
 // copyright notice and this permission notice appear in all copies.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
 // REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
 // AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -14,25 +14,29 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-#ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_BASE64_H_
-#define SEODISPARATE_COM_POOR_MANS_ANUBIS_BASE64_H_
+#include "poor_mans_print.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#if __cplusplus < 202302L
 
-unsigned char base64_value_to_base64(unsigned char value);
+#include <cstdio>
 
-unsigned char base64_base64_to_value(unsigned char b64);
+void std::println() { std::printf("\n"); }
 
-// Returned ptr must be free'd.
-char *base64_number_str_to_base64_str(const char *);
+void PoorMans::print_actual(std::string str) { std::printf("%s", str.c_str()); }
 
-// Returned ptr must be free'd.
-char *base64_base64_str_to_number_str(const char *);
-
-#ifdef __cplusplus
+void PoorMans::println_actual(std::string str) {
+  std::printf("%s\n", str.c_str());
 }
-#endif
+
+void PoorMans::eprint_actual(std::string str) {
+  std::fprintf(stderr, "%s", str.c_str());
+}
+
+void PoorMans::eprintln_actual(std::string str) {
+  std::fprintf(stderr, "%s\n", str.c_str());
+}
+
+void PoorMans::println_actual() { std::printf("\n"); }
+void PoorMans::eprintln_actual() { std::fprintf(stderr, "\n"); }
 
 #endif
