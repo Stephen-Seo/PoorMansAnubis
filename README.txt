@@ -22,15 +22,19 @@ USAGE
 
 ================================================================================
 
-Build the Rust frontend. You may need to do a
-`git submodule update --init --recursive` to pull in the dependency on
+Build the "cxx_backend" (in "cxx_impl"). If there are problems using it, you
+can fall back to the Rust frontend (in "rust_impl") . You may need to do a `git
+submodule update --init --recursive` to pull in the dependency on
 SimpleArchiver.
 
-Set up a MySQL server with a database and a user with password with access to
-said database. (It is recommended to use MariaDB in place of MySQL.)
+The C++ impl uses sqlite, so a path given in the paramaters is only required.
 
-Check "rust_impl/src/args.rs" for flags you can pass to the program. Also check
-"rust_impl/mysql.conf" for how the config file should be set up for MySQL
+The Rust impl requires a MySQL server with a database and a user with password
+with access to said database. (It is recommended to use MariaDB in place of
+MySQL.)
+
+Check "rust_impl/src/args.rs" for flags you can pass to the Rust impl. Also
+check "rust_impl/mysql.conf" for how the config file should be set up for MySQL
 access.
 
 Point your webserver to the Rust-frontend's listening ip and port with the full
@@ -70,6 +74,35 @@ Args:
     If you are going to use this anyway, you must ensure that a proper firewall is configured!
   --important-warning-has-been-read : Use this option to enable potentially dangerous options
 
+Args for the C++ implementation are as follows:
+
+    Args:
+      --factors=<digits> : Generate factors challenge with <digits> digits
+      --dest-url=<url> : Destination URL for verified clients;
+        example: "--dest-url=http://127.0.0.1:9999"
+      --addr-port=<addr>:<port> : Listening addr/port;
+        example: "--addr-port=127.0.0.1:8080"
+      NOTICE: Specify --addr-port=... multiple times to listen on multiple ports
+      NOTE: There is no longer a hard limit on the number of ports one can listen to
+      --port-to-dest-url=<port>:<url> : Ensure requests from listening on <port> is forwarded to <url>
+      example: "--port-to-dest-url=9001:https://example.com"
+      NOTICE: Specify --port-to-dest-url=... multiple times to add more mappings
+      --sqlite-path=<path> : Set filename for sqlite db
+      --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
+      --api-url=<url> : Set endpoint for client to POST to this software;
+        example: "--api-url=/pma_api"
+      --js-factors-url=<url> : Set endpoint for client to request factors.js from this software;
+        example: "--js-factors-url=/pma_factors.js"
+      --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
+      --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
+      --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
+        example header: "override-dest-url: http://127.0.0.1:8888"
+      WARNING: If --enable-override-dest-url is used, you must ensure that
+        PoorMansAnubis always receives this header as set by your server. If you
+        don't then anyone accessing your server may be able to set this header and
+        direct PoorMansAnubis to load any website!
+        If you are going to use this anyway, you must ensure that a proper firewall is configured!
+      --important-warning-has-been-read : Use this option to enable potentially dangerous options
 
 ================================================================================
 
