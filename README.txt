@@ -15,6 +15,14 @@ The "c_impl" contains the challenge generation code.
 
 The "rust_impl" contains the frontend code and is the "meat" of the software.
 
+The "cxx_impl" contains a C++ implementation that should function the same as
+the "rust_impl". It is more lightweight and there are some differences:
+
+- cxx_impl uses `libcurl` while rust_impl uses `reqwest`
+- cxx_impl uses Unix-style ipv4/ipv6 socket handling while rust_impl uses
+  `salvo`
+- cxx_impl uses `sqlite` while rust_impl uses `mariadb` (or `mysql`)
+
 
 ================================================================================
 
