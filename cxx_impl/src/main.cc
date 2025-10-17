@@ -486,9 +486,32 @@ int main(int argc, char **argv) {
 #endif
 
               // Set curl destination
-              if (auto url_iter =
-                      args.port_to_dest_urls.find(iter->second.port);
-                  url_iter != args.port_to_dest_urls.end()) {
+              if (auto header_iter = req.headers.find("override-dest-url");
+                  header_iter != req.headers.end() && args.flags.test(1)) {
+                std::string req_url;
+                if (header_iter->second.ends_with('/')) {
+                  req_url = std::format("{}{}", header_iter->second,
+                                        req.url_or_err_msg);
+                } else {
+                  req_url = std::format("{}/{}", header_iter->second,
+                                        req.url_or_err_msg);
+                }
+                pma_curl_ret =
+                    curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl destination (client {}, port "
+                      "{})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl url</p></html>";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+              } else if (auto url_iter =
+                             args.port_to_dest_urls.find(iter->second.port);
+                         url_iter != args.port_to_dest_urls.end()) {
                 std::string req_url;
                 if (url_iter->second.ends_with('/')) {
                   req_url =
@@ -541,7 +564,7 @@ int main(int argc, char **argv) {
                     curl_slist_free_all(**list);
                   });
               for (const auto &pair : req.headers) {
-                if (pair.first == "host") {
+                if (pair.first == "host" || pair.first == "override-dest-url") {
                   continue;
                 }
                 headers_list = curl_slist_append(

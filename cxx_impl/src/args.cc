@@ -326,6 +326,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
+        PMA_Println(
+            "NOTICE: Enabling dangerous \"--enable-override-dest-url\"!");
         flags.set(1);
       } else {
         PMA_EPrintln(
