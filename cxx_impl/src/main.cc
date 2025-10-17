@@ -115,6 +115,19 @@ size_t pma_curl_header_callback(void *buf, size_t size, size_t nitems,
   return size * nitems;
 }
 
+size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
+                                   void *ud) {
+  void **ptrs = reinterpret_cast<void **>(ud);
+  std::string *body = reinterpret_cast<std::string *>(ptrs[0]);
+  size_t *count = reinterpret_cast<size_t *>(ptrs[1]);
+
+  size_t min = (size * nitems) < body->size() ? size * nitems : body->size();
+  std::memcpy(buf, body->data() + *count, min);
+  *count += min;
+
+  return min;
+}
+
 int main(int argc, char **argv) {
   const PMA_ARGS::Args args(argc, argv);
 
@@ -566,6 +579,12 @@ int main(int argc, char **argv) {
                     headers_list,
                     std::format("x-real-ip: {}", ip_iter->second).c_str());
               }
+              if (auto type_iter = req.headers.find("content-type");
+                  type_iter != req.headers.end()) {
+                headers_list = curl_slist_append(
+                    headers_list,
+                    std::format("content-type: {}", type_iter->second).c_str());
+              }
               // for (const auto &pair : req.headers) {
               //   if (pair.first == "host" || pair.first ==
               //   "override-dest-url") {
@@ -646,6 +665,76 @@ int main(int argc, char **argv) {
                     "<html><p>500 Internal Server Error</p><p>Failed to set "
                     "curl header callback user-data</p></html>";
                 goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
+              // Set callback for sending data
+              void **ptrs =
+                  reinterpret_cast<void **>(std::malloc(sizeof(void *) * 2));
+              GenericCleanup<void ***> ptrs_cleanup(
+                  &ptrs, [](void ****ptrs) { std::free(**ptrs); });
+              size_t count = 0;
+              ptrs[0] = &req.body;
+              ptrs[1] = &count;
+              if (!req.body.empty()) {
+#ifndef NDEBUG
+                PMA_Println("NOTICE: Sending client {} request body...",
+                            iter->second.client_addr);
+#endif
+                pma_curl_ret =
+                    curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION,
+                                     pma_curl_body_send_callback);
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl upload callback (client {}, "
+                      "port {})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl upload callback</p></html>";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+
+                pma_curl_ret =
+                    curl_easy_setopt(curl_handle, CURLOPT_READDATA, ptrs);
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl upload callback user-data "
+                      "(client {}, port {})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl upload callback user-data</p></html>";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+
+                pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1);
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl upload enable (client {}, "
+                      "port {})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl upload enable</p></html>";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+
+                pma_curl_ret = curl_easy_setopt(
+                    curl_handle, CURLOPT_INFILESIZE_LARGE, req.body.size());
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl upload size (client {}, port "
+                      "{})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl upload size</p></html>";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
               }
 
               // Fetch
