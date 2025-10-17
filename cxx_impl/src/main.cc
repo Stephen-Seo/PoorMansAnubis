@@ -536,6 +536,10 @@ int main(int argc, char **argv) {
 
               // Set curl http headers
               struct curl_slist *headers_list = nullptr;
+              GenericCleanup<struct curl_slist **> headers_cleanup(
+                  &headers_list, [](struct curl_slist ***list) {
+                    curl_slist_free_all(**list);
+                  });
               for (const auto &pair : req.headers) {
                 if (pair.first == "host") {
                   continue;
@@ -649,9 +653,6 @@ int main(int argc, char **argv) {
                     "{}: {}\r\n", header_iter->first, header_iter->second));
               }
               content_type.resize(content_type.size() - 2);
-
-              // Cleanup
-              curl_slist_free_all(headers_list);
             }
           }
 
