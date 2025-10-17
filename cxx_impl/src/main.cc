@@ -433,8 +433,10 @@ int main(int argc, char **argv) {
                                               iter->second.client_addr,
                                               id_iter->second);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
-                PMA_EPrintln("ERROR: Failed to prepare challenge: {}, {}",
-                             PMA_SQL::error_t_to_string(err), msg_or_chal);
+                PMA_EPrintln(
+                    "ERROR: Failed to prepare challenge for client {}: {}, {}",
+                    iter->second.client_addr, PMA_SQL::error_t_to_string(err),
+                    msg_or_chal);
                 status = "HTTP/1.0 500 Internal Server Error";
                 body =
                     "<html><p>500 Internal Server Error</p><p>Failed to "
