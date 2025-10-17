@@ -489,14 +489,11 @@ int main(int argc, char **argv) {
               // Set curl destination
               if (auto header_iter = req.headers.find("override-dest-url");
                   header_iter != req.headers.end() && args.flags.test(1)) {
-                std::string req_url;
-                if (header_iter->second.ends_with('/')) {
-                  req_url =
-                      std::format("{}{}", header_iter->second, req.full_url);
-                } else {
-                  req_url =
-                      std::format("{}/{}", header_iter->second, req.full_url);
+                std::string req_url = header_iter->second;
+                while (req_url.ends_with('/')) {
+                  req_url.pop_back();
                 }
+                req_url.append(req.full_url);
                 pma_curl_ret =
                     curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
                 if (pma_curl_ret != CURLE_OK) {
@@ -513,13 +510,11 @@ int main(int argc, char **argv) {
               } else if (auto url_iter =
                              args.port_to_dest_urls.find(iter->second.port);
                          url_iter != args.port_to_dest_urls.end()) {
-                std::string req_url;
-                if (url_iter->second.ends_with('/')) {
-                  req_url = std::format("{}{}", url_iter->second, req.full_url);
-                } else {
-                  req_url =
-                      std::format("{}/{}", url_iter->second, req.full_url);
+                std::string req_url = url_iter->second;
+                while (req_url.ends_with('/')) {
+                  req_url.pop_back();
                 }
+                req_url.append(req.full_url);
                 pma_curl_ret =
                     curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
                 if (pma_curl_ret != CURLE_OK) {
@@ -534,14 +529,11 @@ int main(int argc, char **argv) {
                   goto PMA_RESPONSE_SEND_LOCATION;
                 }
               } else {
-                std::string req_url;
-                if (args.default_dest_url.ends_with('/')) {
-                  req_url =
-                      std::format("{}{}", args.default_dest_url, req.full_url);
-                } else {
-                  req_url =
-                      std::format("{}/{}", args.default_dest_url, req.full_url);
+                std::string req_url = args.default_dest_url;
+                while (req_url.ends_with('/')) {
+                  req_url.pop_back();
                 }
+                req_url.append(req.full_url);
                 pma_curl_ret =
                     curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
                 if (pma_curl_ret != CURLE_OK) {
