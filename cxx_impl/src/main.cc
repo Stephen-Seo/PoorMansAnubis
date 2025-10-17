@@ -563,14 +563,23 @@ int main(int argc, char **argv) {
                   &headers_list, [](struct curl_slist ***list) {
                     curl_slist_free_all(**list);
                   });
-              for (const auto &pair : req.headers) {
-                if (pair.first == "host" || pair.first == "override-dest-url") {
-                  continue;
-                }
+              headers_list = curl_slist_append(
+                  headers_list, "accept: text/html,application/xhtml+xml,*/*");
+              if (auto ip_iter = req.headers.find("x-real-ip");
+                  ip_iter != req.headers.end() && args.flags.test(0)) {
                 headers_list = curl_slist_append(
                     headers_list,
-                    std::format("{}: {}", pair.first, pair.second).c_str());
+                    std::format("x-real-ip: {}", ip_iter->second).c_str());
               }
+              // for (const auto &pair : req.headers) {
+              //   if (pair.first == "host" || pair.first ==
+              //   "override-dest-url") {
+              //     continue;
+              //   }
+              //   headers_list = curl_slist_append(
+              //       headers_list,
+              //       std::format("{}: {}", pair.first, pair.second).c_str());
+              // }
               pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER,
                                               headers_list);
               if (pma_curl_ret != CURLE_OK) {
