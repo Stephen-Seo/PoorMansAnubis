@@ -22,6 +22,7 @@ the "rust_impl". It is more lightweight and there are some differences:
 - cxx_impl uses Unix-style ipv4/ipv6 socket handling while rust_impl uses
   `salvo`
 - cxx_impl uses `sqlite` while rust_impl uses `mariadb` (or `mysql`)
+- cxx_impl uses `blake3` primarly for hashing while rust_impl uses `uuid`s
 
 
 ================================================================================
