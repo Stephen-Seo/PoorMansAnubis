@@ -21,4 +21,6 @@ extern const char *HTML_BODY_FACTORS;
 
 extern const char *JS_FACTORS_WORKER;
 
+constexpr unsigned long long REQ_READ_BUF_SIZE = 1024 * 40;
+
 #endif

@@ -336,8 +336,8 @@ int main(int argc, char **argv) {
         continue;
       }
 
-      char buf[4096];
-      ssize_t read_ret = read(iter->first, buf, 4095);
+      std::array<char, REQ_READ_BUF_SIZE> buf;
+      ssize_t read_ret = read(iter->first, buf.data(), buf.size() - 1);
       if (read_ret == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           // Nonblocking-IO indicating no bytes to read
@@ -350,8 +350,9 @@ int main(int argc, char **argv) {
         }
       }
       if (read_ret > 0) {
-        buf[read_ret] = 0;
-        PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(buf);
+        buf.at(static_cast<size_t>(read_ret)) = 0;
+        PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(
+            std::string(buf.data(), static_cast<size_t>(read_ret)));
         if (req.error_enum == PMA_HTTP::ErrorT::SUCCESS) {
 #ifndef NDEBUG
           PMA_Println("URL: {}, FULL URL: {}, Params:", req.url_or_err_msg,
