@@ -750,6 +750,57 @@ int main(int argc, char **argv) {
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
 
+              long resp_code = 200;
+
+              pma_curl_ret = curl_easy_getinfo(
+                  curl_handle, CURLINFO_RESPONSE_CODE, &resp_code);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to get curl fetch response code (client {}, "
+                    "port {})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to get "
+                    "curl fetch response code</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
+              switch (resp_code) {
+                case 200:
+                  status = "HTTP/1.0 200 OK";
+                  break;
+                case 400:
+                  status = "HTTP/1.0 400 Bad Request";
+                  break;
+                case 401:
+                  status = "HTTP/1.0 401 Unauthorized";
+                  break;
+                case 403:
+                  status = "HTTP/1.0 403 Forbidden";
+                  break;
+                case 404:
+                  status = "HTTP/1.0 404 Not Found";
+                  break;
+                case 502:
+                  status = "HTTP/1.0 502 Bad Gateway";
+                  break;
+                case 503:
+                  status = "HTTP/1.0 503 Service Unavailable";
+                  break;
+                case 504:
+                  status = "HTTP/1.0 504 Gateway Timeout";
+                  break;
+                default:
+                  PMA_EPrintln(
+                      "WARNING: Unhandled response code {} for client {}",
+                      resp_code, iter->second.client_addr);
+                  [[fallthrough]];
+                case 500:
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  break;
+              }
+
               // DEBUG
               // PMA_Println("Result headers:");
               // for (auto header_iter = resp_headers.begin();
