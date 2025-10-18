@@ -144,11 +144,29 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
 async fn req_to_url(
     url: String,
     real_ip: Option<&str>,
+    body: Option<Vec<u8>>,
 ) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
     let req: reqwest::Response = if let Some(ip) = real_ip {
+        if let Some(body) = body {
+            reqwest::Client::new()
+                .post(url)
+                .body(body)
+                .header("x-real-ip", ip)
+                .header("accept", "text/html,application/xhtml+xml,*/*")
+                .send()
+                .await?
+        } else {
+            reqwest::Client::new()
+                .get(url)
+                .header("x-real-ip", ip)
+                .header("accept", "text/html,application/xhtml+xml,*/*")
+                .send()
+                .await?
+        }
+    } else if let Some(body) = body {
         reqwest::Client::new()
-            .get(url)
-            .header("x-real-ip", ip)
+            .post(url)
+            .body(body)
             .header("accept", "text/html,application/xhtml+xml,*/*")
             .send()
             .await?
@@ -544,7 +562,17 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             args.dest_url.clone()
         };
 
-        let res_body_res = req_to_url(format!("{}{}", url, &path_str), Some(&addr_string)).await;
+        let payload: Vec<u8> = req.payload().await?.to_vec();
+        let res_body_res = if payload.is_empty() {
+            req_to_url(format!("{}{}", url, &path_str), Some(&addr_string), None).await
+        } else {
+            req_to_url(
+                format!("{}{}", url, &path_str),
+                Some(&addr_string),
+                Some(payload),
+            )
+            .await
+        };
 
         if let Ok((res_body, status, headers)) = res_body_res {
             res.replace_body(res_body);
@@ -647,7 +675,7 @@ async fn main() {
                 .path(&parsed_args.js_factors_url)
                 .get(factors_js_fn),
         )
-        .push(Router::new().path("{**}").get(handler_fn));
+        .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
     if parsed_args.addr_port_strs.len() == 1 {
         let addr_port_str = parsed_args.addr_port_strs[0].clone();
         let acceptor = TcpListener::new(addr_port_str).bind().await;
