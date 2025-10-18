@@ -1095,7 +1095,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
         full_url.push_back(req.at(idx));
       }
 
-      if (req.at(idx) != '&' && req.at(idx) != ' ') {
+      if (req.at(idx) != '&' && req.at(idx) != ';' && req.at(idx) != ' ') {
         val.push_back(req.at(idx));
       } else if (req.at(idx) == ' ') {
         if (!key.empty() && !val.empty()) {
@@ -1143,22 +1143,6 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     }
     if (needs_slash) {
       url.push_back('/');
-    }
-  }
-
-  if (!full_url.ends_with('/')) {
-    bool needs_slash = true;
-    for (auto url_iter = full_url.rbegin(); url_iter != full_url.rend();
-         ++url_iter) {
-      if (*url_iter == '.' || *url_iter == '?') {
-        needs_slash = false;
-        break;
-      } else if (*url_iter == '/') {
-        break;
-      }
-    }
-    if (needs_slash) {
-      full_url.push_back('/');
     }
   }
 
