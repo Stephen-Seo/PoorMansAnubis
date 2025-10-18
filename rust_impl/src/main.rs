@@ -610,13 +610,12 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     .first(&mut conn)
                     .await;
 
-            if let Ok(Some(r)) = &row {
-                if let Some(id) = r.get::<String, usize>(0) {
-                    if &id == &uuid {
-                        uuid = Uuid::new_v4().to_string();
-                        continue;
-                    }
-                }
+            if let Ok(Some(r)) = &row
+                && let Some(id) = r.get::<String, usize>(0)
+                && id == uuid
+            {
+                uuid = Uuid::new_v4().to_string();
+                continue;
             }
             break;
         }
