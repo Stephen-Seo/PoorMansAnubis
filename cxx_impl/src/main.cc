@@ -680,6 +680,34 @@ int main(int argc, char **argv) {
                 PMA_Println("NOTICE: Sending client {} request body...",
                             iter->second.client_addr);
 #endif
+                pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl upload as POST (client {}, "
+                      "port {})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl upload as POST</ p> < / html > ";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+
+                pma_curl_ret =
+                    curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, nullptr);
+                if (pma_curl_ret != CURLE_OK) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set curl upload as POST (fields; "
+                      "client {}, "
+                      "port {})!",
+                      iter->second.client_addr, iter->second.port);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to set "
+                      "curl upload as POST (fields)</ p> < / html > ";
+                  goto PMA_RESPONSE_SEND_LOCATION;
+                }
+
                 pma_curl_ret =
                     curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION,
                                      pma_curl_body_send_callback);
@@ -709,30 +737,17 @@ int main(int argc, char **argv) {
                   goto PMA_RESPONSE_SEND_LOCATION;
                 }
 
-                pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1);
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl upload enable (client {}, "
-                      "port {})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl upload enable</p></html>";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-
                 pma_curl_ret = curl_easy_setopt(
-                    curl_handle, CURLOPT_INFILESIZE_LARGE, req.body.size());
+                    curl_handle, CURLOPT_POSTFIELDSIZE_LARGE, req.body.size());
                 if (pma_curl_ret != CURLE_OK) {
                   PMA_EPrintln(
-                      "ERROR: Failed to set curl upload size (client {}, port "
+                      "ERROR: Failed to set curl POST size (client {}, port "
                       "{})!",
                       iter->second.client_addr, iter->second.port);
                   status = "HTTP/1.0 500 Internal Server Error";
                   body =
                       "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl upload size</p></html>";
+                      "curl POST size</p></html>";
                   goto PMA_RESPONSE_SEND_LOCATION;
                 }
               }
