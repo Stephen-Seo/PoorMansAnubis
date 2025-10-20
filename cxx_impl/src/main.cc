@@ -221,87 +221,91 @@ int main(int argc, char **argv) {
 
     // Fetch new connections
     for (auto iter = sockets.begin(); iter != sockets.end(); ++iter) {
-      if (iter->second.flags.test(0)) {
-        // IPV4
-        sain_len = sizeof(struct sockaddr_in);
-        ret = accept(iter->first, reinterpret_cast<sockaddr *>(&sain4),
-                     &sain_len);
+      ret = 0;
+      while (ret >= 0) {
+        if (iter->second.flags.test(0)) {
+          // IPV4
+          sain_len = sizeof(struct sockaddr_in);
+          ret = accept(iter->first, reinterpret_cast<sockaddr *>(&sain4),
+                       &sain_len);
 
-        if (sain_len != sizeof(struct sockaddr_in)) {
-          PMA_EPrintln("WARNING: sockaddr return length {}, but should be {}",
-                       sain_len, sizeof(struct sockaddr_in));
-        }
-      } else {
-        // IPV6
-        sain_len = sizeof(struct sockaddr_in6);
-        ret = accept(iter->first, reinterpret_cast<sockaddr *>(&sain6),
-                     &sain_len);
-
-        if (sain_len != sizeof(struct sockaddr_in6)) {
-          PMA_EPrintln("WARNING: sockaddr return length {}, but should be {}",
-                       sain_len, sizeof(struct sockaddr_in));
-        }
-      }
-
-      if (ret == -1) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          // Nonblocking-IO indicating no connection to accept
-          continue;
+          if (sain_len != sizeof(struct sockaddr_in)) {
+            PMA_EPrintln("WARNING: sockaddr return length {}, but should be {}",
+                         sain_len, sizeof(struct sockaddr_in));
+          }
         } else {
-          PMA_EPrintln(
-              "WARNING: Failed to accept connection from socket {} (errno "
-              "{})",
-              iter->first, errno);
-          continue;
+          // IPV6
+          sain_len = sizeof(struct sockaddr_in6);
+          ret = accept(iter->first, reinterpret_cast<sockaddr *>(&sain6),
+                       &sain_len);
+
+          if (sain_len != sizeof(struct sockaddr_in6)) {
+            PMA_EPrintln("WARNING: sockaddr return length {}, but should be {}",
+                         sain_len, sizeof(struct sockaddr_in));
+          }
         }
-      } else if (iter->second.flags.test(0)) {
-        // IPV4 new connection
-        std::string client_ipv4 =
-            PMA_HTTP::ipv4_addr_to_str(sain4.sin_addr.s_addr);
+
+        if (ret == -1) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // Nonblocking-IO indicating no connection to accept
+            break;
+          } else {
+            PMA_EPrintln(
+                "WARNING: Failed to accept connection from socket {} (errno "
+                "{})",
+                iter->first, errno);
+            break;
+          }
+        } else if (iter->second.flags.test(0)) {
+          // IPV4 new connection
+          std::string client_ipv4 =
+              PMA_HTTP::ipv4_addr_to_str(sain4.sin_addr.s_addr);
 #ifndef NDEBUG
-        PMA_Println("New connection from {}:{} on port {}", client_ipv4,
-                    PMA_HELPER::be_swap_u16(sain4.sin_port), iter->second.port);
+          PMA_Println("New connection from {}:{} on port {}", client_ipv4,
+                      PMA_HELPER::be_swap_u16(sain4.sin_port),
+                      iter->second.port);
 #endif
 
-        // Set nonblocking-IO on received connection fd
-        int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
-        if (fcntl_ret < 0) {
-          PMA_EPrintln(
-              "WARNING: Failed to set NONBLOCK on new connection (errno {}), "
-              "closing connection...",
-              errno);
-          close(ret);
-          continue;
-        }
+          // Set nonblocking-IO on received connection fd
+          int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
+          if (fcntl_ret < 0) {
+            PMA_EPrintln(
+                "WARNING: Failed to set NONBLOCK on new connection (errno {}), "
+                "closing connection...",
+                errno);
+            close(ret);
+            break;
+          }
 
-        iter->second.client_addr = std::move(client_ipv4);
-        connections.emplace(ret, iter->second);
-      } else {
-        // IPV6 new connection
-        std::string client_ipv6 = PMA_HTTP::ipv6_addr_to_str(
-            *reinterpret_cast<std::array<uint8_t, 16> *>(
-                sain6.sin6_addr.s6_addr));
+          iter->second.client_addr = std::move(client_ipv4);
+          connections.emplace(ret, iter->second);
+        } else {
+          // IPV6 new connection
+          std::string client_ipv6 = PMA_HTTP::ipv6_addr_to_str(
+              *reinterpret_cast<std::array<uint8_t, 16> *>(
+                  sain6.sin6_addr.s6_addr));
 #ifndef NDEBUG
-        PMA_Println("New connection from {}:{} on port {}", client_ipv6,
-                    PMA_HELPER::be_swap_u16(sain6.sin6_port),
-                    iter->second.port);
+          PMA_Println("New connection from {}:{} on port {}", client_ipv6,
+                      PMA_HELPER::be_swap_u16(sain6.sin6_port),
+                      iter->second.port);
 #endif
 
-        // Set nonblocking-IO on received connection fd
-        int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
-        if (fcntl_ret < 0) {
-          PMA_EPrintln(
-              "WARNING: Failed to set NONBLOCK on new connection (errno {}), "
-              "closing connection...",
-              errno);
-          close(ret);
-          continue;
-        }
+          // Set nonblocking-IO on received connection fd
+          int fcntl_ret = fcntl(ret, F_SETFL, O_NONBLOCK);
+          if (fcntl_ret < 0) {
+            PMA_EPrintln(
+                "WARNING: Failed to set NONBLOCK on new connection (errno {}), "
+                "closing connection...",
+                errno);
+            close(ret);
+            break;
+          }
 
-        iter->second.client_addr = client_ipv6;
-        connections.emplace(ret, iter->second);
-      }
-    }
+          iter->second.client_addr = client_ipv6;
+          connections.emplace(ret, iter->second);
+        }
+      }  // while (ret >= 0)
+    }  // for (sockets ... )
 
     // Handle connections
     for (auto iter = connections.begin(); iter != connections.end(); ++iter) {

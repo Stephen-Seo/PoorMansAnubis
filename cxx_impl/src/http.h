@@ -24,7 +24,7 @@
 #include <unordered_map>
 
 namespace PMA_HTTP {
-constexpr int SOCKET_BACKLOG_SIZE = 32;
+constexpr int SOCKET_BACKLOG_SIZE = 2048;
 
 enum class ErrorT {
   SUCCESS,
