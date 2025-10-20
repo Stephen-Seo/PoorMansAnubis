@@ -248,13 +248,11 @@ int main(int argc, char **argv) {
         if (ret == -1) {
           if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // Nonblocking-IO indicating no connection to accept
-            break;
           } else {
             PMA_EPrintln(
                 "WARNING: Failed to accept connection from socket {} (errno "
                 "{})",
                 iter->first, errno);
-            break;
           }
         } else if (iter->second.flags.test(0)) {
           // IPV4 new connection
@@ -274,7 +272,6 @@ int main(int argc, char **argv) {
                 "closing connection...",
                 errno);
             close(ret);
-            break;
           }
 
           iter->second.client_addr = std::move(client_ipv4);
@@ -298,7 +295,6 @@ int main(int argc, char **argv) {
                 "closing connection...",
                 errno);
             close(ret);
-            break;
           }
 
           iter->second.client_addr = client_ipv6;
