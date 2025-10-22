@@ -35,15 +35,15 @@ namespace PMA_ARGS {
 using AddrPort = std::tuple<std::string, uint16_t>;
 
 struct Args {
-  Args(int argc, char** argv);
+  Args(int argc, char **argv);
 
   // Allow copy
-  Args(const Args& other) = default;
-  Args& operator=(const Args& other) = default;
+  Args(const Args &other) = default;
+  Args &operator=(const Args &other) = default;
 
   // Allow move
-  Args(Args&& other) = default;
-  Args& operator=(Args&& other) = default;
+  Args(Args &&other) = default;
+  Args &operator=(Args &&other) = default;
 
   uint64_t factors;
   std::string default_dest_url;

@@ -108,4 +108,4 @@ clean:
 	rm -f debug_client
 
 clang-format:
-	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=Google ${SOURCES} ${HEADERS} src/test.cc || true
+	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=file ${SOURCES} ${HEADERS} src/test.cc || true
