@@ -689,6 +689,13 @@ int main() {
     } catch (const std::exception &e) {
       // Intentionally left blank.
     }
+
+    try {
+      ipv6 = PMA_HTTP::str_to_ipv6_addr("[1234:abcd]");
+      CHECK_TRUE(!"Should have failed to parse [1234:abcd]");
+    } catch (const std::exception &e) {
+      // Intentionally left blank.
+    }
   }
 
   // test ipv6_addr_to_str

@@ -493,7 +493,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
           ++segment_count;
         }
       }
-      if (segment_count > 8) {
+      if (segment_count != 8) {
         throw std::invalid_argument(
             "Invalid number of segments for full ipv6 addr");
       }
