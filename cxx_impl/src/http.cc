@@ -71,12 +71,27 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
     return ipv6_addr;
   }
 
+  // Get indices
+  size_t start = 0;
+  size_t end = addr.size();
+
+  if (addr.at(0) == '[') {
+    if (addr.at(addr.size() - 1) == ']') {
+      ++start;
+      --end;
+    } else {
+      throw std::invalid_argument("Expected \"]\" at end of ipv6!");
+    }
+  } else if (addr.at(addr.size() - 1) == ']') {
+    throw std::invalid_argument("Expected \"[\" at beginning of ipv6!");
+  }
+
   bool has_double_colon = false;
 
   // first check for double_colon
   int colon_count = 0;
   uint64_t double_colon_idx = 0;
-  for (uint64_t idx = 0; idx < addr.size(); ++idx) {
+  for (uint64_t idx = start; idx < addr.size() && idx < end; ++idx) {
     if (addr.at(idx) == ':') {
       ++colon_count;
       if (colon_count == 2) {
@@ -96,7 +111,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
       int segment_count = 1;
       bool reached_colon = false;
       bool reached_value = false;
-      for (uint64_t idx = 0; idx < addr.size(); ++idx) {
+      for (uint64_t idx = start; idx < addr.size() && idx < end; ++idx) {
         if (addr.at(idx) == ':') {
           if (!reached_colon && reached_value) {
             ++segment_count;
@@ -123,9 +138,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
     uint8_t byte = 0;
     uint_fast8_t segment_count = 0;
     bool checking_for_segment = true;
-    uint64_t idx = 0;
+    uint64_t idx = start;
     while (true) {
-      if (double_colon_idx == 0) {
+      if (double_colon_idx == start) {
         break;
       } else if (addr.at(idx) == ':') {
         if (checking_for_segment) {
@@ -285,7 +300,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
         checking_for_segment = true;
         ++idx;
         if (a_idx >= ipv6_addr.size() || idx >= addr.size() ||
-            idx >= double_colon_idx) {
+            idx >= double_colon_idx || idx >= end) {
           break;
         } else if (addr.at(idx) != ':') {
           throw std::invalid_argument("Failed to parse");
@@ -299,9 +314,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
     byte = 0;
     segment_count = 0;
     checking_for_segment = true;
-    idx = addr.size() - 1;
+    idx = addr.size() - 1 < end - 1 ? addr.size() - 1 : end - 1;
     while (true) {
-      if (double_colon_idx + 2 == addr.size()) {
+      if (double_colon_idx + 2 >= addr.size() || double_colon_idx + 2 >= end) {
         break;
       } else if (addr.at(idx) == ':') {
         if (checking_for_segment) {
@@ -461,7 +476,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
         checking_for_segment = true;
         --idx;
         if (a_idx >= ipv6_addr.size() || idx < double_colon_idx + 2 ||
-            idx >= addr.size()) {
+            idx >= addr.size() || (start > 0 && idx < start)) {
           break;
         } else if (addr.at(idx) != ':') {
           throw std::invalid_argument("Failed to parse");
@@ -473,7 +488,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
     // Validate number of segments.
     {
       int segment_count = 1;
-      for (uint64_t idx = 0; idx < addr.size(); ++idx) {
+      for (uint64_t idx = start; idx < addr.size() && idx < end; ++idx) {
         if (addr.at(idx) == ':') {
           ++segment_count;
         }
@@ -489,9 +504,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
     uint8_t byte = 0;
     uint_fast8_t segment_count = 0;
     bool checking_for_segment = true;
-    uint64_t idx = 0;
+    uint64_t idx = start;
     while (true) {
-      if (idx >= addr.size() || addr.at(idx) == ':') {
+      if (idx >= addr.size() || idx >= end || addr.at(idx) == ':') {
         if (checking_for_segment) {
           idx -= segment_count;
           checking_for_segment = false;
@@ -648,7 +663,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
         segment_count = 0;
         checking_for_segment = true;
         ++idx;
-        if (a_idx >= ipv6_addr.size() || idx >= addr.size()) {
+        if (a_idx >= ipv6_addr.size() || idx >= addr.size() || idx >= end) {
           break;
         } else if (addr.at(idx) != ':') {
           throw std::invalid_argument("Failed to parse");
