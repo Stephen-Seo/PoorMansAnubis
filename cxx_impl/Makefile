@@ -38,6 +38,9 @@ FINAL_COMMON_FLAGS := -DNDEBUG -O2 ${COMMON_FLAGS} \
 FINAL_COMMON_CFLAGS := -DNDEBUG -O2 ${COMMON_CFLAGS} \
 	-fno-delete-null-pointer-checks -fno-strict-overflow -fno-strict-aliasing \
 	-ftrivial-auto-var-init=zero
+else ifdef NOOPT
+FINAL_COMMON_FLAGS := -O0 -g $(filter-out -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3,${COMMON_FLAGS}) -Werror
+FINAL_COMMON_CFLAGS := -O0 -g $(filter-out -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3,${COMMON_CFLAGS}) -Werror
 else
 FINAL_COMMON_FLAGS := -Og -g ${COMMON_FLAGS} -Werror
 FINAL_COMMON_CFLAGS := -Og -g ${COMMON_CFLAGS} -Werror
