@@ -292,8 +292,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
             ipv6_addr.at(a_idx++) = byte;
             break;
           default:
-            throw std::invalid_argument(
-                std::format("Failed to parse, count is {}", segment_count));
+            throw std::invalid_argument(std::format(
+                "Failed to parse, count should be in range 1-4, is {}",
+                segment_count));
         }
 
         segment_count = 0;
@@ -468,8 +469,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
             ipv6_addr.at(a_idx--) = byte;
             break;
           default:
-            throw std::invalid_argument(
-                std::format("Failed to parse, count is {}", segment_count));
+            throw std::invalid_argument(std::format(
+                "Failed to parse, count should be in range 1-4, is {}",
+                segment_count));
         }
 
         segment_count = 0;
@@ -656,8 +658,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
             ipv6_addr.at(a_idx++) = byte;
             break;
           default:
-            throw std::invalid_argument(
-                std::format("Failed to parse, count is {}", segment_count));
+            throw std::invalid_argument(std::format(
+                "Failed to parse, count should be in range 1-4, is {}",
+                segment_count));
         }
 
         segment_count = 0;
@@ -832,7 +835,13 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket_server(
     try {
       ipv6_addr = str_to_ipv6_addr(addr);
     } catch (const std::exception &e) {
-      return {ErrorT::FAILED_TO_PARSE_IPV6, "Failed to parse ipv6 address", -1};
+      if (typeid(e) == typeid(std::out_of_range)) {
+        return {ErrorT::FAILED_TO_PARSE_IPV6,
+                "Failed to parse ipv6 address: indexing out-of-bounds", -1};
+      } else {
+        return {ErrorT::FAILED_TO_PARSE_IPV6,
+                std::format("Failed to parse ipv6 address: {}", e.what()), -1};
+      }
     }
 
     struct sockaddr_in6 sain6;
@@ -881,7 +890,13 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket_server(
     try {
       sain.sin_addr.s_addr = str_to_ipv4_addr(addr);
     } catch (const std::exception &e) {
-      return {ErrorT::FAILED_TO_PARSE_IPV4, "Failed to parse ipv4 address", -1};
+      if (typeid(e) == typeid(std::out_of_range)) {
+        return {ErrorT::FAILED_TO_PARSE_IPV4,
+                "Failed to parse ipv4 address: indexing out-of-bounds", -1};
+      } else {
+        return {ErrorT::FAILED_TO_PARSE_IPV4,
+                std::format("Failed to parse ipv4 address: {}", e.what()), -1};
+      }
     }
 
     int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain),

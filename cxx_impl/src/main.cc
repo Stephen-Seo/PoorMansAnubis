@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
   for (const PMA_ARGS::AddrPort &a : args.addr_ports) {
     std::optional<int> socket_fd_opt;
     bool is_ipv4;
-    const auto [err, msg, socket_fd] =
+    const auto [err, msg_v6, socket_fd] =
         PMA_HTTP::get_ipv6_socket_server(std::get<0>(a), std::get<1>(a));
     if (err == PMA_HTTP::ErrorT::SUCCESS) {
       socket_fd_opt = socket_fd;
@@ -167,8 +167,8 @@ int main(int argc, char **argv) {
       } else {
         PMA_EPrintln(
             "ERROR: Failed to get listening socket for addr \"{}\" on port "
-            "\"{}\"!",
-            std::get<0>(a), std::get<1>(a));
+            "\"{}\" (ipv6: {}, ipv4: {})!",
+            std::get<0>(a), std::get<1>(a), msg_v6, msg);
         return 1;
       }
     }
