@@ -86,6 +86,15 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
     throw std::invalid_argument("Expected \"[\" at beginning of ipv6!");
   }
 
+  // Validate expected characters
+  for (size_t idx = start; idx < addr.size() && idx < end; ++idx) {
+    if (!(addr.at(idx) == ':' || (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') ||
+          (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') ||
+          (addr.at(idx) >= '0' && addr.at(idx) <= '9'))) {
+      throw std::invalid_argument("Unexpected character in ipv6 string!");
+    }
+  }
+
   bool has_double_colon = false;
 
   // first check for double_colon
