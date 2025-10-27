@@ -88,7 +88,7 @@ int main() {
 
   // test str_to_ipv6_addr
   {
-    std::array<uint8_t, 16> ipv6 =
+    const auto [ipv6, scope] =
         PMA_HTTP::str_to_ipv6_addr("1234:123:12:1::abcd");
     CHECK_TRUE(ipv6.at(0) == 0x12);
     CHECK_TRUE(ipv6.at(1) == 0x34);
@@ -106,8 +106,11 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0);
     CHECK_TRUE(ipv6.at(14) == 0xab);
     CHECK_TRUE(ipv6.at(15) == 0xcd);
-
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("5678:9:12:123::fedc:ba:c");
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] =
+        PMA_HTTP::str_to_ipv6_addr("5678:9:12:123::fedc:ba:c");
     CHECK_TRUE(ipv6.at(0) == 0x56);
     CHECK_TRUE(ipv6.at(1) == 0x78);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -124,8 +127,10 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0xba);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 0xc);
-
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("::1467:235:89:a");
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("::1467:235:89:a");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 0);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -142,8 +147,11 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0x89);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 0xa);
-
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("12:3:456:abc:defa::");
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] =
+        PMA_HTTP::str_to_ipv6_addr("12:3:456:abc:defa::");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 0x12);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -160,8 +168,10 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 0);
-
-    ipv6 =
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] =
         PMA_HTTP::str_to_ipv6_addr("1234:5678:9abc:def0:1234:5678:9abc:def0");
     CHECK_TRUE(ipv6.at(0) == 0x12);
     CHECK_TRUE(ipv6.at(1) == 0x34);
@@ -179,8 +189,11 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0xbc);
     CHECK_TRUE(ipv6.at(14) == 0xde);
     CHECK_TRUE(ipv6.at(15) == 0xf0);
-
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("1:12:345:6789:abc:de:f:2");
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] =
+        PMA_HTTP::str_to_ipv6_addr("1:12:345:6789:abc:de:f:2");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 1);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -197,8 +210,11 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0xf);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 2);
-
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("0:1234:0:3a5:9:0:45:1");
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] =
+        PMA_HTTP::str_to_ipv6_addr("0:1234:0:3a5:9:0:45:1");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 0);
     CHECK_TRUE(ipv6.at(2) == 0x12);
@@ -215,8 +231,10 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0x45);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 1);
-
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("::");
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("::");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 0);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -233,8 +251,10 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 0);
-
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("::1");
+    CHECK_TRUE(scope == 0);
+  }
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("::1");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 0);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -251,22 +271,25 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 1);
+    CHECK_TRUE(scope == 0);
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr(":::");
-      CHECK_TRUE(!"Should have failed to parse \":::\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr(":::");
+    CHECK_TRUE(!"Should have failed to parse \":::\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:23:::456");
-      CHECK_TRUE(!"Should have failed to parse \"1:23:::456\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:23:::456");
+    CHECK_TRUE(!"Should have failed to parse \"1:23:::456\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 1);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -283,29 +306,32 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 7);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 8);
+    CHECK_TRUE(scope == 0);
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8:9");
-      CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7:8:9\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8:9");
+    CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7:8:9\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1::2::3:4");
-      CHECK_TRUE(!"Should have failed to parse \"1::2::3:4\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1::2::3:4");
+    CHECK_TRUE(!"Should have failed to parse \"1::2::3:4\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:::23::2:1:5");
-      CHECK_TRUE(!"Should have failed to parse \"1:::23::2:1:5\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:::23::2:1:5");
+    CHECK_TRUE(!"Should have failed to parse \"1:::23::2:1:5\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("1::3:4:5:6:7:8");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("1::3:4:5:6:7:8");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 1);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -322,30 +348,33 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 7);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 8);
+    CHECK_TRUE(scope == 0);
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1::2:3:4:5:6:7:8");
-      CHECK_TRUE(!"Should have failed to parse \"1::2:3:4:5:6:7:8\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1::2:3:4:5:6:7:8");
+    CHECK_TRUE(!"Should have failed to parse \"1::2:3:4:5:6:7:8\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1::2:3:4:5:6:7:8:9");
-      CHECK_TRUE(!"Should have failed to parse \"1::2:3:4:5:6:7:8:9\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1::2:3:4:5:6:7:8:9");
+    CHECK_TRUE(!"Should have failed to parse \"1::2:3:4:5:6:7:8:9\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1::2:3:4:5:6:7:8:9:10");
-      CHECK_TRUE(
-          !"Should have failed to parse \"1::2:3:4:5:6:7:8:9:10\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1::2:3:4:5:6:7:8:9:10");
+    CHECK_TRUE(
+        !"Should have failed to parse \"1::2:3:4:5:6:7:8:9:10\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5::6");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5::6");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 1);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -362,8 +391,11 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 6);
+    CHECK_TRUE(scope == 0);
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6::7");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6::7");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 1);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -380,30 +412,33 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 7);
+    CHECK_TRUE(scope == 0);
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7::8");
-      CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7::8\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7::8");
+    CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7::8\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8::9");
-      CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7:8::9\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8::9");
+    CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7:8::9\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8:9::10");
-      CHECK_TRUE(
-          !"Should have failed to parse \"1:2:3:4:5:6:7:8:9::10\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8:9::10");
+    CHECK_TRUE(
+        !"Should have failed to parse \"1:2:3:4:5:6:7:8:9::10\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 0);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -420,8 +455,11 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 5);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 6);
+    CHECK_TRUE(scope == 0);
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6:7");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6:7");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 0);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -438,23 +476,25 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 6);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 7);
+    CHECK_TRUE(scope == 0);
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6:7:8");
-      CHECK_TRUE(!"Should have failed to parse \"::1:2:3:4:5:6:7:8\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6:7:8");
+    CHECK_TRUE(!"Should have failed to parse \"::1:2:3:4:5:6:7:8\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6:7:8:9");
-      CHECK_TRUE(
-          !"Should have failed to parse \"::1:2:3:4:5:6:7:8:9\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
+  try {
+    PMA_HTTP::str_to_ipv6_addr("::1:2:3:4:5:6:7:8:9");
+    CHECK_TRUE(!"Should have failed to parse \"::1:2:3:4:5:6:7:8:9\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6::");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6::");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 1);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -471,8 +511,11 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 0);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 0);
+    CHECK_TRUE(scope == 0);
+  }
 
-    ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7::");
+  {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7::");
     CHECK_TRUE(ipv6.at(0) == 0);
     CHECK_TRUE(ipv6.at(1) == 1);
     CHECK_TRUE(ipv6.at(2) == 0);
@@ -489,207 +532,279 @@ int main() {
     CHECK_TRUE(ipv6.at(13) == 7);
     CHECK_TRUE(ipv6.at(14) == 0);
     CHECK_TRUE(ipv6.at(15) == 0);
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8::");
-      CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7:8::\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8:9::");
-      CHECK_TRUE(
-          !"Should have failed to parse \"1:2:3:4:5:6:7:8:9::\" as ipv6");
-    } catch (const std::exception &e) {
-      CHECK_TRUE("Successfully caught expected exception");
-    }
-
-    // With square brackets
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[::1]");
-      CHECK_TRUE(ipv6.at(0) == 0);
-      CHECK_TRUE(ipv6.at(1) == 0);
-      CHECK_TRUE(ipv6.at(2) == 0);
-      CHECK_TRUE(ipv6.at(3) == 0);
-      CHECK_TRUE(ipv6.at(4) == 0);
-      CHECK_TRUE(ipv6.at(5) == 0);
-      CHECK_TRUE(ipv6.at(6) == 0);
-      CHECK_TRUE(ipv6.at(7) == 0);
-      CHECK_TRUE(ipv6.at(8) == 0);
-      CHECK_TRUE(ipv6.at(9) == 0);
-      CHECK_TRUE(ipv6.at(10) == 0);
-      CHECK_TRUE(ipv6.at(11) == 0);
-      CHECK_TRUE(ipv6.at(12) == 0);
-      CHECK_TRUE(ipv6.at(13) == 0);
-      CHECK_TRUE(ipv6.at(14) == 0);
-      CHECK_TRUE(ipv6.at(15) == 1);
-    } catch (const std::exception &e) {
-      CHECK_TRUE(!"Parsing [::1] should have been valid!");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[1234::5678]");
-      CHECK_TRUE(ipv6.at(0) == 0x12);
-      CHECK_TRUE(ipv6.at(1) == 0x34);
-      CHECK_TRUE(ipv6.at(2) == 0);
-      CHECK_TRUE(ipv6.at(3) == 0);
-      CHECK_TRUE(ipv6.at(4) == 0);
-      CHECK_TRUE(ipv6.at(5) == 0);
-      CHECK_TRUE(ipv6.at(6) == 0);
-      CHECK_TRUE(ipv6.at(7) == 0);
-      CHECK_TRUE(ipv6.at(8) == 0);
-      CHECK_TRUE(ipv6.at(9) == 0);
-      CHECK_TRUE(ipv6.at(10) == 0);
-      CHECK_TRUE(ipv6.at(11) == 0);
-      CHECK_TRUE(ipv6.at(12) == 0);
-      CHECK_TRUE(ipv6.at(13) == 0);
-      CHECK_TRUE(ipv6.at(14) == 0x56);
-      CHECK_TRUE(ipv6.at(15) == 0x78);
-    } catch (const std::exception &e) {
-      CHECK_TRUE(!"Parsing [1234::5678] should have been valid!");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[::1");
-      CHECK_TRUE(!"Should have failed to parse \"[::1\"");
-    } catch (const std::exception &e) {
-      // Intentionally left blank.
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("::1]");
-      CHECK_TRUE(!"Should have failed to parse \"::1]\"");
-    } catch (const std::exception &e) {
-      // Intentionally left blank.
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr(
-          "[1234:5678:abcd:ef90:1234:5678:abcd:ef90]");
-      CHECK_TRUE(ipv6.at(0) == 0x12);
-      CHECK_TRUE(ipv6.at(1) == 0x34);
-      CHECK_TRUE(ipv6.at(2) == 0x56);
-      CHECK_TRUE(ipv6.at(3) == 0x78);
-      CHECK_TRUE(ipv6.at(4) == 0xab);
-      CHECK_TRUE(ipv6.at(5) == 0xcd);
-      CHECK_TRUE(ipv6.at(6) == 0xef);
-      CHECK_TRUE(ipv6.at(7) == 0x90);
-      CHECK_TRUE(ipv6.at(8) == 0x12);
-      CHECK_TRUE(ipv6.at(9) == 0x34);
-      CHECK_TRUE(ipv6.at(10) == 0x56);
-      CHECK_TRUE(ipv6.at(11) == 0x78);
-      CHECK_TRUE(ipv6.at(12) == 0xab);
-      CHECK_TRUE(ipv6.at(13) == 0xcd);
-      CHECK_TRUE(ipv6.at(14) == 0xef);
-      CHECK_TRUE(ipv6.at(15) == 0x90);
-    } catch (const std::exception &e) {
-      CHECK_TRUE(!"Parsing [1234:5678:abcd:ef90:1234:5678:abcd:ef90] should have been valid!");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[1234::1234:5678:abcd:ef90]");
-      CHECK_TRUE(ipv6.at(0) == 0x12);
-      CHECK_TRUE(ipv6.at(1) == 0x34);
-      CHECK_TRUE(ipv6.at(2) == 0);
-      CHECK_TRUE(ipv6.at(3) == 0);
-      CHECK_TRUE(ipv6.at(4) == 0);
-      CHECK_TRUE(ipv6.at(5) == 0);
-      CHECK_TRUE(ipv6.at(6) == 0);
-      CHECK_TRUE(ipv6.at(7) == 0);
-      CHECK_TRUE(ipv6.at(8) == 0x12);
-      CHECK_TRUE(ipv6.at(9) == 0x34);
-      CHECK_TRUE(ipv6.at(10) == 0x56);
-      CHECK_TRUE(ipv6.at(11) == 0x78);
-      CHECK_TRUE(ipv6.at(12) == 0xab);
-      CHECK_TRUE(ipv6.at(13) == 0xcd);
-      CHECK_TRUE(ipv6.at(14) == 0xef);
-      CHECK_TRUE(ipv6.at(15) == 0x90);
-    } catch (const std::exception &e) {
-      CHECK_TRUE(
-          !"Parsing [1234::1234:5678:abcd:ef90] should have been valid!");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[1234:5678::ef90]");
-      CHECK_TRUE(ipv6.at(0) == 0x12);
-      CHECK_TRUE(ipv6.at(1) == 0x34);
-      CHECK_TRUE(ipv6.at(2) == 0x56);
-      CHECK_TRUE(ipv6.at(3) == 0x78);
-      CHECK_TRUE(ipv6.at(4) == 0);
-      CHECK_TRUE(ipv6.at(5) == 0);
-      CHECK_TRUE(ipv6.at(6) == 0);
-      CHECK_TRUE(ipv6.at(7) == 0);
-      CHECK_TRUE(ipv6.at(8) == 0);
-      CHECK_TRUE(ipv6.at(9) == 0);
-      CHECK_TRUE(ipv6.at(10) == 0);
-      CHECK_TRUE(ipv6.at(11) == 0);
-      CHECK_TRUE(ipv6.at(12) == 0);
-      CHECK_TRUE(ipv6.at(13) == 0);
-      CHECK_TRUE(ipv6.at(14) == 0xef);
-      CHECK_TRUE(ipv6.at(15) == 0x90);
-    } catch (const std::exception &e) {
-      CHECK_TRUE(!"Parsing [1234:5678::ef90] should have been valid!");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[::1:22:333]");
-      CHECK_TRUE(ipv6.at(0) == 0);
-      CHECK_TRUE(ipv6.at(1) == 0);
-      CHECK_TRUE(ipv6.at(2) == 0);
-      CHECK_TRUE(ipv6.at(3) == 0);
-      CHECK_TRUE(ipv6.at(4) == 0);
-      CHECK_TRUE(ipv6.at(5) == 0);
-      CHECK_TRUE(ipv6.at(6) == 0);
-      CHECK_TRUE(ipv6.at(7) == 0);
-      CHECK_TRUE(ipv6.at(8) == 0);
-      CHECK_TRUE(ipv6.at(9) == 0);
-      CHECK_TRUE(ipv6.at(10) == 0);
-      CHECK_TRUE(ipv6.at(11) == 1);
-      CHECK_TRUE(ipv6.at(12) == 0);
-      CHECK_TRUE(ipv6.at(13) == 0x22);
-      CHECK_TRUE(ipv6.at(14) == 0x3);
-      CHECK_TRUE(ipv6.at(15) == 0x33);
-    } catch (const std::exception &e) {
-      CHECK_TRUE(!"Parsing [::1:22:333] should have been valid!");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[111:22:3::]");
-      CHECK_TRUE(ipv6.at(0) == 1);
-      CHECK_TRUE(ipv6.at(1) == 0x11);
-      CHECK_TRUE(ipv6.at(2) == 0);
-      CHECK_TRUE(ipv6.at(3) == 0x22);
-      CHECK_TRUE(ipv6.at(4) == 0);
-      CHECK_TRUE(ipv6.at(5) == 3);
-      CHECK_TRUE(ipv6.at(6) == 0);
-      CHECK_TRUE(ipv6.at(7) == 0);
-      CHECK_TRUE(ipv6.at(8) == 0);
-      CHECK_TRUE(ipv6.at(9) == 0);
-      CHECK_TRUE(ipv6.at(10) == 0);
-      CHECK_TRUE(ipv6.at(11) == 0);
-      CHECK_TRUE(ipv6.at(12) == 0);
-      CHECK_TRUE(ipv6.at(13) == 0);
-      CHECK_TRUE(ipv6.at(14) == 0);
-      CHECK_TRUE(ipv6.at(15) == 0);
-    } catch (const std::exception &e) {
-      CHECK_TRUE(!"Parsing [111:22:3::] should have been valid!");
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[1234::abcd]]");
-      CHECK_TRUE(!"Should have failed to parse [1234::abcd]]");
-    } catch (const std::exception &e) {
-      // Intentionally left blank.
-    }
-
-    try {
-      ipv6 = PMA_HTTP::str_to_ipv6_addr("[[1234::abcd]");
-      CHECK_TRUE(!"Should have failed to parse [[1234::abcd]");
-    } catch (const std::exception &e) {
-      // Intentionally left blank.
-    }
+    CHECK_TRUE(scope == 0);
   }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8::");
+    CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7:8::\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("1:2:3:4:5:6:7:8:9::");
+    CHECK_TRUE(!"Should have failed to parse \"1:2:3:4:5:6:7:8:9::\" as ipv6");
+  } catch (const std::exception &e) {
+    CHECK_TRUE("Successfully caught expected exception");
+  }
+
+  // With square brackets
+  try {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("[::1]");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 0);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 1);
+    CHECK_TRUE(scope == 0);
+  } catch (const std::exception &e) {
+    CHECK_TRUE(!"Parsing [::1] should have been valid!");
+  }
+
+  try {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("[1234::5678]");
+    CHECK_TRUE(ipv6.at(0) == 0x12);
+    CHECK_TRUE(ipv6.at(1) == 0x34);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0x56);
+    CHECK_TRUE(ipv6.at(15) == 0x78);
+    CHECK_TRUE(scope == 0);
+  } catch (const std::exception &e) {
+    CHECK_TRUE(!"Parsing [1234::5678] should have been valid!");
+  }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("[::1");
+    CHECK_TRUE(!"Should have failed to parse \"[::1\"");
+  } catch (const std::exception &e) {
+    // Intentionally left blank.
+  }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("::1]");
+    CHECK_TRUE(!"Should have failed to parse \"::1]\"");
+  } catch (const std::exception &e) {
+    // Intentionally left blank.
+  }
+
+  try {
+    const auto [ipv6, scope] =
+        PMA_HTTP::str_to_ipv6_addr("[1234:5678:abcd:ef90:1234:5678:abcd:ef90]");
+    CHECK_TRUE(ipv6.at(0) == 0x12);
+    CHECK_TRUE(ipv6.at(1) == 0x34);
+    CHECK_TRUE(ipv6.at(2) == 0x56);
+    CHECK_TRUE(ipv6.at(3) == 0x78);
+    CHECK_TRUE(ipv6.at(4) == 0xab);
+    CHECK_TRUE(ipv6.at(5) == 0xcd);
+    CHECK_TRUE(ipv6.at(6) == 0xef);
+    CHECK_TRUE(ipv6.at(7) == 0x90);
+    CHECK_TRUE(ipv6.at(8) == 0x12);
+    CHECK_TRUE(ipv6.at(9) == 0x34);
+    CHECK_TRUE(ipv6.at(10) == 0x56);
+    CHECK_TRUE(ipv6.at(11) == 0x78);
+    CHECK_TRUE(ipv6.at(12) == 0xab);
+    CHECK_TRUE(ipv6.at(13) == 0xcd);
+    CHECK_TRUE(ipv6.at(14) == 0xef);
+    CHECK_TRUE(ipv6.at(15) == 0x90);
+    CHECK_TRUE(scope == 0);
+  } catch (const std::exception &e) {
+    CHECK_TRUE(!"Parsing [1234:5678:abcd:ef90:1234:5678:abcd:ef90] should have been valid!");
+  }
+
+  try {
+    const auto [ipv6, scope] =
+        PMA_HTTP::str_to_ipv6_addr("[1234::1234:5678:abcd:ef90]");
+    CHECK_TRUE(ipv6.at(0) == 0x12);
+    CHECK_TRUE(ipv6.at(1) == 0x34);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0x12);
+    CHECK_TRUE(ipv6.at(9) == 0x34);
+    CHECK_TRUE(ipv6.at(10) == 0x56);
+    CHECK_TRUE(ipv6.at(11) == 0x78);
+    CHECK_TRUE(ipv6.at(12) == 0xab);
+    CHECK_TRUE(ipv6.at(13) == 0xcd);
+    CHECK_TRUE(ipv6.at(14) == 0xef);
+    CHECK_TRUE(ipv6.at(15) == 0x90);
+    CHECK_TRUE(scope == 0);
+  } catch (const std::exception &e) {
+    CHECK_TRUE(!"Parsing [1234::1234:5678:abcd:ef90] should have been valid!");
+  }
+
+  try {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("[1234:5678::ef90]");
+    CHECK_TRUE(ipv6.at(0) == 0x12);
+    CHECK_TRUE(ipv6.at(1) == 0x34);
+    CHECK_TRUE(ipv6.at(2) == 0x56);
+    CHECK_TRUE(ipv6.at(3) == 0x78);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0xef);
+    CHECK_TRUE(ipv6.at(15) == 0x90);
+    CHECK_TRUE(scope == 0);
+  } catch (const std::exception &e) {
+    CHECK_TRUE(!"Parsing [1234:5678::ef90] should have been valid!");
+  }
+
+  try {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("[::1:22:333]");
+    CHECK_TRUE(ipv6.at(0) == 0);
+    CHECK_TRUE(ipv6.at(1) == 0);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 0);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 1);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0x22);
+    CHECK_TRUE(ipv6.at(14) == 0x3);
+    CHECK_TRUE(ipv6.at(15) == 0x33);
+    CHECK_TRUE(scope == 0);
+  } catch (const std::exception &e) {
+    CHECK_TRUE(!"Parsing [::1:22:333] should have been valid!");
+  }
+
+  try {
+    const auto [ipv6, scope] = PMA_HTTP::str_to_ipv6_addr("[111:22:3::]");
+    CHECK_TRUE(ipv6.at(0) == 1);
+    CHECK_TRUE(ipv6.at(1) == 0x11);
+    CHECK_TRUE(ipv6.at(2) == 0);
+    CHECK_TRUE(ipv6.at(3) == 0x22);
+    CHECK_TRUE(ipv6.at(4) == 0);
+    CHECK_TRUE(ipv6.at(5) == 3);
+    CHECK_TRUE(ipv6.at(6) == 0);
+    CHECK_TRUE(ipv6.at(7) == 0);
+    CHECK_TRUE(ipv6.at(8) == 0);
+    CHECK_TRUE(ipv6.at(9) == 0);
+    CHECK_TRUE(ipv6.at(10) == 0);
+    CHECK_TRUE(ipv6.at(11) == 0);
+    CHECK_TRUE(ipv6.at(12) == 0);
+    CHECK_TRUE(ipv6.at(13) == 0);
+    CHECK_TRUE(ipv6.at(14) == 0);
+    CHECK_TRUE(ipv6.at(15) == 0);
+    CHECK_TRUE(scope == 0);
+  } catch (const std::exception &e) {
+    CHECK_TRUE(!"Parsing [111:22:3::] should have been valid!");
+  }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("[1234::abcd]]");
+    CHECK_TRUE(!"Should have failed to parse [1234::abcd]]");
+  } catch (const std::exception &e) {
+    // Intentionally left blank.
+  }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("[[1234::abcd]");
+    CHECK_TRUE(!"Should have failed to parse [[1234::abcd]");
+  } catch (const std::exception &e) {
+    // Intentionally left blank.
+  }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("[1234:abcd]");
+    CHECK_TRUE(!"Should have failed to parse [1234:abcd]");
+  } catch (const std::exception &e) {
+    // Intentionally left blank.
+  }
+
+  try {
+    PMA_HTTP::str_to_ipv6_addr("[1234.abcd]");
+    CHECK_TRUE(!"Should have failed to parse [1234.abcd]");
+  } catch (const std::exception &e) {
+    // Intentionally left blank.
+  }
+
+  //// THIS TEST CANNOT WORK ON ALL DEVICES, HANDLE WITH CARE
+  // try {
+  //   const auto [ipv6, scope] =
+  //       PMA_HTTP::str_to_ipv6_addr("[fe80::1ac0:4dff:fea5:c5e1]%enp7s0");
+  //   CHECK_TRUE(ipv6.at(0) == 0xfe);
+  //   CHECK_TRUE(ipv6.at(1) == 0x80);
+  //   CHECK_TRUE(ipv6.at(2) == 0x0);
+  //   CHECK_TRUE(ipv6.at(3) == 0x0);
+  //   CHECK_TRUE(ipv6.at(4) == 0x0);
+  //   CHECK_TRUE(ipv6.at(5) == 0x0);
+  //   CHECK_TRUE(ipv6.at(6) == 0x0);
+  //   CHECK_TRUE(ipv6.at(7) == 0x0);
+  //   CHECK_TRUE(ipv6.at(8) == 0x1a);
+  //   CHECK_TRUE(ipv6.at(9) == 0xc0);
+  //   CHECK_TRUE(ipv6.at(10) == 0x4d);
+  //   CHECK_TRUE(ipv6.at(11) == 0xff);
+  //   CHECK_TRUE(ipv6.at(12) == 0xfe);
+  //   CHECK_TRUE(ipv6.at(13) == 0xa5);
+  //   CHECK_TRUE(ipv6.at(14) == 0xc5);
+  //   CHECK_TRUE(ipv6.at(15) == 0xe1);
+  //   CHECK_TRUE(scope == 2);
+  // } catch (const std::exception &e) {
+  //   CHECK_TRUE(!"Shouldn't have failed to parse
+  //   \"[fe80::1ac0:4dff:fea5:c5e1]%enp7s0\"!");
+  // }
+  //// THIS TEST CANNOT WORK ON ALL DEVICES, HANDLE WITH CARE
+  // try {
+  //   const auto [ipv6, scope] =
+  //       PMA_HTTP::str_to_ipv6_addr("fe80::1ac0:4dff:fea5:c5e1%enp7s0");
+  //   CHECK_TRUE(ipv6.at(0) == 0xfe);
+  //   CHECK_TRUE(ipv6.at(1) == 0x80);
+  //   CHECK_TRUE(ipv6.at(2) == 0x0);
+  //   CHECK_TRUE(ipv6.at(3) == 0x0);
+  //   CHECK_TRUE(ipv6.at(4) == 0x0);
+  //   CHECK_TRUE(ipv6.at(5) == 0x0);
+  //   CHECK_TRUE(ipv6.at(6) == 0x0);
+  //   CHECK_TRUE(ipv6.at(7) == 0x0);
+  //   CHECK_TRUE(ipv6.at(8) == 0x1a);
+  //   CHECK_TRUE(ipv6.at(9) == 0xc0);
+  //   CHECK_TRUE(ipv6.at(10) == 0x4d);
+  //   CHECK_TRUE(ipv6.at(11) == 0xff);
+  //   CHECK_TRUE(ipv6.at(12) == 0xfe);
+  //   CHECK_TRUE(ipv6.at(13) == 0xa5);
+  //   CHECK_TRUE(ipv6.at(14) == 0xc5);
+  //   CHECK_TRUE(ipv6.at(15) == 0xe1);
+  //   CHECK_TRUE(scope == 2);
+  // } catch (const std::exception &e) {
+  //   CHECK_TRUE(!"Shouldn't have failed to parse
+  //   \"fe80::1ac0:4dff:fea5:c5e1%enp7s0\"!");
+  // }
 
   // test ipv6_addr_to_str
   {
@@ -748,7 +863,6 @@ int main() {
     std::default_random_engine re{0};
     std::uniform_int_distribution int_dist(0, 0xFF);
 
-    std::array<uint8_t, 16> ipv6_result;
     for (int idx = 0; idx < 10000; ++idx) {
       for (int ipv6_idx = 0; ipv6_idx < static_cast<int>(ipv6.size());
            ++ipv6_idx) {
@@ -763,8 +877,9 @@ int main() {
         std::memset(ipv6.data() + idx, 0, zero_size);
       }
       res = PMA_HTTP::ipv6_addr_to_str(ipv6);
-      ipv6_result = PMA_HTTP::str_to_ipv6_addr(res);
+      const auto [ipv6_result, scope] = PMA_HTTP::str_to_ipv6_addr(res);
       CHECK_TRUE(ipv6_result == ipv6);
+      CHECK_TRUE(scope == 0);
       if (ipv6_result != ipv6) {
         PMA_Println("Started with {}, ended with {}",
                     PMA_HELPER::array_to_str<uint8_t, 16>(ipv6),

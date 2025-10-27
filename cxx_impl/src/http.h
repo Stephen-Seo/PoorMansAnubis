@@ -42,8 +42,8 @@ enum class ErrorT {
 std::string error_t_to_str(ErrorT err_enum);
 
 /// May throw an exception when given an invalid string.
-std::array<uint8_t, 16> str_to_ipv6_addr(const std::string &addr) noexcept(
-    false);
+std::tuple<std::array<uint8_t, 16>, uint32_t> str_to_ipv6_addr(
+    const std::string &addr) noexcept(false);
 std::string ipv6_addr_to_str(const std::array<uint8_t, 16> &ipv6) noexcept;
 
 /// May throw an exception when given an invalid string.

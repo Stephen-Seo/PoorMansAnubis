@@ -18,6 +18,7 @@
 
 // Unix includes
 #include <errno.h>
+#include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <poll.h>
@@ -60,30 +61,59 @@ std::string PMA_HTTP::error_t_to_str(PMA_HTTP::ErrorT err_enum) {
   }
 }
 
-std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
+std::tuple<std::array<uint8_t, 16>, uint32_t> PMA_HTTP::str_to_ipv6_addr(
     const std::string &addr) noexcept(false) {
   std::array<uint8_t, 16> ipv6_addr;
   // Memset to zero first.
   std::memset(ipv6_addr.data(), 0, 16);
 
+  uint32_t scope = 0;
+
+  // Check for scope
+  size_t scope_start = 0;
+  for (size_t idx = addr.size(); idx-- > 0;) {
+    if (addr.at(idx) == '%') {
+      scope_start = idx;
+      break;
+    }
+  }
+
+  // Get scope id
+  if (scope_start != 0 && scope_start + 1 < addr.size()) {
+    scope = if_nametoindex(addr.c_str() + scope_start + 1);
+    if (scope == 0 && errno != 0) {
+      throw std::invalid_argument(
+          std::format("Failed to get scope id (errno {})!", errno));
+    }
+  }
+
   // Check for [::] case
   if (addr == "::" || addr == "[::]") {
-    return ipv6_addr;
+    return {ipv6_addr, scope};
   }
 
   // Get indices
   size_t start = 0;
-  size_t end = addr.size();
+  size_t end = scope_start != 0 ? scope_start : addr.size();
 
   if (addr.at(0) == '[') {
-    if (addr.at(addr.size() - 1) == ']') {
+    if (addr.at(end - 1) == ']') {
       ++start;
       --end;
     } else {
       throw std::invalid_argument("Expected \"]\" at end of ipv6!");
     }
-  } else if (addr.at(addr.size() - 1) == ']') {
+  } else if (addr.at(end - 1) == ']') {
     throw std::invalid_argument("Expected \"[\" at beginning of ipv6!");
+  }
+
+  // Validate expected characters
+  for (size_t idx = start; idx < addr.size() && idx < end; ++idx) {
+    if (!(addr.at(idx) == ':' || (addr.at(idx) >= 'a' && addr.at(idx) <= 'f') ||
+          (addr.at(idx) >= 'A' && addr.at(idx) <= 'F') ||
+          (addr.at(idx) >= '0' && addr.at(idx) <= '9'))) {
+      throw std::invalid_argument("Unexpected character in ipv6 string!");
+    }
   }
 
   bool has_double_colon = false;
@@ -292,8 +322,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
             ipv6_addr.at(a_idx++) = byte;
             break;
           default:
-            throw std::invalid_argument(
-                std::format("Failed to parse, count is {}", segment_count));
+            throw std::invalid_argument(std::format(
+                "Failed to parse, count should be in range 1-4, is {}",
+                segment_count));
         }
 
         segment_count = 0;
@@ -468,8 +499,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
             ipv6_addr.at(a_idx--) = byte;
             break;
           default:
-            throw std::invalid_argument(
-                std::format("Failed to parse, count is {}", segment_count));
+            throw std::invalid_argument(std::format(
+                "Failed to parse, count should be in range 1-4, is {}",
+                segment_count));
         }
 
         segment_count = 0;
@@ -493,7 +525,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
           ++segment_count;
         }
       }
-      if (segment_count > 8) {
+      if (segment_count != 8) {
         throw std::invalid_argument(
             "Invalid number of segments for full ipv6 addr");
       }
@@ -656,8 +688,9 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
             ipv6_addr.at(a_idx++) = byte;
             break;
           default:
-            throw std::invalid_argument(
-                std::format("Failed to parse, count is {}", segment_count));
+            throw std::invalid_argument(std::format(
+                "Failed to parse, count should be in range 1-4, is {}",
+                segment_count));
         }
 
         segment_count = 0;
@@ -673,7 +706,7 @@ std::array<uint8_t, 16> PMA_HTTP::str_to_ipv6_addr(
     }
   }
 
-  return ipv6_addr;
+  return {ipv6_addr, scope};
 }
 
 std::string PMA_HTTP::ipv6_addr_to_str(
@@ -829,10 +862,19 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket_server(
   // bind to "addr", with port
   {
     std::array<uint8_t, 16> ipv6_addr;
+    uint32_t scope_id = 0;
     try {
-      ipv6_addr = str_to_ipv6_addr(addr);
+      const auto [ipv6_addr_out, scope_out] = str_to_ipv6_addr(addr);
+      ipv6_addr = ipv6_addr_out;
+      scope_id = scope_out;
     } catch (const std::exception &e) {
-      return {ErrorT::FAILED_TO_PARSE_IPV6, "Failed to parse ipv6 address", -1};
+      if (typeid(e) == typeid(std::out_of_range)) {
+        return {ErrorT::FAILED_TO_PARSE_IPV6,
+                "Failed to parse ipv6 address: indexing out-of-bounds", -1};
+      } else {
+        return {ErrorT::FAILED_TO_PARSE_IPV6,
+                std::format("Failed to parse ipv6 address: {}", e.what()), -1};
+      }
     }
 
     struct sockaddr_in6 sain6;
@@ -840,7 +882,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket_server(
     sain6.sin6_port = PMA_HELPER::be_swap_u16(port);
     sain6.sin6_flowinfo = 0;
     std::memcpy(sain6.sin6_addr.s6_addr, ipv6_addr.data(), 16);
-    sain6.sin6_scope_id = 0;
+    sain6.sin6_scope_id = scope_id;
 
     int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain6),
                    sizeof(struct sockaddr_in6));
@@ -881,7 +923,13 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket_server(
     try {
       sain.sin_addr.s_addr = str_to_ipv4_addr(addr);
     } catch (const std::exception &e) {
-      return {ErrorT::FAILED_TO_PARSE_IPV4, "Failed to parse ipv4 address", -1};
+      if (typeid(e) == typeid(std::out_of_range)) {
+        return {ErrorT::FAILED_TO_PARSE_IPV4,
+                "Failed to parse ipv4 address: indexing out-of-bounds", -1};
+      } else {
+        return {ErrorT::FAILED_TO_PARSE_IPV4,
+                std::format("Failed to parse ipv4 address: {}", e.what()), -1};
+      }
     }
 
     int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain),
@@ -920,9 +968,9 @@ PMA_HTTP::connect_ipv6_socket_client(std::string server_addr,
   sain6.sin6_family = AF_INET6;
   sain6.sin6_port = 0;
   sain6.sin6_flowinfo = 0;
-  std::array<uint8_t, 16> ipv6_addr = str_to_ipv6_addr(client_addr);
-  std::memcpy(sain6.sin6_addr.s6_addr, ipv6_addr.data(), 16);
-  sain6.sin6_scope_id = 0;
+  const auto [cli_ipv6_addr, cli_scope] = str_to_ipv6_addr(client_addr);
+  std::memcpy(sain6.sin6_addr.s6_addr, cli_ipv6_addr.data(), 16);
+  sain6.sin6_scope_id = cli_scope;
 
   int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain6),
                  sizeof(struct sockaddr_in6));
@@ -933,8 +981,9 @@ PMA_HTTP::connect_ipv6_socket_client(std::string server_addr,
   }
 
   sain6.sin6_port = PMA_HELPER::be_swap_u16(port);
-  ipv6_addr = str_to_ipv6_addr(server_addr);
-  std::memcpy(sain6.sin6_addr.s6_addr, ipv6_addr.data(), 16);
+  const auto [serv_ipv6_addr, serv_scope] = str_to_ipv6_addr(server_addr);
+  std::memcpy(sain6.sin6_addr.s6_addr, serv_ipv6_addr.data(), 16);
+  sain6.sin6_scope_id = serv_scope;
 
   ret = connect(socket_fd, reinterpret_cast<sockaddr *>(&sain6),
                 sizeof(struct sockaddr_in6));
