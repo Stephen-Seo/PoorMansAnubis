@@ -9,13 +9,19 @@ salvo = { version = "0.84", features = ["affix-state"] }
 tokio = { version = "1", features = ["fs"] }
 futures = "0.3"
 reqwest = { version = "0.12", features = ["native-tls-vendored"] }
-mysql_async = "0.36"
+mysql_async = { version = "0.36", optional = true }
 time = { version = "0.3", features = ["parsing", "local-offset", "formatting", "macros"] }
 uuid = { version = "1.16", features = ["v4", "v5"] }
 serde = "1"
 serde_json = "1"
 blake3 = "1.8"
+rusqlite = { version = "0.37", features = ["bundled"], optional = true }
 
 [build-dependencies]
 bindgen = "0.72"
 cc = "1.2"
+
+[features]
+default = ["mysql"]
+mysql = ["dep:mysql_async"]
+sqlite = ["dep:rusqlite"]

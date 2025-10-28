@@ -25,6 +25,7 @@ mod sql_types;
 
 use std::{collections::HashMap, path::Path};
 
+#[cfg(feature = "mysql")]
 use mysql_async::{
     Pool, Row, params,
     prelude::{Query, WithParams},
@@ -57,35 +58,46 @@ async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> 
     Ok(map)
 }
 
-async fn get_db_pool(args: &args::Args) -> Result<Pool, Error> {
-    let config_map = parse_db_conf(&args.mysql_config_file)
-        .await
-        .expect("Parse config for mysql usage");
+#[cfg(feature = "mysql")]
+async fn get_mysql_db_pool(args: &args::Args) -> Result<Pool, Error> {
+    if args.mysql_has_priority {
+        let config_map = parse_db_conf(&args.mysql_config_file)
+            .await
+            .expect("Parse config for mysql usage");
 
-    let pool = mysql_async::Pool::from_url(format!(
-        "mysql://{}:{}@{}:{}/{}",
-        config_map
-            .get("user")
-            .ok_or("User not in mysql config".to_owned())?,
-        config_map
-            .get("password")
-            .ok_or("Password not in mysql config".to_owned())?,
-        config_map
-            .get("address")
-            .ok_or("Address not in mysql config".to_owned())?,
-        config_map
-            .get("port")
-            .ok_or("Port not in mysql config".to_owned())?,
-        config_map
-            .get("database")
-            .ok_or("Database not in mysql config".to_owned())?
-    ))?;
+        let pool = mysql_async::Pool::from_url(format!(
+            "mysql://{}:{}@{}:{}/{}",
+            config_map
+                .get("user")
+                .ok_or("User not in mysql config".to_owned())?,
+            config_map
+                .get("password")
+                .ok_or("Password not in mysql config".to_owned())?,
+            config_map
+                .get("address")
+                .ok_or("Address not in mysql config".to_owned())?,
+            config_map
+                .get("port")
+                .ok_or("Port not in mysql config".to_owned())?,
+            config_map
+                .get("database")
+                .ok_or("Database not in mysql config".to_owned())?
+        ))?;
 
-    Ok(pool)
+        Ok(pool)
+    } else {
+        Err(String::from("Prioritizing sqlite over MySQL").into())
+    }
 }
 
-async fn init_db(args: &args::Args) -> Result<(), Error> {
-    let pool = get_db_pool(args).await?;
+#[cfg(not(feature = "mysql"))]
+async fn get_mysql_db_pool(args: &args::Args) -> Result<(), Error> {
+    Err(String::from("\"mysql\" feature not enabled").into())
+}
+
+#[cfg(feature = "mysql")]
+async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
+    let pool = get_mysql_db_pool(args).await?;
 
     let mut conn = pool.get_conn().await?;
 
@@ -137,6 +149,28 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
     drop(conn);
 
     pool.disconnect().await?;
+
+    Ok(())
+}
+
+#[cfg(feature = "sqlite")]
+async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
+    // TODO
+    todo!();
+    Ok(())
+}
+
+async fn init_db(args: &args::Args) -> Result<(), Error> {
+    #[cfg(all(feature = "mysql", feature = "sqlite"))]
+    if args.mysql_has_priority {
+        init_mysql_db(args).await?;
+    } else {
+        init_sqlite_db(args).await?;
+    }
+    #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+    init_mysql_db(args).await?;
+    #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
+    init_sqlite_db(args).await?;
 
     Ok(())
 }
@@ -224,77 +258,82 @@ async fn set_up_factors_challenge(depot: &Depot, port: u16) -> Result<(String, S
         constants::DEFAULT_FACTORS_DIGITS
     });
 
-    let seq: u32;
+    let hash: String;
 
-    let pool = get_db_pool(args).await?;
+    #[cfg(feature = "mysql")]
     {
-        let mut conn = pool.get_conn().await?;
+        let seq: u32;
 
-        r"LOCK TABLE RUST_SEQ_ID WRITE"
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
+        let pool = get_mysql_db_pool(args).await?;
+        {
+            let mut conn = pool.get_conn().await?;
 
-        let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM RUST_SEQ_ID"
-            .with(())
-            .first(&mut conn)
-            .await
-            .map_err(Error::from)?;
-
-        if let Some(seq_r) = seq_row {
-            let id: u32 = seq_r.get(0).expect("Row should have ID");
-            seq = seq_r.get(1).expect("Row should have SEQ_ID");
-            r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
-                .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
+            r"LOCK TABLE RUST_SEQ_ID WRITE"
                 .ignore(&mut conn)
                 .await
                 .map_err(Error::from)?;
-        } else {
-            seq = 1;
-            r"INSERT INTO RUST_SEQ_ID (SEQ_ID) VALUES (:seq_id)"
-                .with(params! {"seq_id" => (seq + 1)})
+
+            let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM RUST_SEQ_ID"
+                .with(())
+                .first(&mut conn)
+                .await
+                .map_err(Error::from)?;
+
+            if let Some(seq_r) = seq_row {
+                let id: u32 = seq_r.get(0).expect("Row should have ID");
+                seq = seq_r.get(1).expect("Row should have SEQ_ID");
+                r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+                    .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from)?;
+            } else {
+                seq = 1;
+                r"INSERT INTO RUST_SEQ_ID (SEQ_ID) VALUES (:seq_id)"
+                    .with(params! {"seq_id" => (seq + 1)})
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from)?;
+            }
+
+            r"UNLOCK TABLES"
                 .ignore(&mut conn)
                 .await
                 .map_err(Error::from)?;
         }
 
-        r"UNLOCK TABLES"
+        hash = Uuid::new_v5(
+            &Uuid::NAMESPACE_DNS,
+            format!("{}.pma.seodisparate.com", seq).as_bytes(),
+        )
+        .to_string();
+
+        let factors_hash = blake3::hash(factors.as_bytes()).to_string();
+
+        {
+            let mut conn = pool.get_conn().await?;
+
+            r"LOCK TABLE RUST_CHALLENGE_FACTORS_2 WRITE"
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+
+            r"INSERT INTO RUST_CHALLENGE_FACTORS_2 (UUID, PORT, FACTORS) VALUES (:uuid, :port, :factors)"
+            .with(params! {"uuid" => &hash, "port" => port, "factors" => factors_hash})
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
+
+            r"UNLOCK TABLES"
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+        }
+
+        pool.disconnect().await?;
     }
 
-    let uuid = Uuid::new_v5(
-        &Uuid::NAMESPACE_DNS,
-        format!("{}.pma.seodisparate.com", seq).as_bytes(),
-    )
-    .to_string();
-
-    let factors_hash = blake3::hash(factors.as_bytes()).to_string();
-
-    {
-        let mut conn = pool.get_conn().await?;
-
-        r"LOCK TABLE RUST_CHALLENGE_FACTORS_2 WRITE"
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
-
-        r"INSERT INTO RUST_CHALLENGE_FACTORS_2 (UUID, PORT, FACTORS) VALUES (:uuid, :port, :factors)"
-            .with(params! {"uuid" => &uuid, "port" => port, "factors" => factors_hash})
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
-
-        r"UNLOCK TABLES"
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
-    }
-
-    pool.disconnect().await?;
-
-    Ok((value, uuid))
+    Ok((value, hash))
 }
 
 fn get_local_port_from_req(req: &Request) -> Result<u16, Error> {
@@ -332,8 +371,9 @@ async fn factors_js_fn(
     ))?;
 
     let mut port: Option<u16> = None;
+    #[cfg(feature = "mysql")]
     {
-        let pool = get_db_pool(args).await?;
+        let pool = get_mysql_db_pool(args).await?;
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
         r"LOCK TABLE RUST_ID_TO_PORT_2 WRITE"
@@ -396,10 +436,11 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 
     helpers::validate_client_response(&factors_response.factors)?;
 
-    let pool = get_db_pool(args).await?;
-
     let correct: bool;
     let mut port_opt: Option<u16> = None;
+    #[cfg(feature = "mysql")]
+    let pool = get_mysql_db_pool(args).await?;
+    #[cfg(feature = "mysql")]
     {
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
@@ -446,7 +487,9 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     let port = port_opt.ok_or(Error::Generic("No port from challenge factors!".to_owned()))?;
 
     if correct {
+        #[cfg(feature = "mysql")]
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
+        #[cfg(feature = "mysql")]
         r"INSERT INTO RUST_ALLOWED_IPS (IP, PORT) VALUES (:ip, :port)"
             .with(params! { "ip" => &addr_string, "port" => port })
             .ignore(&mut conn)
@@ -454,6 +497,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             .map_err(Error::from)?;
     }
 
+    #[cfg(feature = "mysql")]
     pool.disconnect().await.map_err(Error::from)?;
 
     if correct {
@@ -489,8 +533,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     ))?;
 
     let is_allowed: bool;
+    #[cfg(feature = "mysql")]
     {
-        let pool = get_db_pool(args).await?;
+        let pool = get_mysql_db_pool(args).await?;
         let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
         let mut ip_entry: Option<AllowedIPs> = None;
@@ -587,53 +632,57 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
-        let pool = get_db_pool(args).await?;
-        let mut conn = pool.get_conn().await.map_err(Error::from)?;
+        let mut hash: String;
+        #[cfg(feature = "mysql")]
+        {
+            let pool = get_mysql_db_pool(args).await?;
+            let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-        r"LOCK TABLE RUST_ID_TO_PORT_2 WRITE"
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
+            r"LOCK TABLE RUST_ID_TO_PORT_2 WRITE"
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
 
-        r"DELETE FROM RUST_ID_TO_PORT_2 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
+            r"DELETE FROM RUST_ID_TO_PORT_2 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.challenge_timeout_mins})
             .ignore(&mut conn)
             .await
             .map_err(Error::from)?;
 
-        let mut uuid: String = Uuid::new_v4().to_string();
+            hash = Uuid::new_v4().to_string();
 
-        loop {
-            let row: Result<Option<Row>, _> =
-                r"SELECT UUID FROM RUST_ID_TO_PORT_2 WHERE UUID = :uuid"
-                    .with(params! {"uuid" => &uuid})
-                    .first(&mut conn)
-                    .await;
+            loop {
+                let row: Result<Option<Row>, _> =
+                    r"SELECT UUID FROM RUST_ID_TO_PORT_2 WHERE UUID = :uuid"
+                        .with(params! {"uuid" => &hash})
+                        .first(&mut conn)
+                        .await;
 
-            if let Ok(Some(r)) = &row
-                && let Some(id) = r.get::<String, usize>(0)
-                && id == uuid
-            {
-                uuid = Uuid::new_v4().to_string();
-                continue;
+                if let Ok(Some(r)) = &row
+                    && let Some(id) = r.get::<String, usize>(0)
+                    && id == hash
+                {
+                    hash = Uuid::new_v4().to_string();
+                    continue;
+                }
+                break;
             }
-            break;
+
+            r"INSERT INTO RUST_ID_TO_PORT_2 (UUID, PORT) VALUES (:uuid, :port)"
+                .with(params! {"uuid" => &hash, "port" => port})
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+
+            r"UNLOCK TABLES"
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
         }
-
-        r"INSERT INTO RUST_ID_TO_PORT_2 (UUID, PORT) VALUES (:uuid, :port)"
-            .with(params! {"uuid" => &uuid, "port" => port})
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
-
-        r"UNLOCK TABLES"
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
         let html = constants::HTML_BODY_FACTORS;
         let html = html.replacen(
             "{JS_FACTORS_URL}",
-            &format!("{}?id={}", args.js_factors_url, &uuid),
+            &format!("{}?id={}", args.js_factors_url, &hash),
             1,
         );
         res.body(html).status_code(StatusCode::OK);

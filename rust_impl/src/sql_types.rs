@@ -18,8 +18,13 @@ use crate::error::Error;
 
 use std::{net::IpAddr, str::FromStr};
 
+#[cfg(feature = "mysql")]
 use mysql_async::{Row, Value};
-use time::{Date, Month, OffsetDateTime, Time, UtcOffset};
+#[cfg(feature = "sqlite")]
+use rusqlite::Row as SqliteRow;
+use time::{
+    Date, Month, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset, macros::format_description,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AllowedIPs {
@@ -27,6 +32,7 @@ pub struct AllowedIPs {
     pub time: OffsetDateTime,
 }
 
+#[cfg(feature = "mysql")]
 impl TryFrom<Row> for AllowedIPs {
     type Error = crate::error::Error;
 
@@ -51,6 +57,34 @@ impl TryFrom<Row> for AllowedIPs {
         }
 
         let offset_time: OffsetDateTime = OffsetDateTime::new_in_offset(date, time, time_offset);
+
+        Ok(Self {
+            ip: ip_addr,
+            time: offset_time,
+        })
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl TryFrom<SqliteRow<'_>> for AllowedIPs {
+    type Error = crate::error::Error;
+
+    fn try_from(value: SqliteRow) -> Result<Self, Self::Error> {
+        let ip_string: String = value
+            .get(0)
+            .map_err(|_| "Failed to get ip string".to_owned())?;
+        let ip_addr: IpAddr = IpAddr::from_str(&ip_string)?;
+
+        let time_value: String = value
+            .get(1)
+            .map_err(|_| "Failed to get time string".to_owned())?;
+
+        let primitive_time: PrimitiveDateTime = PrimitiveDateTime::parse(
+            &time_value,
+            format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
+        )?;
+
+        let offset_time = primitive_time.assume_utc();
 
         Ok(Self {
             ip: ip_addr,
