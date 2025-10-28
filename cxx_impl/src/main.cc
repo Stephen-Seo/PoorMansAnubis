@@ -469,9 +469,10 @@ int main(int argc, char **argv) {
             }
           } else {
             PMA_SQL::cleanup_stale_entries(sqliteCtx, args.allowed_timeout);
-            const auto [err, msg, unordset] = PMA_SQL::get_allowed_ip_ports(
-                sqliteCtx, iter->second.client_addr);
-            if (unordset.find(iter->second.port) == unordset.end()) {
+
+            const auto [err, msg, is_allowed] = PMA_SQL::is_allowed_ip_port(
+                sqliteCtx, iter->second.client_addr, iter->second.port);
+            if (err != PMA_SQL::ErrorT::SUCCESS || !is_allowed) {
               PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
                                                  args.challenge_timeout);
               const auto [err, msg, id] =

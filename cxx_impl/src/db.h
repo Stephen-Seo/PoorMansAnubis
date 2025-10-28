@@ -157,6 +157,11 @@ std::tuple<ErrorT, std::string, uint16_t> verify_answer(SQLITECtx &ctx,
 
 std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
 get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
+
+// May return false even if ErrorT is SUCCESS.
+std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
+                                                         std::string ipaddr,
+                                                         uint16_t port);
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////
