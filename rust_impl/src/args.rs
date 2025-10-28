@@ -51,7 +51,7 @@ pub fn print_args() {
     println!("  example: \"--port-to-dest-url=9001:https://example.com\"");
     println!("  NOTICE: Specify --port-to-dest-url=... multiple times to add more mappings");
     println!("  --mysql-conf=<config_file> : Set path to config file for mysql settings");
-    println!("  --sqlite-db-path=<filename> : Set sqlite db filename path");
+    println!("  --sqlite-path=<filename> : Set sqlite db filename path");
     println!(
         "  --enable-x-real-ip-header : Enable trusting \"x-real-ip\" header as client ip addr"
     );
@@ -92,10 +92,11 @@ pub fn parse_args() -> Result<Args, Error> {
         challenge_timeout_mins: crate::constants::CHALLENGE_FACTORS_TIMEOUT_MINUTES,
         allowed_timeout_mins: crate::constants::ALLOWED_IP_TIMEOUT_MINUTES,
         enable_override_dest_url: false,
+        #[cfg(feature = "mysql")]
         mysql_has_priority: true,
+        #[cfg(not(feature = "mysql"))]
+        mysql_has_priority: false,
     };
-
-    let mut set_mysql_conf = false;
 
     let p_args = args_fn();
 
@@ -133,17 +134,29 @@ pub fn parse_args() -> Result<Args, Error> {
                 .to_owned();
             args.port_to_dest_urls.insert(port, url);
         } else if arg.starts_with("--mysql-conf=") {
+            #[cfg(not(feature = "mysql"))]
+            {
+                return Err(String::from(
+                    r#"mysql feature is not enabled, cannot use "--mysql-conf=""#,
+                )
+                .into());
+            }
+            #[allow(unreachable_code)]
             let end = arg.split_off(13);
             args.mysql_config_file = end.into();
-            if !set_mysql_conf {
-                set_mysql_conf = true;
+            args.mysql_has_priority = true;
+        } else if arg.starts_with("--sqlite-path=") {
+            #[cfg(not(feature = "sqlite"))]
+            {
+                return Err(String::from(
+                    r#"sqlite feature is not enabled, cannot use "--sqlite-db-path=""#,
+                )
+                .into());
             }
-        } else if arg.starts_with("--sqlite-db-path=") {
-            let end = arg.split_off(17);
+            #[allow(unreachable_code)]
+            let end = arg.split_off(14);
             args.sqlite_db_file = end.into();
-            if !set_mysql_conf {
-                args.mysql_has_priority = false;
-            }
+            args.mysql_has_priority = false;
         } else if arg == "--enable-x-real-ip-header" {
             args.enable_x_real_ip_header = true;
         } else if arg.starts_with("--api-url=") {

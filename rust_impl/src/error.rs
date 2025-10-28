@@ -21,6 +21,8 @@ pub enum Error {
     Generic(String),
     #[cfg(feature = "mysql")]
     MySQL(mysql_async::Error),
+    #[cfg(feature = "sqlite")]
+    Sqlite(rusqlite::Error),
     IO(std::io::Error),
     Reqwest(reqwest::Error),
     Time(time::Error),
@@ -31,6 +33,7 @@ pub enum Error {
     ToStrE(reqwest::header::ToStrError),
     ReqParse(salvo::http::ParseError),
     IntParse(std::num::ParseIntError),
+    GetRand(getrandom::Error),
 }
 
 impl error::Error for Error {
@@ -39,6 +42,8 @@ impl error::Error for Error {
             Error::Generic(_) => None,
             #[cfg(feature = "mysql")]
             Error::MySQL(error) => error.source(),
+            #[cfg(feature = "sqlite")]
+            Error::Sqlite(error) => error.source(),
             Error::IO(error) => error.source(),
             Error::Reqwest(error) => error.source(),
             Error::Time(error) => error.source(),
@@ -49,6 +54,7 @@ impl error::Error for Error {
             Error::ToStrE(error) => error.source(),
             Error::ReqParse(error) => error.source(),
             Error::IntParse(error) => error.source(),
+            Error::GetRand(error) => error.source(),
         }
     }
 }
@@ -59,6 +65,8 @@ impl Display for Error {
             Error::Generic(s) => f.write_str(s),
             #[cfg(feature = "mysql")]
             Error::MySQL(error) => error.fmt(f),
+            #[cfg(feature = "sqlite")]
+            Error::Sqlite(error) => error.fmt(f),
             Error::IO(error) => error.fmt(f),
             Error::Reqwest(error) => error.fmt(f),
             Error::Time(error) => error.fmt(f),
@@ -69,6 +77,7 @@ impl Display for Error {
             Error::ToStrE(error) => error.fmt(f),
             Error::ReqParse(error) => error.fmt(f),
             Error::IntParse(error) => error.fmt(f),
+            Error::GetRand(error) => error.fmt(f),
         }
     }
 }
@@ -89,6 +98,13 @@ impl From<&str> for Error {
 impl From<mysql_async::Error> for Error {
     fn from(value: mysql_async::Error) -> Self {
         Error::MySQL(value)
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl From<rusqlite::Error> for Error {
+    fn from(value: rusqlite::Error) -> Self {
+        Error::Sqlite(value)
     }
 }
 
@@ -149,6 +165,12 @@ impl From<salvo::http::ParseError> for Error {
 impl From<std::num::ParseIntError> for Error {
     fn from(value: std::num::ParseIntError) -> Self {
         Error::IntParse(value)
+    }
+}
+
+impl From<getrandom::Error> for Error {
+    fn from(value: getrandom::Error) -> Self {
+        Error::GetRand(value)
     }
 }
 
