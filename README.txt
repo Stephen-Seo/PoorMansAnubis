@@ -79,7 +79,7 @@ Args:
   example: "--port-to-dest-url=9001:https://example.com"
   NOTICE: Specify --port-to-dest-url=... multiple times to add more mappings
   --mysql-conf=<config_file> : Set path to config file for mysql settings
-  --sqlite-db-path=<filename> : Set sqlite db filename path
+  --sqlite-path=<filename> : Set sqlite db filename path
   --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
   --api-url=<url> : Set endpoint for client to POST to this software;
     example: "--api-url=/pma_api"
