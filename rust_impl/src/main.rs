@@ -736,7 +736,7 @@ async fn validate_client_sqlite(
 
     let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
-    conn.execute(&format!(r#"DELETE FROM CHALLENGE_FACTOR WHERE timediff(datetime(), ON_TIME) > '+0000-00-00 00:{:02}:00'"#, args.challenge_timeout_mins), ())?;
+    conn.execute(&format!(r#"DELETE FROM CHALLENGE_FACTOR WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.challenge_timeout_mins), ())?;
 
     let res = conn.query_one(
         r"SELECT IP, PORT FROM CHALLENGE_FACTOR WHERE ID = ?1 AND FACTORS = ?2",
@@ -864,7 +864,13 @@ async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Res
 async fn check_is_allowed_sqlite(args: &args::Args, addr: &str, port: u16) -> Result<bool, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(&format!(r#"DELETE FROM ALLOWED_IP WHERE timediff(datetime(), ON_TIME) > '+0000-00-00 00:{:02}:00'"#, args.allowed_timeout_mins), ())?;
+    conn.execute(
+        &format!(
+            r#"DELETE FROM ALLOWED_IP WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#,
+            args.allowed_timeout_mins
+        ),
+        (),
+    )?;
 
     let mut stmt = conn.prepare(r"SELECT PORT FROM ALLOWED_IP WHERE IP = ?1 AND PORT = ?2")?;
     let rows = stmt.query_map((addr, port), |r| r.get::<usize, u16>(0));
@@ -935,7 +941,13 @@ async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, 
 
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(&format!(r#"DELETE FROM ID_TO_PORT WHERE timediff(datetime(), ON_TIME) > '+0000-00-00 00:{:02}:00'"#, args.challenge_timeout_mins), ())?;
+    conn.execute(
+        &format!(
+            r#"DELETE FROM ID_TO_PORT WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#,
+            args.challenge_timeout_mins
+        ),
+        (),
+    )?;
 
     let mut hasher = blake3::Hasher::new();
     let mut buf = [0u8; GETRANDOM_BUF_SIZE];
