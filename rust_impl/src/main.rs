@@ -115,10 +115,14 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
         .ignore(&mut conn)
         .await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_3 (
+    r"DROP TABLE IF EXISTS RUST_CHALLENGE_FACTORS_3"
+        .ignore(&mut conn)
+        .await?;
+
+    r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_4 (
         ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
-        FACTORS CHAR(128) CHARACTER SET ascii NOT NULL,
+        FACTORS CHAR(64) CHARACTER SET ascii NOT NULL,
         PORT INT UNSIGNED NOT NULL,
         GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
@@ -381,7 +385,7 @@ async fn has_challenge_factor_id_mysql(args: &args::Args, hash: &str) -> Result<
     let pool = get_mysql_db_pool(args).await?;
     let mut conn = pool.get_conn().await?;
 
-    let with_id: Vec<String> = r"SELECT ID FROM RUST_CHALLENGE_FACTORS_3 WHERE ID = ?"
+    let with_id: Vec<String> = r"SELECT ID FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?"
         .with((hash,))
         .map(&mut conn, |(id,)| id)
         .await?;
@@ -412,12 +416,12 @@ async fn set_challenge_factor_mysql(
     let pool = get_mysql_db_pool(args).await?;
     let mut conn = pool.get_conn().await?;
 
-    r"LOCK TABLE RUST_CHALLENGE_FACTORS_3 WRITE"
+    r"LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE"
         .ignore(&mut conn)
         .await
         .map_err(Error::from)?;
 
-    r"INSERT INTO RUST_CHALLENGE_FACTORS_3 (ID, IP, PORT, FACTORS) VALUES (:id, :ip, :port, :factors)"
+    r"INSERT INTO RUST_CHALLENGE_FACTORS_4 (ID, IP, PORT, FACTORS) VALUES (:id, :ip, :port, :factors)"
         .with(params! {"id" => hash, "ip" => ip, "port" => port, "factors" => factors_hash})
         .ignore(&mut conn)
         .await
@@ -667,12 +671,12 @@ async fn validate_client_mysql(
     let pool = get_mysql_db_pool(args).await?;
     let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
-    r"LOCK TABLE RUST_CHALLENGE_FACTORS_3 WRITE"
+    r"LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE"
         .ignore(&mut conn)
         .await
         .map_err(Error::from)?;
 
-    r"DELETE FROM RUST_CHALLENGE_FACTORS_3 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
+    r"DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.challenge_timeout_mins})
             .ignore(&mut conn)
             .await
@@ -681,7 +685,7 @@ async fn validate_client_mysql(
     let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
     let addr_port_row: Option<Row> =
-        r"SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_3 WHERE ID = :id AND FACTORS = :factors"
+        r"SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = :id AND FACTORS = :factors"
             .with(params! {"id" => &factors_response.id, "factors" => hashed_factors})
             .first(&mut conn)
             .await
@@ -696,7 +700,7 @@ async fn validate_client_mysql(
                 "No Port from ChallengeFactors",
             )))?;
             correct = true;
-            r"DELETE FROM RUST_CHALLENGE_FACTORS_3 WHERE ID = :id"
+            r"DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = :id"
                 .with(params! {"id" => &factors_response.id})
                 .ignore(&mut conn)
                 .await
