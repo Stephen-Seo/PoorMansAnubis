@@ -303,8 +303,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM ID_TO_PORT WHERE timediff(datetime(), ON_TIME) > "
-      "'+0000-00-00 00:{:02}:00.000'",
+      "DELETE FROM ID_TO_PORT WHERE datetime(ON_TIME, '{} minutes') < "
+      "datetime('now')",
       challenge_timeout);
 
   {
@@ -326,8 +326,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM CHALLENGE_FACTOR WHERE timediff(datetime(), ON_TIME) > "
-      "'+0000-00-00 00:{:02}:00.000'",
+      "DELETE FROM CHALLENGE_FACTOR WHERE datetime(ON_TIME, '{} minutes') < "
+      "datetime('now')",
       challenge_timeout);
 
   {
@@ -349,8 +349,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM ALLOWED_IP WHERE timediff(datetime(), ON_TIME) > "
-      "'+0000-00-00 00:{:02}:00.000'",
+      "DELETE FROM ALLOWED_IP WHERE datetime(ON_TIME, '{} minutes') < "
+      "datetime('now')",
       allowed_timeout);
 
   {
@@ -604,4 +604,31 @@ PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr) {
   }
 
   return {ErrorT::SUCCESS, {}, ret};
+}
+
+std::tuple<PMA_SQL::ErrorT, std::string, bool> PMA_SQL::is_allowed_ip_port(
+    SQLITECtx &ctx, std::string ipaddr, uint16_t port) {
+  auto lock = ctx.get_mutex_lock_guard();
+
+  const auto [err_enum, err_msg, opt_vec] =
+      SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string, int>(
+          ctx, "SELECT PORT FROM ALLOWED_IP WHERE IP = ? AND PORT = ?",
+          std::nullopt, ipaddr, port);
+
+  if (err_enum != ErrorT::SUCCESS) {
+    return {err_enum, err_msg, {}};
+  } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
+    return {ErrorT::FAILED_TO_FETCH_FROM_ALLOWED_IPS,
+            "opt_vec is nullopt or empty",
+            {}};
+  }
+
+  for (size_t idx = 0; idx < opt_vec.value().size(); ++idx) {
+    if (auto opt_val = std::get<0>(opt_vec.value().at(idx).row);
+        opt_val.has_value() && opt_val.value() == port) {
+      return {ErrorT::SUCCESS, {}, true};
+    }
+  }
+
+  return {ErrorT::SUCCESS, {}, false};
 }

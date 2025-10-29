@@ -21,8 +21,9 @@ the "rust_impl". It is more lightweight and there are some differences:
 - cxx_impl uses `libcurl` while rust_impl uses `reqwest`
 - cxx_impl uses Unix-style ipv4/ipv6 socket handling while rust_impl uses
   `salvo`
-- cxx_impl uses `sqlite` while rust_impl uses `mariadb` (or `mysql`)
-- cxx_impl uses `blake3` primarly for hashing while rust_impl uses `uuid`s
+- cxx_impl uses `sqlite` while rust_impl uses `mariadb` (or `mysql`) by default
+    (it is possible to use `sqlite` with the rust_impl)
+- cxx_impl uses `blake3` primarly for hashing and the rust_impl also does so
 
 
 ================================================================================
@@ -38,9 +39,20 @@ SimpleArchiver.
 
 The C++ impl uses sqlite, so a path given in the paramaters is only required.
 
-The Rust impl requires a MySQL server with a database and a user with password
-with access to said database. (It is recommended to use MariaDB in place of
-MySQL.)
+The Rust impl by default requires a MySQL server with a database and user with
+password with access to said database. If using MySQL, then it is recommended to
+use MariaDB.
+
+Sqlite usage is also possible with the Rust impl, by compiling with the
+following options:
+
+Enable only sqlite:
+cargo build --no-default-features --features sqlite
+
+or
+
+Enable both mysql and sqlite:
+cargo build --all-features
 
 Check "rust_impl/src/args.rs" for flags you can pass to the Rust impl. Also
 check "rust_impl/mysql.conf" for how the config file should be set up for MySQL
@@ -67,6 +79,7 @@ Args:
   example: "--port-to-dest-url=9001:https://example.com"
   NOTICE: Specify --port-to-dest-url=... multiple times to add more mappings
   --mysql-conf=<config_file> : Set path to config file for mysql settings
+  --sqlite-path=<filename> : Set sqlite db filename path
   --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
   --api-url=<url> : Set endpoint for client to POST to this software;
     example: "--api-url=/pma_api"
@@ -82,6 +95,11 @@ Args:
     direct PoorMansAnubis to load any website!
     If you are going to use this anyway, you must ensure that a proper firewall is configured!
   --important-warning-has-been-read : Use this option to enable potentially dangerous options
+
+thread 'main' panicked at src/main.rs:1082:46:
+called `Result::unwrap()` on an `Err` value: Generic("Printed help text")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
 
 Args for the C++ implementation are as follows:
 

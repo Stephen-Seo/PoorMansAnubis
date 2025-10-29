@@ -44,8 +44,8 @@
 #include "poor_mans_print.h"
 
 constexpr unsigned int SLEEP_MILLISECONDS = 2;
-// 5 seconds
-constexpr unsigned int TIMEOUT_ITER_TICKS = 5000 / SLEEP_MILLISECONDS;
+// 7 seconds
+constexpr unsigned int TIMEOUT_ITER_TICKS = 7000 / SLEEP_MILLISECONDS;
 
 volatile int interrupt_received = 0;
 
@@ -346,6 +346,7 @@ int main(int argc, char **argv) {
           }
         } else {
           iter->second.remaining_buffer = std::nullopt;
+          iter->second.ticks = 0;
         }
         continue;
       }
@@ -363,6 +364,7 @@ int main(int argc, char **argv) {
         }
       }
       if (read_ret > 0) {
+        iter->second.ticks = 0;
         buf.at(static_cast<size_t>(read_ret)) = 0;
         PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(
             std::string(buf.data(), static_cast<size_t>(read_ret)));
@@ -469,9 +471,10 @@ int main(int argc, char **argv) {
             }
           } else {
             PMA_SQL::cleanup_stale_entries(sqliteCtx, args.allowed_timeout);
-            const auto [err, msg, unordset] = PMA_SQL::get_allowed_ip_ports(
-                sqliteCtx, iter->second.client_addr);
-            if (unordset.find(iter->second.port) == unordset.end()) {
+
+            const auto [err, msg, is_allowed] = PMA_SQL::is_allowed_ip_port(
+                sqliteCtx, iter->second.client_addr, iter->second.port);
+            if (err != PMA_SQL::ErrorT::SUCCESS || !is_allowed) {
               PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
                                                  args.challenge_timeout);
               const auto [err, msg, id] =
@@ -563,6 +566,21 @@ int main(int argc, char **argv) {
                       "curl url</p></html>";
                   goto PMA_RESPONSE_SEND_LOCATION;
                 }
+              }
+
+              // Set curl follow redirects
+              pma_curl_ret = curl_easy_setopt(
+                  curl_handle, CURLOPT_FOLLOWLOCATION, CURLFOLLOW_ALL);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set curl follow redirects (client {}, "
+                    "port {})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "curl follow redirects</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
               }
 
               // Set curl http headers
