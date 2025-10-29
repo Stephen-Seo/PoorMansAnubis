@@ -335,7 +335,7 @@ async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
         .map_err(Error::from)?;
 
     if let Some(seq_r) = seq_row {
-        let id: u32 = seq_r.get(0).expect("Row should have ID");
+        let id: u64 = seq_r.get(0).expect("Row should have ID");
         seq = seq_r.get(1).expect("Row should have SEQ_ID");
         r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
             .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
