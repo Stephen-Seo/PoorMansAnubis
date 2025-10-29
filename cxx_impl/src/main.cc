@@ -568,6 +568,21 @@ int main(int argc, char **argv) {
                 }
               }
 
+              // Set curl follow redirects
+              pma_curl_ret = curl_easy_setopt(
+                  curl_handle, CURLOPT_FOLLOWLOCATION, CURLFOLLOW_ALL);
+              if (pma_curl_ret != CURLE_OK) {
+                PMA_EPrintln(
+                    "ERROR: Failed to set curl follow redirects (client {}, "
+                    "port {})!",
+                    iter->second.client_addr, iter->second.port);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to set "
+                    "curl follow redirects</p></html>";
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+
               // Set curl http headers
               struct curl_slist *headers_list = nullptr;
               GenericCleanup<struct curl_slist **> headers_cleanup(
