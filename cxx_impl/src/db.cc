@@ -303,8 +303,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM ID_TO_PORT WHERE timediff(datetime(), ON_TIME) > "
-      "'+0000-00-00 00:{:02}:00.000'",
+      "DELETE FROM ID_TO_PORT WHERE datetime(ON_TIME, '{} minutes') < "
+      "datetime('now')",
       challenge_timeout);
 
   {
@@ -326,8 +326,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM CHALLENGE_FACTOR WHERE timediff(datetime(), ON_TIME) > "
-      "'+0000-00-00 00:{:02}:00.000'",
+      "DELETE FROM CHALLENGE_FACTOR WHERE datetime(ON_TIME, '{} minutes') < "
+      "datetime('now')",
       challenge_timeout);
 
   {
@@ -349,8 +349,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
   }
 
   std::string stmt = std::format(
-      "DELETE FROM ALLOWED_IP WHERE timediff(datetime(), ON_TIME) > "
-      "'+0000-00-00 00:{:02}:00.000'",
+      "DELETE FROM ALLOWED_IP WHERE datetime(ON_TIME, '{} minutes') < "
+      "datetime('now')",
       allowed_timeout);
 
   {
