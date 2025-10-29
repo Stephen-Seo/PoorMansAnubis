@@ -28,7 +28,7 @@
 constexpr uint32_t DEFAULT_FACTORS_DIGITS = 5000;
 constexpr uint32_t DEFAULT_JSON_MAX_SIZE = 10000;
 constexpr uint32_t ALLOWED_IP_TIMEOUT_MINUTES = 60;
-constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 3;
+constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 2;
 
 namespace PMA_ARGS {
 

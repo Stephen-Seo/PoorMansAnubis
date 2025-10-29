@@ -44,8 +44,8 @@
 #include "poor_mans_print.h"
 
 constexpr unsigned int SLEEP_MILLISECONDS = 2;
-// 5 seconds
-constexpr unsigned int TIMEOUT_ITER_TICKS = 5000 / SLEEP_MILLISECONDS;
+// 7 seconds
+constexpr unsigned int TIMEOUT_ITER_TICKS = 7000 / SLEEP_MILLISECONDS;
 
 volatile int interrupt_received = 0;
 
