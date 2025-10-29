@@ -346,6 +346,7 @@ int main(int argc, char **argv) {
           }
         } else {
           iter->second.remaining_buffer = std::nullopt;
+          iter->second.ticks = 0;
         }
         continue;
       }
@@ -363,6 +364,7 @@ int main(int argc, char **argv) {
         }
       }
       if (read_ret > 0) {
+        iter->second.ticks = 0;
         buf.at(static_cast<size_t>(read_ret)) = 0;
         PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(
             std::string(buf.data(), static_cast<size_t>(read_ret)));
