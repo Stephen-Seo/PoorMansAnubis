@@ -167,8 +167,9 @@ PMA_SQL::SQLITECtx::SQLITECtx(std::string sqlite_path) : mutex(), ctx(nullptr) {
   sqlite3 *db = nullptr;
   int ret = sqlite3_open(sqlite_path.c_str(), &db);
 
-  if (db && !ret) {
+  if (db && ret == SQLITE_OK) {
     ctx = reinterpret_cast<void *>(db);
+    sqlite3_busy_timeout(db, 5000);
   }
 }
 
