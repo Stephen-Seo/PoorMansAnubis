@@ -108,6 +108,7 @@ int main(int argc, char **argv) {
 
   PMA_HELPER::set_signal_handler(SIGINT, handle_signal);
   PMA_HELPER::set_signal_handler(SIGHUP, handle_signal);
+  PMA_HELPER::set_signal_handler(SIGTERM, handle_signal);
 
   std::unordered_set<int> connections;
   struct sockaddr_in addr_v4;
