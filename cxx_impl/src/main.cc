@@ -201,9 +201,9 @@ int main(int argc, char **argv) {
         }
       });
 
-  signal(SIGINT, receive_signal);
-  signal(SIGHUP, receive_signal);
-  signal(SIGTERM, receive_signal);
+  PMA_HELPER::set_signal_handler(SIGINT, receive_signal);
+  PMA_HELPER::set_signal_handler(SIGHUP, receive_signal);
+  PMA_HELPER::set_signal_handler(SIGTERM, receive_signal);
 
   struct sockaddr_in sain4;
   std::memset(&sain4, 0, sizeof(struct sockaddr_in));

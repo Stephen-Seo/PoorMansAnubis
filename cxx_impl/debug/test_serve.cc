@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 
 #include "../src/poor_mans_print.h"
+#include "../src/helpers.h"
 
 static bool do_run = true;
 
@@ -105,8 +106,8 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  signal(SIGINT, handle_signal);
-  signal(SIGHUP, handle_signal);
+  PMA_HELPER::set_signal_handler(SIGINT, handle_signal);
+  PMA_HELPER::set_signal_handler(SIGHUP, handle_signal);
 
   std::unordered_set<int> connections;
   struct sockaddr_in addr_v4;

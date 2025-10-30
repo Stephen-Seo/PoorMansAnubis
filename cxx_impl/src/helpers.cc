@@ -19,6 +19,9 @@
 // Standard library includes
 #include <cstdio>
 
+// Posix includes
+#include <signal.h>
+
 uint16_t PMA_HELPER::endian_swap_u16(uint16_t u16) {
   uint8_t *u16_ptr = reinterpret_cast<uint8_t *>(&u16);
   uint16_t result;
@@ -104,4 +107,14 @@ void PMA_HELPER::str_replace_all(std::string &body, std::string target,
       body.replace(idx, target.size(), result);
     }
   } while (idx != std::string::npos);
+}
+
+int PMA_HELPER::set_signal_handler(int signal, void (*handler)(int)) {
+  struct sigaction sa;
+
+  sa.sa_handler = handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+
+  return sigaction(signal, &sa, nullptr);
 }

@@ -75,6 +75,8 @@ std::string ascii_str_to_lower(std::string);
 
 void str_replace_all(std::string &body, std::string target, std::string result);
 
+int set_signal_handler(int signal, void (*handler)(int));
+
 }  // namespace PMA_HELPER
 
 ////////////////////////////////////////////////////////////////////////////////
