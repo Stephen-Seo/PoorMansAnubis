@@ -11,7 +11,7 @@ PWD != pwd
 all: ../cxx_backend_impl
 
 ../cxx_backend_impl: out/lib/libsqlite3.a out/lib/libblake3.a out/lib/libcurl.a
-	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -lbrotlidec -lbrotlicommon -lz" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" ${MAKE} -C ..
+	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -lbrotlidec -lbrotlicommon -lz" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
 
 out/lib/libsqlite3.a out/include/sqlite3.h: download_cache/sqlite-autoconf-3510000.tar.gz
 	@mkdir -p sqlite_build
@@ -40,18 +40,18 @@ download_cache/blake3_1.8.2.tar.gz:
 	cd download_cache && curl -L -o blake3_1.8.2.tar.gz https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.2.tar.gz
 	sha256sum -c SHA256SUM_blake3_1.8.2.tar.gz.txt || (rm -f download_cache/blake3_1.8.2.tar.gz && false)
 
-out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.16.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a
+out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.17.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a
 	@mkdir -p curl_build
-	tar -xf download_cache/curl-8.16.0.tar.xz -C curl_build
-	cd curl_build/curl-8.16.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --without-ssl --disable-ldap --disable-ldaps --disable-manual --without-libpsl --enable-threaded-resolver --enable-websockets --disable-versioned-symbols --enable-ipv6 --enable-static --disable-shared --with-nghttp2="${PWD}/out" --with-idn2="${PWD}/out" --with-zstd="${PWD}/out" --with-brotli="${PWD}/out" --with-zlib="${PWD}/out" && ${MAKE} -C lib
-	install -D -m444 curl_build/curl-8.16.0/lib/.libs/libcurl.a out/lib/libcurl.a
-	find curl_build/curl-8.16.0/include/curl -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/curl/{}" ';'
+	tar -xf download_cache/curl-8.17.0.tar.xz -C curl_build
+	cd curl_build/curl-8.17.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --without-ssl --disable-ldap --disable-ldaps --disable-manual --without-libpsl --enable-threaded-resolver --enable-websockets --disable-versioned-symbols --enable-ipv6 --enable-static --disable-shared --with-nghttp2="${PWD}/out" --with-idn2="${PWD}/out" --with-zstd="${PWD}/out" --with-brotli="${PWD}/out" --with-zlib="${PWD}/out" && ${MAKE} -C lib
+	install -D -m444 curl_build/curl-8.17.0/lib/.libs/libcurl.a out/lib/libcurl.a
+	find curl_build/curl-8.17.0/include/curl -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/curl/{}" ';'
 	rm -rf curl_build
 
-download_cache/curl-8.16.0.tar.xz:
+download_cache/curl-8.17.0.tar.xz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://curl.se/download/curl-8.16.0.tar.xz
-	sha256sum -c SHA256SUM_curl-8.16.0.txt || (rm -f download_cache/curl-8.16.0.tar.xz && false)
+	cd download_cache && curl -OL https://github.com/curl/curl/releases/download/curl-8_17_0/curl-8.17.0.tar.xz
+	sha256sum -c SHA256SUM_curl-8.17.0.txt || (rm -f download_cache/curl-8.17.0.tar.xz && false)
 
 out/lib/libnghttp2.a: download_cache/nghttp2-1.68.0.tar.xz
 	@mkdir -p nghttp2_build
