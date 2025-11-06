@@ -1,0 +1,11 @@
+/download_cache/
+/out/
+/sqlite_build/
+/blake3_build/
+/curl_build/
+/libunistring_build/
+/nghttp2_build/
+/zstd_build/
+/idn2_build/
+/brotli_build/
+/zlib_build/

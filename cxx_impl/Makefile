@@ -1,7 +1,7 @@
 CWD != pwd
 
-LINKER_FLAGS := -lsqlite3 -lblake3 -lcurl
-COMMON_FLAGS := -std=c++20 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
+LINKER_FLAGS := ${PMA_PRE_LINKER_FLAGS} -lsqlite3 -lblake3 -lcurl ${PMA_POST_LINKER_FLAGS}
+COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
@@ -14,7 +14,7 @@ COMMON_FLAGS := -std=c++20 -I../c_impl/src -I../c_impl/third_party/SimpleArchive
 	-Wtrampolines -fzero-init-padding-bits=all \
 	-Wbidi-chars=any \
 	-fPIE -pie
-COMMON_CFLAGS := -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
+COMMON_CFLAGS := ${PMA_PRE_COMMON_CFLAGS} -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
