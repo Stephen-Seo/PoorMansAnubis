@@ -12,7 +12,7 @@ PWD != pwd
 all: ../cxx_backend_impl
 
 ../cxx_backend_impl: out/lib/libsqlite3.a out/lib/libblake3.a out/lib/libcurl.a
-	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
+	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
 
 out/lib/libsqlite3.a out/include/sqlite3.h: download_cache/sqlite-autoconf-3510000.tar.gz
 	@mkdir -p sqlite_build
@@ -30,6 +30,7 @@ download_cache/sqlite-autoconf-3510000.tar.gz:
 out/lib/libblake3.a out/include/blake3.h: download_cache/blake3_1.8.2.tar.gz
 	@mkdir -p blake3_build
 	tar -xf download_cache/blake3_1.8.2.tar.gz -C blake3_build
+	sed -i -e '/^target_compile_features/d' blake3_build/BLAKE3-1.8.2/c/CMakeLists.txt
 	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S blake3_build/BLAKE3-1.8.2/c -B blake3_build/build -DCMAKE_BUILD_TYPE=Release
 	${MAKE} -C blake3_build/build
 	install -D -m444 blake3_build/build/libblake3.a out/lib/libblake3.a
@@ -93,10 +94,10 @@ download_cache/libunistring-1.4.1.tar.xz:
 	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.4.1.tar.xz
 	sha256sum -c SHA256SUM_libunistring-1.4.1.tar.xz.txt || (rm -f download_cache/libunistring-1.4.1.tar.xz && false)
 
-out/lib/libzstd.a: download_cache/zstd-1.5.7.tar.zst
+out/lib/libzstd.a: download_cache/zstd-1.5.7.tar.zst out/lib/libz.a out/lib/liblzma.a
 	@mkdir -p zstd_build
 	tar -xf download_cache/zstd-1.5.7.tar.zst -C zstd_build
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S zstd_build/zstd-1.5.7/build/cmake -B zstd_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off && ${MAKE} -C zstd_build/build && ${MAKE} DESTDIR="${PWD}/zstd_build/zstd_out" -C zstd_build/build install
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S zstd_build/zstd-1.5.7/build/cmake -B zstd_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DLIBLZMA_INCLUDE_DIR="${PWD}/out/include" -DLIBLZMA_LIBRARY="${PWD}/out/lib/liblzma.a" && ${MAKE} -C zstd_build/build && ${MAKE} DESTDIR="${PWD}/zstd_build/zstd_out" -C zstd_build/build install
 	install -D -m444 zstd_build/zstd_out/usr/lib/libzstd.a out/lib/libzstd.a
 	cd zstd_build/zstd_out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf zstd_build
@@ -144,6 +145,19 @@ download_cache/openssl-3.6.0.tar.gz:
 	cd download_cache && curl -OL https://github.com/openssl/openssl/releases/download/openssl-3.6.0/openssl-3.6.0.tar.gz
 	sha256sum -c SHA256SUM_openssl-3.6.0.tar.gz.txt || (rm -f download_cache/openssl-3.6.0.tar.gz && false)
 
+out/lib/liblzma.a: download_cache/xz_v5.8.1.tar.gz
+	@mkdir -p xz_utils_build
+	tar -xf download_cache/xz_v5.8.1.tar.gz -C xz_utils_build
+	cd xz_utils_build/xz-5.8.1 && ./autogen.sh --no-po4a && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --host="${TARGET_TRIPLE}" --disable-shared --enable-static && ${MAKE} -C src/liblzma
+	install -D -m444 xz_utils_build/xz-5.8.1/src/liblzma/.libs/liblzma.a out/lib/liblzma.a
+	install -D -m444 xz_utils_build/xz-5.8.1/src/liblzma/api/lzma.h out/include/lzma.h
+	rm -rf xz_utils_build
+
+download_cache/xz_v5.8.1.tar.gz:
+	@mkdir -p $(dir $@)
+	cd download_cache && curl -o xz_v5.8.1.tar.gz -L https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.1.tar.gz
+	sha256sum -c SHA256SUM_xz_v5.8.1.tar.gz.txt || (rm -f download_cache/xz_v5.8.1.tar.gz && false)
+
 .PHONY: clean
 
 clean:
@@ -158,4 +172,5 @@ clean:
 	rm -rf brotli_build
 	rm -rf zlib_build
 	rm -rf openssl_build
+	rm -rf xz_utils_build
 	${MAKE} -C .. clean
