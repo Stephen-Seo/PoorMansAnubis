@@ -4,6 +4,7 @@ AR ?= /usr/bin/ar
 RANLIB ?= /usr/bin/ranlib
 LD ?= /usr/bin/ld
 TARGET_TRIPLE ?= x86_64-pc-linux-gnu
+TARGET_ARCH ?= x86_64
 # Note that aarch64 linux is typically: aarch64-linux-gnu
 
 PWD != pwd
@@ -11,7 +12,7 @@ PWD != pwd
 all: ../cxx_backend_impl
 
 ../cxx_backend_impl: out/lib/libsqlite3.a out/lib/libblake3.a out/lib/libcurl.a
-	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -lbrotlidec -lbrotlicommon -lz" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
+	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
 
 out/lib/libsqlite3.a out/include/sqlite3.h: download_cache/sqlite-autoconf-3510000.tar.gz
 	@mkdir -p sqlite_build
@@ -40,10 +41,10 @@ download_cache/blake3_1.8.2.tar.gz:
 	cd download_cache && curl -L -o blake3_1.8.2.tar.gz https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.2.tar.gz
 	sha256sum -c SHA256SUM_blake3_1.8.2.tar.gz.txt || (rm -f download_cache/blake3_1.8.2.tar.gz && false)
 
-out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.17.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a
+out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.17.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a out/ssl/usr/lib/libssl.a
 	@mkdir -p curl_build
 	tar -xf download_cache/curl-8.17.0.tar.xz -C curl_build
-	cd curl_build/curl-8.17.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --without-ssl --disable-ldap --disable-ldaps --disable-manual --without-libpsl --enable-threaded-resolver --enable-websockets --disable-versioned-symbols --enable-ipv6 --enable-static --disable-shared --with-nghttp2="${PWD}/out" --with-idn2="${PWD}/out" --with-zstd="${PWD}/out" --with-brotli="${PWD}/out" --with-zlib="${PWD}/out" && ${MAKE} -C lib
+	cd curl_build/curl-8.17.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --with-openssl="${PWD}/out/ssl/usr" --disable-ldap --disable-ldaps --disable-manual --without-libpsl --enable-threaded-resolver --enable-websockets --disable-versioned-symbols --enable-ipv6 --enable-static --disable-shared --with-nghttp2="${PWD}/out" --with-idn2="${PWD}/out" --with-zstd="${PWD}/out" --with-brotli="${PWD}/out" --with-zlib="${PWD}/out" && ${MAKE} -C lib
 	install -D -m444 curl_build/curl-8.17.0/lib/.libs/libcurl.a out/lib/libcurl.a
 	find curl_build/curl-8.17.0/include/curl -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/curl/{}" ';'
 	rm -rf curl_build
@@ -121,7 +122,7 @@ download_cache/brotli-1.2.0.tar.gz:
 out/lib/libz.a: download_cache/zlib-1.3.1.tar.xz
 	@mkdir -p zlib_build
 	tar -xf download_cache/zlib-1.3.1.tar.xz -C zlib_build
-	cd zlib_build/zlib-1.3.1 && ./configure --prefix=/usr && ${MAKE} && ${MAKE} DESTDIR="${PWD}/zlib_build/out/" install
+	cd zlib_build/zlib-1.3.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --static && ${MAKE} && ${MAKE} DESTDIR="${PWD}/zlib_build/out/" install
 	install -D -m444 zlib_build/out/usr/lib/libz.a out/lib/libz.a
 	cd zlib_build/out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf zlib_build
@@ -130,6 +131,18 @@ download_cache/zlib-1.3.1.tar.xz:
 	@mkdir -p $(dir $@)
 	cd download_cache && curl -OL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.xz
 	sha256sum -c SHA256SUM_zlib-1.3.1.tar.xz.txt || (rm -f download_cache/zlib-1.3.1.tar.xz && false)
+
+out/ssl/usr/lib/libssl.a: download_cache/openssl-3.6.0.tar.gz
+	@mkdir -p openssl_build
+	tar -xf download_cache/openssl-3.6.0.tar.gz -C openssl_build
+	cd openssl_build/openssl-3.6.0 && sed -i -e 's|./demoCA|/etc/ssl|' apps/CA.pl.in apps/openssl.cnf
+	cd openssl_build/openssl-3.6.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 linux-${TARGET_ARCH} && ${MAKE} && ${MAKE} DESTDIR="${PWD}/out/ssl" install
+	rm -rf openssl_build
+
+download_cache/openssl-3.6.0.tar.gz:
+	@mkdir -p $(dir $@)
+	cd download_cache && curl -OL https://github.com/openssl/openssl/releases/download/openssl-3.6.0/openssl-3.6.0.tar.gz
+	sha256sum -c SHA256SUM_openssl-3.6.0.tar.gz.txt || (rm -f download_cache/openssl-3.6.0.tar.gz && false)
 
 .PHONY: clean
 
@@ -144,4 +157,5 @@ clean:
 	rm -rf zstd_build
 	rm -rf brotli_build
 	rm -rf zlib_build
+	rm -rf openssl_build
 	${MAKE} -C .. clean
