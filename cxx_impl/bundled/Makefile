@@ -146,7 +146,7 @@ out/ssl/usr/lib/libssl.a: download_cache/openssl-3.6.0.tar.gz
 	@mkdir -p openssl_build
 	tar -xf download_cache/openssl-3.6.0.tar.gz -C openssl_build
 	cd openssl_build/openssl-3.6.0 && sed -i -e 's|./demoCA|/etc/ssl|' apps/CA.pl.in apps/openssl.cnf
-	cd openssl_build/openssl-3.6.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 linux-${TARGET_ARCH} && ${MAKE} && ${MAKE} DESTDIR="${PWD}/out/ssl" install
+	cd openssl_build/openssl-3.6.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 disable-tests linux-${TARGET_ARCH} && ${MAKE} && ${MAKE} DESTDIR="${PWD}/out/ssl" install
 	rm -rf openssl_build
 
 download_cache/openssl-3.6.0.tar.gz:
