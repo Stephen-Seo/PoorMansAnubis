@@ -150,7 +150,7 @@ out/lib/liblzma.a: download_cache/xz_v5.8.1.tar.gz
 	tar -xf download_cache/xz_v5.8.1.tar.gz -C xz_utils_build
 	cd xz_utils_build/xz-5.8.1 && ./autogen.sh --no-po4a && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --host="${TARGET_TRIPLE}" --disable-shared --enable-static && ${MAKE} -C src/liblzma
 	install -D -m444 xz_utils_build/xz-5.8.1/src/liblzma/.libs/liblzma.a out/lib/liblzma.a
-	install -D -m444 xz_utils_build/xz-5.8.1/src/liblzma/api/lzma.h out/include/lzma.h
+	cd xz_utils_build/xz-5.8.1/src/liblzma/api && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf xz_utils_build
 
 download_cache/xz_v5.8.1.tar.gz:
