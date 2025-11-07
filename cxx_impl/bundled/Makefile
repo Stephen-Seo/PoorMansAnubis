@@ -12,7 +12,7 @@ PWD != pwd
 all: ../cxx_backend_impl
 
 ../cxx_backend_impl: out/lib/libsqlite3.a out/lib/libblake3.a out/lib/libcurl.a
-	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
+	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -llz4 -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
 
 out/lib/libsqlite3.a out/include/sqlite3.h: download_cache/sqlite-autoconf-3510000.tar.gz
 	@mkdir -p sqlite_build
@@ -94,10 +94,10 @@ download_cache/libunistring-1.4.1.tar.xz:
 	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.4.1.tar.xz
 	sha256sum -c SHA256SUM_libunistring-1.4.1.tar.xz.txt || (rm -f download_cache/libunistring-1.4.1.tar.xz && false)
 
-out/lib/libzstd.a: download_cache/zstd-1.5.7.tar.zst out/lib/libz.a out/lib/liblzma.a
+out/lib/libzstd.a: download_cache/zstd-1.5.7.tar.zst out/lib/libz.a out/lib/liblzma.a out/lib/liblz4.a
 	@mkdir -p zstd_build
 	tar -xf download_cache/zstd-1.5.7.tar.zst -C zstd_build
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S zstd_build/zstd-1.5.7/build/cmake -B zstd_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DLIBLZMA_INCLUDE_DIR="${PWD}/out/include" -DLIBLZMA_LIBRARY="${PWD}/out/lib/liblzma.a" && ${MAKE} -C zstd_build/build && ${MAKE} DESTDIR="${PWD}/zstd_build/zstd_out" -C zstd_build/build install
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S zstd_build/zstd-1.5.7/build/cmake -B zstd_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DLIBLZMA_INCLUDE_DIR="${PWD}/out/include" -DLIBLZMA_LIBRARY="${PWD}/out/lib/liblzma.a" -DLIBLZ4_INCLUDE_DIR="${PWD}/out/include" -DLIBLZ4_LIBRARY="${PWD}/out/lib/liblz4.a" && ${MAKE} -C zstd_build/build && ${MAKE} DESTDIR="${PWD}/zstd_build/zstd_out" -C zstd_build/build install
 	install -D -m444 zstd_build/zstd_out/usr/lib/libzstd.a out/lib/libzstd.a
 	cd zstd_build/zstd_out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf zstd_build
@@ -158,6 +158,19 @@ download_cache/xz_v5.8.1.tar.gz:
 	cd download_cache && curl -o xz_v5.8.1.tar.gz -L https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.1.tar.gz
 	sha256sum -c SHA256SUM_xz_v5.8.1.tar.gz.txt || (rm -f download_cache/xz_v5.8.1.tar.gz && false)
 
+out/lib/liblz4.a: download_cache/lz4_v1.10.0.tar.gz
+	@mkdir -p lz4_build
+	tar -xf download_cache/lz4_v1.10.0.tar.gz -C lz4_build
+	cd lz4_build/lz4-1.10.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S build/cmake -B BUILD -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBUILD_STATIC_LIBS=On -DLZ4_BUILD_CLI=Off && ${MAKE} -C BUILD && ${MAKE} DESTDIR=HERE_OUT -C BUILD install
+	install -D -m444 lz4_build/lz4-1.10.0/BUILD/HERE_OUT/usr/lib/liblz4.a out/lib/liblz4.a
+	cd lz4_build/lz4-1.10.0/BUILD/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
+	rm -rf lz4_build
+
+download_cache/lz4_v1.10.0.tar.gz:
+	@mkdir -p $(dir $@)
+	cd download_cache && curl -o lz4_v1.10.0.tar.gz -L https://github.com/lz4/lz4/archive/refs/tags/v1.10.0.tar.gz
+	sha256sum -c SHA256SUM_lz4_v1.10.0.tar.gz.txt || (rm -f download_cache/lz4_v1.10.0.tar.gz && false)
+
 .PHONY: clean
 
 clean:
@@ -173,4 +186,5 @@ clean:
 	rm -rf zlib_build
 	rm -rf openssl_build
 	rm -rf xz_utils_build
+	rm -rf lz4_build
 	${MAKE} -C .. clean
