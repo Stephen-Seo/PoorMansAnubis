@@ -162,7 +162,7 @@ out/lib/liblz4.a: download_cache/lz4_v1.10.0.tar.gz
 	@mkdir -p lz4_build
 	tar -xf download_cache/lz4_v1.10.0.tar.gz -C lz4_build
 	cd lz4_build/lz4-1.10.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S build/cmake -B BUILD -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBUILD_STATIC_LIBS=On -DLZ4_BUILD_CLI=Off && ${MAKE} -C BUILD && ${MAKE} DESTDIR=HERE_OUT -C BUILD install
-	install -D -m444 lz4_build/lz4-1.10.0/BUILD/HERE_OUT/usr/lib/liblz4.a out/lib/liblz4.a
+	find lz4_build/lz4-1.10.0/BUILD/HERE_OUT/usr/lib -name liblz4.a -execdir install -D -m444 '{}' "${PWD}/out/lib/liblz4.a" ';'
 	cd lz4_build/lz4-1.10.0/BUILD/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf lz4_build
 
