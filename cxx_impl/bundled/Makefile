@@ -3,9 +3,18 @@ CXX ?= /usr/bin/g++
 AR ?= /usr/bin/ar
 RANLIB ?= /usr/bin/ranlib
 LD ?= /usr/bin/ld
+# System we are building on
+BUILD_TRIPLE ?= x86_64-pc-linux-gnu
+# System we are building for
 TARGET_TRIPLE ?= x86_64-pc-linux-gnu
 TARGET_ARCH ?= x86_64
 # Note that aarch64 linux is typically: aarch64-linux-gnu
+
+ifeq (${TARGET_ARCH},aarch64)
+	BLAKE3_DISABLE_ASM_FLAG := -DBLAKE3_SIMD_TYPE=neon-intrinsics
+else
+	BLAKE3_DISABLE_ASM_FLAG :=
+endif
 
 PWD != pwd
 
@@ -31,7 +40,7 @@ out/lib/libblake3.a out/include/blake3.h: download_cache/blake3_1.8.2.tar.gz
 	@mkdir -p blake3_build
 	tar -xf download_cache/blake3_1.8.2.tar.gz -C blake3_build
 	sed -i -e '/^target_compile_features/d' blake3_build/BLAKE3-1.8.2/c/CMakeLists.txt
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S blake3_build/BLAKE3-1.8.2/c -B blake3_build/build -DCMAKE_BUILD_TYPE=Release
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S blake3_build/BLAKE3-1.8.2/c -B blake3_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_PROCESSOR=${TARGET_ARCH} -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} ${BLAKE3_DISABLE_ASM_FLAG}
 	${MAKE} -C blake3_build/build
 	install -D -m444 blake3_build/build/libblake3.a out/lib/libblake3.a
 	install -D -m444 blake3_build/BLAKE3-1.8.2/c/blake3.h out/include/blake3.h
@@ -45,7 +54,7 @@ download_cache/blake3_1.8.2.tar.gz:
 out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.17.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a out/ssl/usr/lib/libssl.a
 	@mkdir -p curl_build
 	tar -xf download_cache/curl-8.17.0.tar.xz -C curl_build
-	cd curl_build/curl-8.17.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --with-openssl="${PWD}/out/ssl/usr" --disable-ldap --disable-ldaps --disable-manual --without-libpsl --enable-threaded-resolver --enable-websockets --disable-versioned-symbols --enable-ipv6 --enable-static --disable-shared --with-nghttp2="${PWD}/out" --with-idn2="${PWD}/out" --with-zstd="${PWD}/out" --with-brotli="${PWD}/out" --with-zlib="${PWD}/out" && ${MAKE} -C lib
+	cd curl_build/curl-8.17.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --with-openssl="${PWD}/out/ssl/usr" --disable-ldap --disable-ldaps --disable-manual --without-libpsl --enable-threaded-resolver --enable-websockets --disable-versioned-symbols --enable-ipv6 --enable-static --disable-shared --with-nghttp2="${PWD}/out" --with-idn2="${PWD}/out" --with-zstd="${PWD}/out" --with-brotli="${PWD}/out" --with-zlib="${PWD}/out" && ${MAKE} -C lib
 	install -D -m444 curl_build/curl-8.17.0/lib/.libs/libcurl.a out/lib/libcurl.a
 	find curl_build/curl-8.17.0/include/curl -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/curl/{}" ';'
 	rm -rf curl_build
@@ -58,7 +67,7 @@ download_cache/curl-8.17.0.tar.xz:
 out/lib/libnghttp2.a: download_cache/nghttp2-1.68.0.tar.xz
 	@mkdir -p nghttp2_build
 	tar -xf download_cache/nghttp2-1.68.0.tar.xz -C nghttp2_build
-	cd nghttp2_build/nghttp2-1.68.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only && ${MAKE}
+	cd nghttp2_build/nghttp2-1.68.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only && ${MAKE}
 	install -D -m444 nghttp2_build/nghttp2-1.68.0/lib/.libs/libnghttp2.a out/lib/libnghttp2.a
 	find nghttp2_build/nghttp2-1.68.0/lib/includes/nghttp2 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/nghttp2/{}" ';'
 	rm -rf nghttp2_build
@@ -71,7 +80,7 @@ download_cache/nghttp2-1.68.0.tar.xz:
 out/lib/libidn2.a: download_cache/libidn2-2.3.8.tar.gz out/lib/libunistring.a
 	@mkdir -p idn2_build
 	tar -xf download_cache/libidn2-2.3.8.tar.gz -C idn2_build
-	cd idn2_build/libidn2-2.3.8 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --enable-static --disable-shared --with-libunistring-prefix="${PWD}/out" && ${MAKE}
+	cd idn2_build/libidn2-2.3.8 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --with-libunistring-prefix="${PWD}/out" && ${MAKE}
 	install -D -m444 idn2_build/libidn2-2.3.8/lib/.libs/libidn2.a out/lib/libidn2.a
 	install -D -m444 idn2_build/libidn2-2.3.8/lib/idn2.h out/include/idn2.h
 	rm -rf idn2_build
@@ -84,7 +93,7 @@ download_cache/libidn2-2.3.8.tar.gz:
 out/lib/libunistring.a: download_cache/libunistring-1.4.1.tar.xz
 	@mkdir -p libunistring_build
 	tar -xf download_cache/libunistring-1.4.1.tar.xz -C libunistring_build
-	cd libunistring_build/libunistring-1.4.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr && ${MAKE} && ${MAKE} DESTDIR="${PWD}/libunistring_build/libunistring-1.4.1/HERE_OUT" install
+	cd libunistring_build/libunistring-1.4.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr && ${MAKE} && ${MAKE} DESTDIR="${PWD}/libunistring_build/libunistring-1.4.1/HERE_OUT" install
 	install -D -m444 libunistring_build/libunistring-1.4.1/lib/.libs/libunistring.a out/lib/libunistring.a
 	cd libunistring_build/libunistring-1.4.1/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf libunistring_build
@@ -97,7 +106,7 @@ download_cache/libunistring-1.4.1.tar.xz:
 out/lib/libzstd.a: download_cache/zstd-1.5.7.tar.zst out/lib/libz.a out/lib/liblzma.a out/lib/liblz4.a
 	@mkdir -p zstd_build
 	tar -xf download_cache/zstd-1.5.7.tar.zst -C zstd_build
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S zstd_build/zstd-1.5.7/build/cmake -B zstd_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DLIBLZMA_INCLUDE_DIR="${PWD}/out/include" -DLIBLZMA_LIBRARY="${PWD}/out/lib/liblzma.a" -DLIBLZ4_INCLUDE_DIR="${PWD}/out/include" -DLIBLZ4_LIBRARY="${PWD}/out/lib/liblz4.a" && ${MAKE} -C zstd_build/build && ${MAKE} DESTDIR="${PWD}/zstd_build/zstd_out" -C zstd_build/build install
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S zstd_build/zstd-1.5.7/build/cmake -B zstd_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DLIBLZMA_INCLUDE_DIR="${PWD}/out/include" -DLIBLZMA_LIBRARY="${PWD}/out/lib/liblzma.a" -DLIBLZ4_INCLUDE_DIR="${PWD}/out/include" -DLIBLZ4_LIBRARY="${PWD}/out/lib/liblz4.a" -DZSTD_BUILD_CONTRIB=Off && ${MAKE} -C zstd_build/build && ${MAKE} DESTDIR="${PWD}/zstd_build/zstd_out" -C zstd_build/build install
 	cd zstd_build/zstd_out/usr/lib && find . -name libzstd.a -execdir install -D -m444 '{}' "${PWD}/out/lib/libzstd.a" ';'
 	cd zstd_build/zstd_out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf zstd_build
@@ -148,7 +157,7 @@ download_cache/openssl-3.6.0.tar.gz:
 out/lib/liblzma.a: download_cache/xz_v5.8.1.tar.gz
 	@mkdir -p xz_utils_build
 	tar -xf download_cache/xz_v5.8.1.tar.gz -C xz_utils_build
-	cd xz_utils_build/xz-5.8.1 && ./autogen.sh --no-po4a && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --host="${TARGET_TRIPLE}" --disable-shared --enable-static && ${MAKE} -C src/liblzma
+	cd xz_utils_build/xz-5.8.1 && ./autogen.sh --no-po4a && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --build="${BUILD_TRIPLE}" --host="${TARGET_TRIPLE}" --disable-shared --enable-static && ${MAKE} -C src/liblzma
 	install -D -m444 xz_utils_build/xz-5.8.1/src/liblzma/.libs/liblzma.a out/lib/liblzma.a
 	cd xz_utils_build/xz-5.8.1/src/liblzma/api && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf xz_utils_build
