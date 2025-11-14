@@ -1,0 +1,12 @@
+sqlite: https://sqlite.org/download.html
+blake3: https://github.com/BLAKE3-team/BLAKE3/releases
+curl: https://github.com/curl/curl/releases
+nghttp2: https://github.com/nghttp2/nghttp2/releases
+libidn2: https://gitlab.com/libidn/libidn2/-/tags
+libunistring: https://www.gnu.org/software/libunistring/
+zstd: https://github.com/facebook/zstd/releases
+brotli: https://github.com/google/brotli/releases
+zlib: https://github.com/madler/zlib/releases
+openssl: https://github.com/openssl/openssl/releases
+liblzma xz: https://github.com/tukaani-project/xz/releases
+liblz4: https://github.com/lz4/lz4/releases
