@@ -221,7 +221,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   uint8_t *cli_buf = new uint8_t[4];
   uint32_t *u32 = reinterpret_cast<uint32_t *>(cli_buf);
   *u32 = 0;
-  u32[0] |= 1 | 8;
+  u32[0] |= 1 | 8 | 0x20;
 
   *u32 = PMA_HELPER::le_swap_u32(*u32);
 
@@ -238,8 +238,26 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
 
   // character set and collation.
   cli_buf = new uint8_t[1];
+  // utf8mb4_unicode_ci
+  cli_buf[0] = 0xe0;
+  parts.append(1, cli_buf);
 
-  // TODO figure out what to set for the character set and collation byte.
+  // Reserved 19 bytes.
+  cli_buf = new uint8_t[19];
+  std::memset(cli_buf, 0, 19);
+  parts.append(19, cli_buf);
+
+  // Extended client capabilities.
+  cli_buf = new uint8_t[4];
+  std::memset(cli_buf, 0, 4);
+  parts.append(4, cli_buf);
+
+  // Username.
+  cli_buf = new uint8_t[user.length() + 1];
+  std::memcpy(cli_buf, user.c_str(), user.length() + 1);
+  parts.append(user.length() + 1, cli_buf);
+
+  // TODO auth
 
   close(fd);
   return std::nullopt;
