@@ -58,9 +58,9 @@ std::tuple<ErrorT, std::string, int> get_ipv4_socket_server(std::string addr,
                                                             uint16_t port);
 
 std::tuple<ErrorT, std::string, int> connect_ipv6_socket_client(
-    std::string client_addr, std::string server_addr, uint16_t port);
+    std::string server_addr, std::string client_addr, uint16_t port);
 std::tuple<ErrorT, std::string, int> connect_ipv4_socket_client(
-    std::string client_addr, std::string server_addr, uint16_t port);
+    std::string server_addr, std::string client_addr, uint16_t port);
 
 struct Request {
   std::unordered_map<std::string, std::string> queries;
