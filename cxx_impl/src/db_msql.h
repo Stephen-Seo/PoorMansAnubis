@@ -17,7 +17,10 @@
 #ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_DB_MSQL_H_
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_DB_MSQL_H_
 
+#include <bitset>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace PMA_MSQL {
@@ -42,9 +45,22 @@ struct MSQLPacket {
   uint8_t *body;
 };
 
+struct MSQLConnection {
+  MSQLConnection();
+  ~MSQLConnection();
+
+  // 0 - invalid connection if set.
+  std::bitset<32> flags;
+  int fd;
+  uint32_t connection_id;
+};
+
 // Copies "data" into the returned packet struct(s).
 std::vector<MSQLPacket> create_packets(uint8_t *data, size_t data_size,
                                        uint8_t *seq);
+
+std::optional<MSQLConnection> connect_msql(std::string addr, uint16_t port,
+                                           std::string user, std::string pass);
 
 }  // Namespace PMA_MSQL
 
