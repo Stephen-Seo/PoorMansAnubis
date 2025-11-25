@@ -86,15 +86,15 @@ struct BinaryPart {
   BinaryPart();
   ~BinaryPart();
 
-  BinaryPart(size_t, uint8_t*);
+  BinaryPart(size_t, uint8_t *);
 
   // No copy.
-  BinaryPart(const BinaryPart&) = delete;
-  BinaryPart &operator=(const BinaryPart&) = delete;
+  BinaryPart(const BinaryPart &) = delete;
+  BinaryPart &operator=(const BinaryPart &) = delete;
 
   // Allow move.
-  BinaryPart(BinaryPart&&);
-  BinaryPart &operator=(BinaryPart&&);
+  BinaryPart(BinaryPart &&);
+  BinaryPart &operator=(BinaryPart &&);
 
   size_t size;
   uint8_t *data;
@@ -104,12 +104,12 @@ struct BinaryParts {
   BinaryParts();
 
   // No copy.
-  BinaryParts(const BinaryParts&) = delete;
-  BinaryParts &operator=(const BinaryParts&) = delete;
+  BinaryParts(const BinaryParts &) = delete;
+  BinaryParts &operator=(const BinaryParts &) = delete;
 
   // Allow move.
-  BinaryParts(BinaryParts&&);
-  BinaryParts &operator=(BinaryParts&&);
+  BinaryParts(BinaryParts &&);
+  BinaryParts &operator=(BinaryParts &&);
 
   // Data must be allocated with "new uint8_t[N]".
   void append(size_t size, uint8_t *data);
