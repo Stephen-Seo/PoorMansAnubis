@@ -18,6 +18,7 @@
 
 // Standard library includes
 #include <cstdio>
+#include <cstring>
 
 // Posix includes
 #include <signal.h>
@@ -129,4 +130,61 @@ int PMA_HELPER::set_signal_handler(int signal, void (*handler)(int)) {
   sa.sa_flags = 0;
 
   return sigaction(signal, &sa, nullptr);
+}
+
+PMA_HELPER::BinaryPart::BinaryPart() : size(0), data(nullptr) {}
+
+PMA_HELPER::BinaryPart::~BinaryPart() {
+  if (data) {
+    delete[] data;
+  }
+}
+
+PMA_HELPER::BinaryPart::BinaryPart(size_t size, uint8_t *data) : size(size), data(data) {}
+
+PMA_HELPER::BinaryPart::BinaryPart(BinaryPart &&other) : size(other.size), data(other.data) {
+  other.data = nullptr;
+}
+
+PMA_HELPER::BinaryPart &PMA_HELPER::BinaryPart::operator=(BinaryPart &&other) {
+  this->size = other.size;
+  this->data = other.data;
+  other.data = nullptr;
+  return *this;
+}
+
+PMA_HELPER::BinaryParts::BinaryParts() : parts() {}
+
+PMA_HELPER::BinaryParts::BinaryParts(BinaryParts &&other) : parts(std::move(other.parts)) {
+  other.parts = std::list<BinaryPart>();
+}
+
+PMA_HELPER::BinaryParts &PMA_HELPER::BinaryParts::operator=(BinaryParts &&other) {
+  parts = std::move(other.parts);
+  other.parts = std::list<BinaryPart>();
+  return *this;
+}
+
+void PMA_HELPER::BinaryParts::append(size_t size, uint8_t *data) {
+  parts.emplace_back(size, data);
+}
+
+PMA_HELPER::BinaryPart PMA_HELPER::BinaryParts::combine() const {
+  size_t size = 0;
+  for (const auto &part : parts) {
+    size += part.size;
+  }
+
+  if (size == 0) {
+    return BinaryPart();
+  }
+
+  uint8_t *combined_data = new uint8_t[size];
+  size_t idx = 0;
+  for (const auto &part : parts) {
+    std::memcpy(combined_data + idx, part.data, part.size);
+    idx += part.size;
+  }
+
+  return BinaryPart(size, combined_data);
 }
