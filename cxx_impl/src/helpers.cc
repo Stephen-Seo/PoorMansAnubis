@@ -140,9 +140,11 @@ PMA_HELPER::BinaryPart::~BinaryPart() {
   }
 }
 
-PMA_HELPER::BinaryPart::BinaryPart(size_t size, uint8_t *data) : size(size), data(data) {}
+PMA_HELPER::BinaryPart::BinaryPart(size_t size, uint8_t *data)
+    : size(size), data(data) {}
 
-PMA_HELPER::BinaryPart::BinaryPart(BinaryPart &&other) : size(other.size), data(other.data) {
+PMA_HELPER::BinaryPart::BinaryPart(BinaryPart &&other)
+    : size(other.size), data(other.data) {
   other.data = nullptr;
 }
 
@@ -155,11 +157,13 @@ PMA_HELPER::BinaryPart &PMA_HELPER::BinaryPart::operator=(BinaryPart &&other) {
 
 PMA_HELPER::BinaryParts::BinaryParts() : parts() {}
 
-PMA_HELPER::BinaryParts::BinaryParts(BinaryParts &&other) : parts(std::move(other.parts)) {
+PMA_HELPER::BinaryParts::BinaryParts(BinaryParts &&other)
+    : parts(std::move(other.parts)) {
   other.parts = std::list<BinaryPart>();
 }
 
-PMA_HELPER::BinaryParts &PMA_HELPER::BinaryParts::operator=(BinaryParts &&other) {
+PMA_HELPER::BinaryParts &PMA_HELPER::BinaryParts::operator=(
+    BinaryParts &&other) {
   parts = std::move(other.parts);
   other.parts = std::list<BinaryPart>();
   return *this;

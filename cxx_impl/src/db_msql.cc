@@ -91,9 +91,11 @@ PMA_MSQL::MSQLConnection::~MSQLConnection() {}
 
 std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     std::string addr, uint16_t port, std::string user, std::string pass) {
-  auto [errt, errm, fd] = PMA_HTTP::connect_ipv6_socket_client(addr, "::", port);
+  auto [errt, errm, fd] =
+      PMA_HTTP::connect_ipv6_socket_client(addr, "::", port);
   if (errt != PMA_HTTP::ErrorT::SUCCESS) {
-    std::tie(errt, errm, fd) = PMA_HTTP::connect_ipv4_socket_client(addr, "0.0.0.0", port);
+    std::tie(errt, errm, fd) =
+        PMA_HTTP::connect_ipv4_socket_client(addr, "0.0.0.0", port);
     if (errt != PMA_HTTP::ErrorT::SUCCESS) {
       return std::nullopt;
     }
@@ -121,7 +123,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   }
 
   // Connection id.
-  uint32_t connection_id = *reinterpret_cast<uint32_t*>(buf + idx);
+  uint32_t connection_id = *reinterpret_cast<uint32_t *>(buf + idx);
   idx += 4;
   connection_id = PMA_HELPER::le_swap_u32(connection_id);
   if (idx >= read_ret || idx >= 4096) {
@@ -144,7 +146,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   }
 
   // Server capabilities (1st part).
-  uint16_t server_capabilities_1 = *reinterpret_cast<uint16_t*>(buf + idx);
+  uint16_t server_capabilities_1 = *reinterpret_cast<uint16_t *>(buf + idx);
   server_capabilities_1 = PMA_HELPER::le_swap_u16(server_capabilities_1);
   idx += 2;
   if (idx >= read_ret || idx >= 4096) {
@@ -167,7 +169,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   }
 
   // Server capabilities (2nd part).
-  uint16_t server_capabilities_2 = *reinterpret_cast<uint16_t*>(buf + idx);
+  uint16_t server_capabilities_2 = *reinterpret_cast<uint16_t *>(buf + idx);
   server_capabilities_2 = PMA_HELPER::le_swap_u16(server_capabilities_2);
   idx += 2;
   if (idx >= read_ret || idx >= 4096) {
@@ -199,7 +201,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     // filler
     idx += 4;
   } else {
-    server_capabilities_3 = *reinterpret_cast<uint32_t*>(buf + idx);
+    server_capabilities_3 = *reinterpret_cast<uint32_t *>(buf + idx);
     server_capabilities_3 = PMA_HELPER::le_swap_u32(server_capabilities_3);
     idx += 4;
   }
@@ -217,7 +219,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
 
   // Client capabilities.
   uint8_t *cli_buf = new uint8_t[4];
-  uint32_t *u32 = reinterpret_cast<uint32_t*>(cli_buf);
+  uint32_t *u32 = reinterpret_cast<uint32_t *>(cli_buf);
   *u32 = 0;
   u32[0] |= 1 | 8;
 
@@ -227,7 +229,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
 
   // Max packet size.
   cli_buf = new uint8_t[4];
-  u32 = reinterpret_cast<uint32_t*>(cli_buf);
+  u32 = reinterpret_cast<uint32_t *>(cli_buf);
   *u32 = 0x1000000;
 
   *u32 = PMA_HELPER::le_swap_u32(*u32);
