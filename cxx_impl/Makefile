@@ -56,14 +56,16 @@ SOURCES := \
 	src/http.cc \
 	src/helpers.cc \
 	src/poor_mans_print.cc \
-	src/args.cc
+	src/args.cc \
+	src/db_msql.cc
 HEADERS := \
 	src/db.h \
 	src/constants.h \
 	src/http.h \
 	src/helpers.h \
 	src/poor_mans_print.h \
-	src/args.h
+	src/args.h \
+	src/db_msql.h
 
 C_IMPL_SOURCES := \
 	../c_impl/src/work.c \
