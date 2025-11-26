@@ -395,7 +395,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   uint8_t *cli_buf = new uint8_t[4];
   uint32_t *u32 = reinterpret_cast<uint32_t *>(cli_buf);
   *u32 = 0;
-  *u32 |= 1 | 8 | (1 << 9) | (1 << 15) | (1 << 19) | (1 << 21);
+  *u32 |= 1 | 8 | (1 << 9) | (1 << 15) | (1 << 19) | (1 << 21) | (1 << 24);
 
   *u32 = PMA_HELPER::le_swap_u32(*u32);
 
@@ -589,9 +589,9 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   // "Header" byte.
   if (server_capabilities_2 & (1 << (24 - 16))) {
     // CLIENT_DEPRECATE_EOF set.
-    if (pkt_data[idx] == 0xFE) {
+    if (pkt_data[idx] == 0) {
 #ifndef NDEBUG
-      std::fprintf(stderr, "NOTICE: Got 0xFE as OK from server.\n");
+      std::fprintf(stderr, "NOTICE: Got 0 as OK from server.\n");
 #endif
     } else {
       std::fprintf(stderr, "ERROR: Got invalid %#hhx from server (not 0xFE)!\n",
@@ -601,9 +601,9 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
       return std::nullopt;
     }
   } else {
-    if (pkt_data[idx] == 0x0) {
+    if (pkt_data[idx] == 0) {
 #ifndef NDEBUG
-      std::fprintf(stderr, "NOTICE: Got 0x0 as OK from server.\n");
+      std::fprintf(stderr, "NOTICE: Got 0 as OK from server.\n");
 #endif
     } else {
       std::fprintf(stderr, "ERROR: Got invalid %#hhx from server (not 0)!\n",
@@ -723,13 +723,16 @@ std::array<uint8_t, 20> PMA_MSQL::msql_native_auth_resp(
   std::array<uint8_t, 20> pass_sha1_sha1 =
       PMA_HELPER::sha1_digest(pass_sha1.data(), pass_sha1.size());
 
-  std::array<uint8_t, 20> seed_and_pass_xor;
+  std::vector<uint8_t> seed_and_pass_concat;
+  for (size_t idx = 0; idx < seed.size(); ++idx) {
+    seed_and_pass_concat.push_back(seed.at(idx));
+  }
   for (size_t idx = 0; idx < 20; ++idx) {
-    seed_and_pass_xor.at(idx) = seed.at(idx) ^ pass_sha1_sha1.at(idx);
+    seed_and_pass_concat.push_back(pass_sha1_sha1.at(idx));
   }
 
-  std::array<uint8_t, 20> seed_and_pass_xor_sha1 =
-      PMA_HELPER::sha1_digest(seed_and_pass_xor.data(), 20);
+  std::array<uint8_t, 20> seed_and_pass_xor_sha1 = PMA_HELPER::sha1_digest(
+      seed_and_pass_concat.data(), seed_and_pass_concat.size());
 
   std::array<uint8_t, 20> ret;
   for (size_t idx = 0; idx < 20; ++idx) {
