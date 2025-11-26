@@ -39,6 +39,7 @@
 #include "args.h"
 #include "constants.h"
 #include "db.h"
+#include "db_msql.h"
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
@@ -135,6 +136,12 @@ int main(int argc, char **argv) {
     PMA_EPrintln("ERROR: Failed to parse args!");
     return 3;
   }
+
+  // TODO DEBUG
+  auto msql_conn_opt =
+      PMA_MSQL::connect_msql("127.0.0.1", 3306, "pmauser", "pmauserpass");
+
+  return 0;
 
   curl_global_init(CURL_GLOBAL_SSL);
 

@@ -53,10 +53,12 @@ struct Args {
   // 1 - enable "override-dest-url" header
   // 2 - failed to parse args
   // 3 - potentially dangerous flags enabled
+  // 4 - use msql
   std::bitset<32> flags;
   std::string api_url;
   std::string js_factors_url;
   std::string sqlite_path;
+  std::string mysql_conf_path;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;
 };

@@ -45,6 +45,9 @@ void pma_print_usage() {
   PMA_Println(
       "  NOTICE: Specify --port-to-dest-url=... multiple times to add more "
       "mappings");
+  PMA_Println(
+      "  --mysql-conf=<config_file> : Set path to config file for mysql "
+      "settings");
   PMA_Println("  --sqlite-path=<path> : Set filename for sqlite db");
   PMA_Println(
       "  --enable-x-real-ip-header : Enable trusting \"x-real-ip\" header as "
@@ -249,6 +252,14 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
 
       this->port_to_dest_urls.insert(std::make_pair(port, url));
+    } else if (std::strncmp(argv[0], "--mysql-conf=", 13) == 0) {
+      this->mysql_conf_path = argv[0] + 13;
+      if (this->mysql_conf_path.empty()) {
+        PMA_EPrintln("ERROR: Failed to set mysql conf path!");
+        flags.set(2);
+        return;
+      }
+      flags.set(4);
     } else if (std::strncmp(argv[0], "--sqlite-path=", 14) == 0) {
       this->sqlite_path = argv[0] + 14;
       if (this->sqlite_path.empty()) {
