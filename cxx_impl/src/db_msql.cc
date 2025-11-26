@@ -17,11 +17,17 @@
 #include "db_msql.h"
 
 // Unix includes.
+#include <errno.h>
 #include <unistd.h>
 
 // Standard library includes.
+#include <chrono>
+#include <cinttypes>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <thread>
 
 // Local includes.
 #include "helpers.h"
@@ -91,107 +97,211 @@ PMA_MSQL::MSQLConnection::~MSQLConnection() {}
 
 std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     std::string addr, uint16_t port, std::string user, std::string pass) {
-  auto [errt, errm, fd] =
-      PMA_HTTP::connect_ipv6_socket_client(addr, "::", port);
-  if (errt != PMA_HTTP::ErrorT::SUCCESS) {
+  PMA_HTTP::ErrorT errt = PMA_HTTP::ErrorT::INVALID_STATE;
+  std::string errm;
+  int fd;
+  try {
     std::tie(errt, errm, fd) =
-        PMA_HTTP::connect_ipv4_socket_client(addr, "0.0.0.0", port);
-    if (errt != PMA_HTTP::ErrorT::SUCCESS) {
+        PMA_HTTP::connect_ipv6_socket_client(addr, "::", port);
+  } catch (const std::exception &e) {
+    try {
+      std::tie(errt, errm, fd) =
+          PMA_HTTP::connect_ipv4_socket_client(addr, "0.0.0.0", port);
+    } catch (const std::exception &e) {
+      std::fprintf(stderr,
+                   "ERROR: Failed to set up client socket for msql client to "
+                   "server connection (invalid address?)\n");
       return std::nullopt;
     }
+  }
+  if (errt != PMA_HTTP::ErrorT::SUCCESS) {
+    std::fprintf(stderr,
+                 "ERROR: Failed to set up client socket for msql client to "
+                 "server connection (invalid address?)\n");
+    return std::nullopt;
   }
 
   uint8_t buf[4096];
 
-  ssize_t read_ret = read(fd, buf, 4096);
-  if (read_ret == 0 || (read_ret == 1 && buf[0] == 0xFF)) {
-    close(fd);
-    return std::nullopt;
+  ssize_t read_ret = 0;
+  while (true) {
+    read_ret = read(fd, buf, 4096);
+    if (read_ret == -1) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        // NONBLOCKING nothing to read.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#ifndef NDEBUG
+        std::printf(".");
+#endif
+        continue;
+      } else {
+        std::fprintf(stderr, "ERROR: Error occurred reading data (errno %d)\n",
+                     errno);
+        return std::nullopt;
+      }
+    } else if (read_ret == 0 || buf[0] == 0xFF) {
+      close(fd);
+      std::fprintf(stderr, "ERROR: Failed to connect to msql server!\n");
+      return std::nullopt;
+    } else {
+#ifndef NDEBUG
+      std::printf("\n");
+#endif
+      break;
+    }
   }
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: read_ret: %zd\n", read_ret);
+#endif
+
+  uint32_t pkt_size = static_cast<uint32_t>(buf[0]) |
+                      (static_cast<uint32_t>(buf[1]) << 8) |
+                      (static_cast<uint32_t>(buf[2]) << 16);
+#ifndef NDEBUG
+  std::fprintf(stderr, "pkt_size: %" PRIu32 " (%x)\n", pkt_size, pkt_size);
+#endif
+  uint8_t sequence_id = buf[3];
+#ifndef NDEBUG
+  std::fprintf(stderr, "seq: %hhu\n", sequence_id);
+#endif
+
+  uint8_t *pkt_data = buf + 4;
 
   ssize_t idx = 0;
   // Protocol version.
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: Protocol version: %hhu\n", pkt_data[idx]);
+#endif
   ++idx;
-
-  // Server version.
-  while (buf[idx] != 0 && idx < 4096) {
-    ++idx;
-  }
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
-  // Connection id.
-  uint32_t connection_id = *reinterpret_cast<uint32_t *>(buf + idx);
-  idx += 4;
-  connection_id = PMA_HELPER::le_swap_u32(connection_id);
-  if (idx >= read_ret || idx >= 4096) {
+  // Server version.
+  std::printf("NOTICE: Connecting to server, reported version: %s\n",
+              pkt_data + idx);
+  while (pkt_data[idx] != 0 && idx < 4092 && idx < pkt_size) {
+    ++idx;
+  }
+  ++idx;
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: idx after server version: %zd\n", idx);
+#endif
+
+  // Connection id.
+  uint32_t connection_id = static_cast<uint32_t>(pkt_data[idx]) |
+                           (static_cast<uint32_t>(pkt_data[idx + 1]) << 8) |
+                           (static_cast<uint32_t>(pkt_data[idx + 2]) << 16) |
+                           (static_cast<uint32_t>(pkt_data[idx + 3]) << 24);
+  idx += 4;
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: Connection id %" PRIu32 " (%#" PRIx32 ")\n",
+               connection_id, connection_id);
+#endif
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
+    close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // Auth plugin data.
+  std::unique_ptr<uint8_t[]> auth_plugin_data = std::make_unique<uint8_t[]>(64);
+  std::memcpy(auth_plugin_data.get(), pkt_data + idx, 8);
   idx += 8;
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // Reserved byte.
   idx += 1;
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // Server capabilities (1st part).
-  uint16_t server_capabilities_1 = *reinterpret_cast<uint16_t *>(buf + idx);
+  uint16_t server_capabilities_1 =
+      *reinterpret_cast<uint16_t *>(pkt_data + idx);
   server_capabilities_1 = PMA_HELPER::le_swap_u16(server_capabilities_1);
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: Server capabilities 1: %#hx\n",
+               server_capabilities_1);
+#endif
   idx += 2;
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // Server default collation.
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: Server default collation: %hhu (%#hhx)\n",
+               pkt_data[idx], pkt_data[idx]);
+#endif
   idx += 1;
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // status flags.
   idx += 2;
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // Server capabilities (2nd part).
-  uint16_t server_capabilities_2 = *reinterpret_cast<uint16_t *>(buf + idx);
+  uint16_t server_capabilities_2 =
+      *reinterpret_cast<uint16_t *>(pkt_data + idx);
   server_capabilities_2 = PMA_HELPER::le_swap_u16(server_capabilities_2);
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: Server capabilities 2: %#hx\n",
+               server_capabilities_2);
+#endif
   idx += 2;
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // Plugin auth.
+  uint8_t plugin_data_length = 0;
   if (server_capabilities_2 & 0x8) {
+    plugin_data_length = pkt_data[idx];
     idx += 1;
+#ifndef NDEBUG
+    std::fprintf(stderr, "NOTICE: plugin_data_length: %hhu\n",
+                 plugin_data_length);
+#endif
   } else {
     idx += 1;
   }
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // Filler
   idx += 6;
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
@@ -201,18 +311,53 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     // filler
     idx += 4;
   } else {
-    server_capabilities_3 = *reinterpret_cast<uint32_t *>(buf + idx);
+    server_capabilities_3 = *reinterpret_cast<uint32_t *>(pkt_data + idx);
     server_capabilities_3 = PMA_HELPER::le_swap_u32(server_capabilities_3);
     idx += 4;
   }
-  if (idx >= read_ret || idx >= 4096) {
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
     return std::nullopt;
   }
 
   // CLIENT_SECURE_CONNECTION
-  // Documentation is missing for this, so parsing the initial handshake stops
-  // here.
+  if (server_capabilities_1 & 0x80) {
+    size_t size_max = 12;
+    if (static_cast<size_t>(plugin_data_length) - 9 > size_max) {
+      size_max = plugin_data_length - 9;
+    }
+#ifndef NDEBUG
+    std::fprintf(stderr,
+                 "NOTICE: Writing size %zu to auth_plugin_data offset 8\n",
+                 size_max);
+#endif
+    std::memcpy(auth_plugin_data.get() + 8, pkt_data + idx, size_max);
+    idx += size_max;
+    idx += 1;
+  }
+  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
+    close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  std::string auth_plugin_name;
+  if (server_capabilities_2 & 0x8) {
+#ifndef NDEBUG
+    std::fprintf(stderr,
+                 "NOTICE: at auth_plugin_name: pkt_size %" PRIu32 ", idx %zu\n",
+                 pkt_size, idx);
+#endif
+    auto str_size =
+        static_cast<std::string::allocator_type::size_type>(pkt_size - idx);
+    auth_plugin_name =
+        std::string(reinterpret_cast<char *>(pkt_data + idx), str_size);
+#ifndef NDEBUG
+    std::fprintf(stderr, "NOTICE: auth_plugin_name: %s\n",
+                 auth_plugin_name.c_str());
+#endif
+  }
 
   // Response.
   PMA_HELPER::BinaryParts parts;
