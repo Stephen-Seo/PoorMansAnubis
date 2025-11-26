@@ -17,6 +17,7 @@
 #ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_DB_MSQL_H_
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_DB_MSQL_H_
 
+#include <array>
 #include <bitset>
 #include <cstdint>
 #include <optional>
@@ -49,6 +50,16 @@ struct MSQLConnection {
   MSQLConnection();
   ~MSQLConnection();
 
+  MSQLConnection(int fd, uint32_t connection_id);
+
+  // No copy
+  MSQLConnection(const MSQLConnection &) = delete;
+  MSQLConnection &operator=(const MSQLConnection &) = delete;
+
+  // Allow move
+  MSQLConnection(MSQLConnection &&);
+  MSQLConnection &operator=(MSQLConnection &&);
+
   // 0 - invalid connection if set.
   std::bitset<32> flags;
   int fd;
@@ -60,7 +71,13 @@ std::vector<MSQLPacket> create_packets(uint8_t *data, size_t data_size,
                                        uint8_t *seq);
 
 std::optional<MSQLConnection> connect_msql(std::string addr, uint16_t port,
-                                           std::string user, std::string pass);
+                                           std::string user, std::string pass,
+                                           std::string dbname);
+
+std::array<uint8_t, 20> msql_native_auth_resp(std::array<uint8_t, 20> seed,
+                                              std::string pass);
+
+void print_error_pkt(uint8_t *data, size_t size);
 
 }  // Namespace PMA_MSQL
 
