@@ -18,6 +18,7 @@
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_HELPERS_H_
 
 // Standard library includes
+#include <array>
 #include <cstdint>
 #include <format>
 #include <functional>
@@ -117,6 +118,10 @@ struct BinaryParts {
 
   std::list<BinaryPart> parts;
 };
+
+std::array<uint8_t, 20> sha1_digest(uint8_t *data, size_t size);
+std::array<char, 40> digest_s20_to_hex(const std::array<uint8_t, 20> &);
+std::array<char, 40> sha1_digest_hex(uint8_t *data, size_t size);
 
 }  // namespace PMA_HELPER
 

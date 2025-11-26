@@ -1011,6 +1011,15 @@ int main() {
     }
   }
 
+  // Test PMA_HELPER::sha1_digest_hex(...)
+  {
+    auto hex = PMA_HELPER::sha1_digest_hex(
+        reinterpret_cast<uint8_t *>(const_cast<char *>("test")), 4);
+    CHECK_TRUE(std::strncmp(hex.data(),
+                            "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3",
+                            40) == 0);
+  }
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;
