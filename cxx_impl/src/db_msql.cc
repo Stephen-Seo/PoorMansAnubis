@@ -437,12 +437,12 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     close(fd);
     return std::nullopt;
   }
-  std::array<uint8_t, 20> seed_arr;
-  for (size_t sidx = 0; sidx < 20; ++sidx) {
-    seed_arr.at(sidx) = auth_plugin_data[sidx];
+  std::vector<uint8_t> seed_vec;
+  for (size_t sidx = 0; sidx < auth_plugin_data_size; ++sidx) {
+    seed_vec.push_back(auth_plugin_data[sidx]);
   }
 
-  std::array<uint8_t, 20> auth_arr = msql_native_auth_resp(seed_arr, pass);
+  std::array<uint8_t, 20> auth_arr = msql_native_auth_resp(seed_vec, pass);
   if (server_capabilities_2 & (1 << (21 - 16))) {
 #ifndef NDEBUG
     std::fprintf(stderr, "NOTICE: LENENC auth response.\n");
@@ -716,7 +716,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
 }
 
 std::array<uint8_t, 20> PMA_MSQL::msql_native_auth_resp(
-    std::array<uint8_t, 20> seed, std::string pass) {
+    std::vector<uint8_t> seed, std::string pass) {
   std::array<uint8_t, 20> pass_sha1 = PMA_HELPER::sha1_digest(
       reinterpret_cast<uint8_t *>(pass.data()), pass.size());
 

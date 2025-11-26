@@ -74,7 +74,7 @@ std::optional<MSQLConnection> connect_msql(std::string addr, uint16_t port,
                                            std::string user, std::string pass,
                                            std::string dbname);
 
-std::array<uint8_t, 20> msql_native_auth_resp(std::array<uint8_t, 20> seed,
+std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
                                               std::string pass);
 
 void print_error_pkt(uint8_t *data, size_t size);
