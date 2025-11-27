@@ -161,7 +161,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf(".");
+          std::printf("w");
 #endif
           continue;
         } else {
@@ -172,7 +172,9 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
         remaining -= static_cast<size_t>(write_ret);
         continue;
       } else {
+#ifndef NDEBUG
         std::printf("\n");
+#endif
         break;
       }
     }
@@ -190,7 +192,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf(".");
+          std::printf("r");
 #endif
           continue;
         }
@@ -199,6 +201,9 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
                      "ERROR: execute_stmt: Recv EOF after sending stmt!\n");
         return 2;
       } else {
+#ifndef NDEBUG
+        std::printf("\n");
+#endif
         break;
       }
     }
@@ -367,6 +372,9 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       if (write_ret == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#ifndef NDEBUG
+          std::printf("w");
+#endif
           continue;
         } else {
           std::fprintf(stderr, "Failed to send execute stmt pkt (errno %d)!\n",
@@ -376,6 +384,9 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       } else if (static_cast<size_t>(write_ret) < remaining) {
         remaining -= static_cast<size_t>(write_ret);
       } else {
+#ifndef NDEBUG
+        std::printf("\n");
+#endif
         break;
       }
     }
@@ -390,6 +401,9 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       if (read_ret == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#ifndef NDEBUG
+          std::printf("r");
+#endif
           continue;
         } else {
           std::fprintf(stderr,
@@ -399,6 +413,9 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
         }
       } else {
         size = static_cast<size_t>(read_ret);
+#ifndef NDEBUG
+        std::printf("\n");
+#endif
         break;
       }
     }
@@ -408,6 +425,10 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
                    "ERROR: Recv 0 bytes after sending exec stmt pkt!\n");
       return 2;
     }
+
+#ifndef NDEBUG
+    PMA_EPrintln("NOTICE: response to execute pkt size is: {}", size);
+#endif
 
     size_t idx = 0;
 
@@ -452,7 +473,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       std::tie(rows_size, bytes_read) = parse_len_enc_int(buf + idx);
       idx += bytes_read;
 #ifndef NDEBUG
-      std::fprintf(stderr, "stmt affected %" PRIu64 " rows!\n", rows_size);
+      PMA_EPrintln("stmt affected {} rows!", rows_size);
 #endif
       if (idx >= size && idx >= 4096) {
         std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
@@ -463,7 +484,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       std::tie(last_insert_id, bytes_read) = parse_len_enc_int(buf + idx);
       idx += bytes_read;
 #ifndef NDEBUG
-      std::fprintf(stderr, "last insert id: %" PRIu64 "\n", last_insert_id);
+      PMA_EPrintln("last insert id: {}", last_insert_id);
 #endif
       if (idx >= size && idx >= 4096) {
         std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
@@ -475,7 +496,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       status_bytes[0] = buf[idx++];
       status_bytes[1] = buf[idx++];
 #ifndef NDEBUG
-      std::fprintf(stderr, "Server status: %#" PRIx16 "\n", status);
+      PMA_EPrintln("Server status: {:#x}", status);
 #endif
       if (idx >= size && idx >= 4096) {
         std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
@@ -487,7 +508,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       warning_c_bytes[0] = buf[idx++];
       warning_c_bytes[1] = buf[idx++];
 #ifndef NDEBUG
-      std::fprintf(stderr, "Warning count: %" PRIu16 "\n", warning_c);
+      PMA_EPrintln("Warning count: {}", warning_c);
 #endif
       if (idx == size) {
         close_stmt(stmt_id);
@@ -508,16 +529,16 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
         return 2;
       }
 
-      std::fprintf(stderr, "%.*s", static_cast<int>(info_string_size),
-                   buf + idx);
+      std::string str(reinterpret_cast<char *>(buf + idx), info_string_size);
+
+      PMA_EPrintln("Info string: {}", str);
     } else {
       uint64_t col_count;
       uint_fast8_t bytes_read;
       std::tie(col_count, bytes_read) = parse_len_enc_int(buf + idx);
       idx += bytes_read;
 #ifndef NDEBUG
-      std::fprintf(stderr, "NOTICE: stmt result col count: %" PRIu64 "\n",
-                   col_count);
+      PMA_EPrintln("NOTICE: stmt result col count: {}", col_count);
 #endif
       // TODO result pkts handling.
     }
@@ -558,7 +579,7 @@ void PMA_MSQL::MSQLConnection::close_stmt(uint32_t stmt_id) {
       }
     } else {
       if (write_ret != 9) {
-        std::fprintf(stderr, "WARNING: Sent %zd of 9 bytes!\n", write_ret);
+        PMA_EPrintln("WARNING: Sent {} of 9 bytes!", write_ret);
       }
       break;
     }
@@ -630,7 +651,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
         // NONBLOCKING nothing to read.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-        std::printf(".");
+        std::printf("r");
 #endif
         continue;
       } else {
@@ -650,14 +671,14 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     }
   }
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: read_ret: %zd\n", read_ret);
+  PMA_EPrintln("NOTICE: read_ret: {}", read_ret);
 #endif
 
   uint32_t pkt_size = static_cast<uint32_t>(buf[0]) |
                       (static_cast<uint32_t>(buf[1]) << 8) |
                       (static_cast<uint32_t>(buf[2]) << 16);
 #ifndef NDEBUG
-  std::fprintf(stderr, "pkt_size: %" PRIu32 " (%x)\n", pkt_size, pkt_size);
+  PMA_EPrintln("pkt_size: {} ({:#x})", pkt_size, pkt_size);
 #endif
   uint8_t sequence_id = buf[3];
 #ifndef NDEBUG
@@ -669,7 +690,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   ssize_t idx = 0;
   // Protocol version.
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Protocol version: %hhu\n", pkt_data[idx]);
+  PMA_EPrintln("NOTICE: Protocol version: {}", pkt_data[idx]);
 #endif
   ++idx;
   if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
@@ -691,7 +712,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     return std::nullopt;
   }
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: idx after server version: %zd\n", idx);
+  PMA_EPrintln("NOTICE: idx after server version: {}", idx);
 #endif
 
   // Connection id.
@@ -701,8 +722,8 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
                            (static_cast<uint32_t>(pkt_data[idx + 3]) << 24);
   idx += 4;
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Connection id %" PRIu32 " (%#" PRIx32 ")\n",
-               connection_id, connection_id);
+  PMA_EPrintln("NOTICE: Connection id {} ({:#x})", connection_id,
+               connection_id);
 #endif
   if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
     close(fd);
@@ -745,8 +766,8 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
 
   // Server default collation.
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Server default collation: %hhu (%#hhx)\n",
-               pkt_data[idx], pkt_data[idx]);
+  PMA_EPrintln("NOTICE: Server default collation: {} ({:#x})", pkt_data[idx],
+               pkt_data[idx]);
 #endif
   idx += 1;
   if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
@@ -768,8 +789,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
       *reinterpret_cast<uint16_t *>(pkt_data + idx);
   server_capabilities_2 = PMA_HELPER::le_swap_u16(server_capabilities_2);
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Server capabilities 2: %#hx\n",
-               server_capabilities_2);
+  PMA_EPrintln("NOTICE: Server capabilities 2: {:#x}", server_capabilities_2);
 #endif
   idx += 2;
   if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
@@ -784,8 +804,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     plugin_data_length = pkt_data[idx];
     idx += 1;
 #ifndef NDEBUG
-    std::fprintf(stderr, "NOTICE: plugin_data_length: %hhu\n",
-                 plugin_data_length);
+    PMA_EPrintln("NOTICE: plugin_data_length: {}", plugin_data_length);
 #endif
   } else {
     idx += 1;
@@ -829,8 +848,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     }
     auth_plugin_data_size += size_max;
 #ifndef NDEBUG
-    std::fprintf(stderr,
-                 "NOTICE: Writing size %zu to auth_plugin_data offset 8\n",
+    PMA_EPrintln("NOTICE: Writing size {} to auth_plugin_data offset 8",
                  size_max);
 #endif
     std::memcpy(auth_plugin_data.get() + 8, pkt_data + idx, size_max);
@@ -846,9 +864,8 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   std::string auth_plugin_name;
   if (server_capabilities_2 & 0x8) {
 #ifndef NDEBUG
-    std::fprintf(stderr,
-                 "NOTICE: at auth_plugin_name: pkt_size %" PRIu32 ", idx %zu\n",
-                 pkt_size, idx);
+    PMA_EPrintln("NOTICE: at auth_plugin_name: pkt_size {}, idx {}", pkt_size,
+                 idx);
 #endif
     auto str_size =
         static_cast<std::string::allocator_type::size_type>(pkt_size - idx);
@@ -960,7 +977,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   // Send combined data.
   const PMA_HELPER::BinaryPart combined = parts.combine();
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Client send size: %zu\n", combined.size);
+  PMA_EPrintln("NOTICE: Client send size: {}", combined.size);
 #endif
   sequence_id += 1;
   std::vector<MSQLPacket> write_pkts =
@@ -997,7 +1014,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
           // NONBLOCKING nothing to read.
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf(".");
+          std::printf("w");
 #endif
         } else {
           std::fprintf(
@@ -1010,7 +1027,9 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
         break;
       }
     }
+#ifndef NDEBUG
     std::printf("\n");
+#endif
   }
 
   while (true) {
@@ -1020,7 +1039,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
         // NONBLOCKING nothing to read.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-        std::printf(".");
+        std::printf("r");
 #endif
         continue;
       } else {
@@ -1040,18 +1059,18 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     }
   }
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: read_ret: %zd\n", read_ret);
+  PMA_EPrintln("NOTICE: read_ret: {}", read_ret);
 #endif
 
   pkt_size = static_cast<uint32_t>(buf[0]) |
              (static_cast<uint32_t>(buf[1]) << 8) |
              (static_cast<uint32_t>(buf[2]) << 16);
 #ifndef NDEBUG
-  std::fprintf(stderr, "pkt_size: %" PRIu32 " (%x)\n", pkt_size, pkt_size);
+  PMA_EPrintln("pkt_size: {} ({:#x})", pkt_size, pkt_size);
 #endif
   sequence_id = buf[3];
 #ifndef NDEBUG
-  std::fprintf(stderr, "seq: %hhu\n", sequence_id);
+  PMA_EPrintln("seq: {}", sequence_id);
 #endif
 
   pkt_data = buf + 4;
@@ -1065,7 +1084,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
       std::fprintf(stderr, "NOTICE: Got 0 as OK from server.\n");
 #endif
     } else {
-      std::fprintf(stderr, "ERROR: Got invalid %#hhx from server (not 0xFE)!\n",
+      std::fprintf(stderr, "ERROR: Got invalid %#hhx from server (not 0)!\n",
                    pkt_data[idx]);
       close(fd);
       print_error_pkt(pkt_data, pkt_size);
@@ -1091,8 +1110,8 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   uint_fast8_t bytes_read;
   std::tie(affected_rows, bytes_read) = parse_len_enc_int(pkt_data + idx);
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Affected rows: %" PRIu64 " (%#" PRIx64 ")\n",
-               affected_rows, affected_rows);
+  PMA_EPrintln("NOTICE: Affected rows: {} ({:#x})", affected_rows,
+               affected_rows);
 #endif
   idx += bytes_read;
 
@@ -1106,8 +1125,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   uint64_t last_insert_id;
   std::tie(last_insert_id, bytes_read) = parse_len_enc_int(pkt_data + idx);
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Last insert id: %#" PRIx64 "\n",
-               last_insert_id);
+  PMA_EPrintln("NOTICE: Last insert id: {:#x}", last_insert_id);
 #endif
   idx += bytes_read;
 
@@ -1124,7 +1142,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   server_status_bytes[1] = pkt_data[idx++];
 
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Server status: %#" PRIx16 "\n", server_status);
+  PMA_EPrintln("NOTICE: Server status: {:#x}", server_status);
 #endif
 
   if (idx >= 4092 || idx >= pkt_size) {
