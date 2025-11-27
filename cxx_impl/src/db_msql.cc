@@ -51,6 +51,10 @@ PMA_MSQL::MSQLPacket::MSQLPacket(MSQLPacket &&other)
 
 PMA_MSQL::MSQLPacket &PMA_MSQL::MSQLPacket::operator=(
     PMA_MSQL::MSQLPacket &&other) {
+  if (this->body) {
+    delete[] this->body;
+  }
+
   this->packet_length = other.packet_length;
   this->seq = other.seq;
   this->body = other.body;
@@ -83,6 +87,10 @@ PMA_MSQL::MSQLConnection::MSQLConnection(MSQLConnection &&other)
 
 PMA_MSQL::MSQLConnection &PMA_MSQL::MSQLConnection::operator=(
     MSQLConnection &&other) {
+  if (this->fd >= 0) {
+    close(this->fd);
+  }
+
   this->flags = other.flags;
   this->fd = other.fd;
   this->connection_id = other.connection_id;
