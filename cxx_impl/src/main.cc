@@ -140,6 +140,11 @@ int main(int argc, char **argv) {
   // TODO DEBUG
   auto msql_conn_opt = PMA_MSQL::connect_msql("127.0.0.1", 3306, "pmauser",
                                               "pmauserpass", "PMA");
+  if (msql_conn_opt.has_value()) {
+    msql_conn_opt->execute_stmt(
+        "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
+        "PRIMARY KEY)");
+  }
 
   return 0;
 

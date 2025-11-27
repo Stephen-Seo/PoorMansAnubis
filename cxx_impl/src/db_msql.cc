@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 // Standard library includes.
+#include <cerrno>
 #include <chrono>
 #include <cinttypes>
 #include <cstdlib>
@@ -99,6 +100,460 @@ PMA_MSQL::MSQLConnection &PMA_MSQL::MSQLConnection::operator=(
   other.flags.set(0);
 
   return *this;
+}
+
+bool PMA_MSQL::MSQLConnection::is_valid() const {
+  return fd >= 0 && !flags.test(0);
+}
+
+int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
+  if (!is_valid()) {
+    return 1;
+  }
+
+  uint8_t seq = 0;
+
+  // Setup prepare stmt packet(s).
+  std::vector<MSQLPacket> pkts;
+  {
+    uint8_t *buf = new uint8_t[stmt.size() + 1];
+    buf[0] = 0x16;
+    std::memcpy(buf + 1, stmt.data(), stmt.size());
+
+    pkts = PMA_MSQL::create_packets(buf, stmt.size() + 1, &seq);
+    delete[] buf;
+  }
+
+  for (const MSQLPacket &pkt : pkts) {
+    PMA_HELPER::BinaryPart part;
+    {
+      PMA_HELPER::BinaryParts parts;
+      uint32_t u32 = pkt.packet_length;
+      uint8_t *u32_8 = reinterpret_cast<uint8_t *>(&u32);
+
+      uint8_t *buf = new uint8_t[1];
+      buf[0] = u32_8[0];
+      parts.append(1, buf);
+      buf = new uint8_t[1];
+      buf[0] = u32_8[1];
+      parts.append(1, buf);
+      buf = new uint8_t[1];
+      buf[0] = u32_8[2];
+      parts.append(1, buf);
+
+      buf = new uint8_t[1];
+      buf[0] = pkt.seq;
+      parts.append(1, buf);
+
+      buf = new uint8_t[pkt.packet_length];
+      std::memcpy(buf, pkt.body, pkt.packet_length);
+      parts.append(pkt.packet_length, buf);
+
+      part = parts.combine();
+    }
+
+    size_t remaining = part.size;
+    while (true) {
+      ssize_t write_ret =
+          write(fd, part.data + (part.size - remaining), remaining);
+      if (write_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#ifndef NDEBUG
+          std::printf(".");
+#endif
+          continue;
+        } else {
+          std::fprintf(stderr, "ERROR: execute_stmt: Failed to send stmt!\n");
+          return 2;
+        }
+      } else if (static_cast<size_t>(write_ret) < remaining) {
+        remaining -= static_cast<size_t>(write_ret);
+        continue;
+      } else {
+        std::printf("\n");
+        break;
+      }
+    }
+  }
+
+  // Recv response pkt to prepare.
+  uint32_t stmt_id;
+  uint8_t *stmt_id_bytes = reinterpret_cast<uint8_t *>(&stmt_id);
+  {
+    uint8_t buf[4096];
+    ssize_t read_ret = 0;
+    while (true) {
+      read_ret = read(fd, buf, 4096);
+      if (read_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#ifndef NDEBUG
+          std::printf(".");
+#endif
+          continue;
+        }
+      } else if (read_ret == 0) {
+        std::fprintf(stderr,
+                     "ERROR: execute_stmt: Recv EOF after sending stmt!\n");
+        return 2;
+      } else {
+        break;
+      }
+    }
+
+    size_t idx = 0;
+
+    // Parse response pkt.
+    uint32_t pkt_size;
+    uint8_t *ps_bytes = reinterpret_cast<uint8_t *>(&pkt_size);
+    ps_bytes[0] = buf[idx++];
+    ps_bytes[1] = buf[idx++];
+    ps_bytes[2] = buf[idx++];
+    ps_bytes[3] = 0;
+
+    if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
+      std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+      return 2;
+    }
+
+    uint8_t seq_id = buf[idx++];
+    if (seq_id != seq) {
+      std::fprintf(stderr,
+                   "WARNING: execute_stmt: Recv seq %#hhx, should be %#hhx!\n",
+                   seq_id, seq);
+    }
+
+    if (buf[idx] == 0xFF) {
+      std::fprintf(stderr,
+                   "ERROR: execute_stmt: Err pkt in response to stmt!\n");
+      print_error_pkt(buf + idx, pkt_size);
+      return 2;
+    } else if (buf[idx] != 0) {
+      std::fprintf(stderr, "ERROR: execute_stmt: Not OK pkt (%#hhx)!\n",
+                   buf[idx]);
+      return 2;
+    }
+    ++idx;
+
+    stmt_id_bytes[0] = buf[idx++];
+    stmt_id_bytes[1] = buf[idx++];
+    stmt_id_bytes[2] = buf[idx++];
+    stmt_id_bytes[3] = buf[idx++];
+
+#ifndef NDEBUG
+    std::fprintf(stderr, "NOTICE: stmt id %" PRIu32 " (%#" PRIx32 ")\n",
+                 stmt_id, stmt_id);
+#endif
+
+    if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
+      std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+      close_stmt(stmt_id);
+      return 2;
+    }
+
+    uint16_t cols;
+    uint8_t *cols_bytes = reinterpret_cast<uint8_t *>(&cols);
+    cols_bytes[0] = buf[idx++];
+    cols_bytes[1] = buf[idx++];
+    if (cols != 0) {
+      std::fprintf(stderr, "WARNING: Got non-zero cols %" PRIu16 "!\n", cols);
+    }
+
+    if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
+      std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+      close_stmt(stmt_id);
+      return 2;
+    }
+
+    uint16_t params;
+    uint8_t *params_bytes = reinterpret_cast<uint8_t *>(&params);
+    params_bytes[0] = buf[idx++];
+    params_bytes[1] = buf[idx++];
+
+    if (params != 0) {
+      std::fprintf(stderr, "ERROR: stmt requires %" PRIu16 " binded params!\n",
+                   params);
+      close_stmt(stmt_id);
+      return 2;
+    }
+
+    // unused 1 byte.
+    ++idx;
+
+    if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
+      std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+      close_stmt(stmt_id);
+      return 2;
+    }
+
+    uint16_t warnings;
+    uint8_t *warn_bytes = reinterpret_cast<uint8_t *>(&warnings);
+    warn_bytes[0] = buf[idx++];
+    warn_bytes[1] = buf[idx++];
+
+    if (warnings > 0) {
+      std::fprintf(stderr, "NOTICE: %" PRIu16 " warnings!\n", warnings);
+    }
+
+    if (idx < static_cast<size_t>(read_ret)) {
+      std::fprintf(stderr, "WARNING: execute_stmt: trailing bytes %zu!\n",
+                   static_cast<size_t>(read_ret) - idx);
+    }
+  }
+
+  // Set up execute pkt(s).
+  seq = 0;
+  {
+    PMA_HELPER::BinaryParts parts;
+
+    uint8_t *buf = new uint8_t[1];
+    buf[0] = 0x17;
+    parts.append(1, buf);
+
+    buf = new uint8_t[4];
+    buf[0] = stmt_id_bytes[0];
+    buf[1] = stmt_id_bytes[1];
+    buf[2] = stmt_id_bytes[2];
+    buf[3] = stmt_id_bytes[3];
+    parts.append(4, buf);
+
+    buf = new uint8_t[1];
+    buf[0] = 0;
+    parts.append(1, buf);
+
+    buf = new uint8_t[4];
+    buf[0] = 1;
+    buf[1] = 0;
+    buf[2] = 0;
+    buf[3] = 0;
+    parts.append(4, buf);
+
+    PMA_HELPER::BinaryPart part = parts.combine();
+
+    pkts = PMA_MSQL::create_packets(part.data, part.size, &seq);
+  }
+
+  // Send execute pkt(s).
+  for (const MSQLPacket &pkt : pkts) {
+    PMA_HELPER::BinaryPart part;
+    {
+      PMA_HELPER::BinaryParts parts;
+
+      uint32_t size = pkt.packet_length;
+      uint8_t *size_bytes = reinterpret_cast<uint8_t *>(&size);
+      uint8_t *buf = new uint8_t[3];
+      buf[0] = size_bytes[0];
+      buf[1] = size_bytes[1];
+      buf[2] = size_bytes[2];
+      parts.append(3, buf);
+
+      buf = new uint8_t[1];
+      buf[0] = pkt.seq;
+      parts.append(1, buf);
+
+      buf = new uint8_t[size];
+      std::memcpy(buf, pkt.body, size);
+      parts.append(size, buf);
+
+      part = parts.combine();
+    }
+
+    size_t remaining = part.size;
+    while (true) {
+      ssize_t write_ret =
+          write(fd, part.data + (part.size - remaining), remaining);
+      if (write_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        } else {
+          std::fprintf(stderr, "Failed to send execute stmt pkt (errno %d)!\n",
+                       errno);
+          return 2;
+        }
+      } else if (static_cast<size_t>(write_ret) < remaining) {
+        remaining -= static_cast<size_t>(write_ret);
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Response to execute stmt pkt(s).
+  {
+    uint8_t buf[4096];
+    size_t size = 0;
+    while (true) {
+      ssize_t read_ret = read(fd, buf, 4096);
+      if (read_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        } else {
+          std::fprintf(stderr,
+                       "ERROR: Failed to recv after exec pkt (errno %d)!\n",
+                       errno);
+          return 2;
+        }
+      } else {
+        size = static_cast<size_t>(read_ret);
+        break;
+      }
+    }
+
+    if (size == 0) {
+      std::fprintf(stderr,
+                   "ERROR: Recv 0 bytes after sending exec stmt pkt!\n");
+      return 2;
+    }
+
+    size_t idx = 0;
+
+    uint32_t pkt_size;
+    uint8_t *pkt_size_bytes = reinterpret_cast<uint8_t *>(&pkt_size);
+    pkt_size_bytes[0] = buf[idx++];
+    pkt_size_bytes[1] = buf[idx++];
+    pkt_size_bytes[2] = buf[idx++];
+    pkt_size_bytes[3] = 0;
+
+    if (idx >= size && idx >= 4096) {
+      std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+      return 2;
+    }
+
+    uint8_t seq_id = buf[idx++];
+    if (seq_id != seq) {
+      std::fprintf(stderr,
+                   "WARNING: execute_stmt: Recv seq %#hhx, should be %#hhx!\n",
+                   seq_id, seq);
+    }
+
+    if (idx >= size && idx >= 4096) {
+      std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+      return 2;
+    }
+
+    if (buf[idx] == 0xFF) {
+      std::fprintf(stderr, "ERROR: Recv Err pkt after exec pkt sent!\n");
+      print_error_pkt(buf + idx, pkt_size);
+      return 2;
+    } else if (buf[idx] == 0) {
+      // OK pkt.
+      ++idx;
+      if (idx >= size && idx >= 4096) {
+        std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+        return 2;
+      }
+
+      uint64_t rows_size;
+      uint_fast8_t bytes_read;
+      std::tie(rows_size, bytes_read) = parse_len_enc_int(buf + idx);
+      idx += bytes_read;
+#ifndef NDEBUG
+      std::fprintf(stderr, "stmt affected %" PRIu64 " rows!\n", rows_size);
+#endif
+      if (idx >= size && idx >= 4096) {
+        std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+        return 2;
+      }
+
+      uint64_t last_insert_id;
+      std::tie(last_insert_id, bytes_read) = parse_len_enc_int(buf + idx);
+      idx += bytes_read;
+#ifndef NDEBUG
+      std::fprintf(stderr, "last insert id: %" PRIu64 "\n", last_insert_id);
+#endif
+      if (idx >= size && idx >= 4096) {
+        std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+        return 2;
+      }
+
+      uint16_t status;
+      uint8_t *status_bytes = reinterpret_cast<uint8_t *>(&status);
+      status_bytes[0] = buf[idx++];
+      status_bytes[1] = buf[idx++];
+#ifndef NDEBUG
+      std::fprintf(stderr, "Server status: %#" PRIx16 "\n", status);
+#endif
+      if (idx >= size && idx >= 4096) {
+        std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+        return 2;
+      }
+
+      uint16_t warning_c;
+      uint8_t *warning_c_bytes = reinterpret_cast<uint8_t *>(&warning_c);
+      warning_c_bytes[0] = buf[idx++];
+      warning_c_bytes[1] = buf[idx++];
+#ifndef NDEBUG
+      std::fprintf(stderr, "Warning count: %" PRIu16 "\n", warning_c);
+#endif
+      if (idx == size) {
+        close_stmt(stmt_id);
+        return 0;
+      }
+
+      if (idx >= size && idx >= 4096) {
+        std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+        return 2;
+      }
+
+      uint64_t info_string_size;
+      std::tie(info_string_size, bytes_read) = parse_len_enc_int(buf + idx);
+      idx += bytes_read;
+
+      if (idx + info_string_size > size || idx + info_string_size >= 4096) {
+        std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+        return 2;
+      }
+
+      std::fprintf(stderr, "%.*s", static_cast<int>(info_string_size),
+                   buf + idx);
+    } else {
+      // TODO handle result set pkts.
+    }
+  }
+  close_stmt(stmt_id);
+  return 0;
+}
+
+void PMA_MSQL::MSQLConnection::close_stmt(uint32_t stmt_id) {
+  if (!is_valid()) {
+    return;
+  }
+
+  uint8_t buf[9];
+  buf[0] = 5;
+  buf[1] = 0;
+  buf[2] = 0;
+  buf[3] = 0;
+  buf[4] = 0x19;
+
+  uint8_t *id_bytes = reinterpret_cast<uint8_t *>(&stmt_id);
+
+  buf[5] = id_bytes[0];
+  buf[6] = id_bytes[1];
+  buf[7] = id_bytes[2];
+  buf[8] = id_bytes[3];
+
+  ssize_t write_ret;
+  while (true) {
+    write_ret = write(fd, buf, 9);
+    if (write_ret == -1) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        continue;
+      } else {
+        std::fprintf(stderr, "ERROR: Failed to send close stmt packet!\n");
+        return;
+      }
+    } else {
+      if (write_ret != 9) {
+        std::fprintf(stderr, "WARNING: Sent %zd of 9 bytes!\n", write_ret);
+      }
+      break;
+    }
+  }
 }
 
 std::vector<PMA_MSQL::MSQLPacket> PMA_MSQL::create_packets(uint8_t *data,
@@ -412,7 +867,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   // Max packet size.
   cli_buf = new uint8_t[4];
   u32 = reinterpret_cast<uint32_t *>(cli_buf);
-  *u32 = 0xFFFFFF;
+  *u32 = 0x1000;
 
   *u32 = PMA_HELPER::le_swap_u32(*u32);
 
@@ -852,4 +1307,52 @@ void PMA_MSQL::print_error_pkt(uint8_t *data, size_t size) {
       std::fprintf(stderr, "%.*s\n", static_cast<int>(size - idx), data + idx);
     }
   }
+}
+
+std::tuple<uint64_t, uint_fast8_t> PMA_MSQL::parse_len_enc_int(uint8_t *data) {
+  uint64_t i;
+  uint8_t *i_bytes = reinterpret_cast<uint8_t *>(&i);
+
+  uint_fast8_t idx = 0;
+  if (data[idx] < 0xFB) {
+    i = data[idx];
+    return {i, 1};
+  } else if (data[idx] == 0xFB) {
+    return {0, 1};
+  } else if (data[idx] == 0xFC) {
+    ++idx;
+    i_bytes[0] = data[idx++];
+    i_bytes[1] = data[idx++];
+    i_bytes[2] = 0;
+    i_bytes[3] = 0;
+    i_bytes[4] = 0;
+    i_bytes[5] = 0;
+    i_bytes[6] = 0;
+    i_bytes[7] = 0;
+    return {i, idx};
+  } else if (data[idx] == 0xFD) {
+    ++idx;
+    i_bytes[0] = data[idx++];
+    i_bytes[1] = data[idx++];
+    i_bytes[2] = data[idx++];
+    i_bytes[3] = 0;
+    i_bytes[4] = 0;
+    i_bytes[5] = 0;
+    i_bytes[6] = 0;
+    i_bytes[7] = 0;
+    return {i, idx};
+  } else if (data[idx] == 0xFE) {
+    ++idx;
+    i_bytes[0] = data[idx++];
+    i_bytes[1] = data[idx++];
+    i_bytes[2] = data[idx++];
+    i_bytes[3] = data[idx++];
+    i_bytes[4] = data[idx++];
+    i_bytes[5] = data[idx++];
+    i_bytes[6] = data[idx++];
+    i_bytes[7] = data[idx++];
+    return {i, idx};
+  }
+
+  return {0, 0};
 }
