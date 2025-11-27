@@ -510,7 +510,15 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
       std::fprintf(stderr, "%.*s", static_cast<int>(info_string_size),
                    buf + idx);
     } else {
-      // TODO handle result set pkts.
+      uint64_t col_count;
+      uint_fast8_t bytes_read;
+      std::tie(col_count, bytes_read) = parse_len_enc_int(buf + idx);
+      idx += bytes_read;
+#ifndef NDEBUG
+      std::fprintf(stderr, "NOTICE: stmt result col count: %" PRIu64 "\n",
+                   col_count);
+#endif
+      // TODO result pkts handling.
     }
   }
   close_stmt(stmt_id);

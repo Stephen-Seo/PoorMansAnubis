@@ -144,6 +144,7 @@ int main(int argc, char **argv) {
     msql_conn_opt->execute_stmt(
         "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
         "PRIMARY KEY)");
+    msql_conn_opt->execute_stmt("SELECT COUNT(*) FROM TEST_TABLE");
   }
 
   return 0;
