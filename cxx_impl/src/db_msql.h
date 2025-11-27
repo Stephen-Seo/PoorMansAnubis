@@ -87,6 +87,9 @@ std::optional<MSQLConnection> connect_msql(std::string addr, uint16_t port,
 std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
                                               std::string pass);
 
+// 0 on success, 1 if error. Second integer is bytes read.
+std::tuple<int, size_t> handle_ok_pkt(uint8_t *data, size_t size);
+
 void print_error_pkt(uint8_t *data, size_t size);
 
 // Integer value and bytes read.

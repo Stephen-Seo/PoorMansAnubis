@@ -143,8 +143,8 @@ int main(int argc, char **argv) {
   if (msql_conn_opt.has_value()) {
     msql_conn_opt->execute_stmt(
         "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
-        "PRIMARY KEY)");
-    msql_conn_opt->execute_stmt("SELECT COUNT(*) FROM TEST_TABLE");
+        "PRIMARY KEY, test INT)");
+    msql_conn_opt->execute_stmt("SELECT id, test FROM TEST_TABLE");
   }
 
   return 0;
