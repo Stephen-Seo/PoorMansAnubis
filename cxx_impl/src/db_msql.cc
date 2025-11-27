@@ -33,6 +33,7 @@
 // Local includes.
 #include "helpers.h"
 #include "http.h"
+#include "poor_mans_print.h"
 
 PMA_MSQL::MSQLPacket::MSQLPacket() : packet_length(0), seq(0), body(nullptr) {}
 
@@ -854,8 +855,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
     auth_plugin_name =
         std::string(reinterpret_cast<char *>(pkt_data + idx), str_size);
 #ifndef NDEBUG
-    std::fprintf(stderr, "NOTICE: auth_plugin_name: %s\n",
-                 auth_plugin_name.c_str());
+    PMA_EPrintln("NOTICE: auth_plugin_name: {}", auth_plugin_name);
 #endif
   }
 
@@ -1087,64 +1087,29 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   ++idx;
 
   // Affected rows.
+  uint64_t affected_rows;
+  uint_fast8_t bytes_read;
+  std::tie(affected_rows, bytes_read) = parse_len_enc_int(pkt_data + idx);
 #ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Affected rows: %hhu (%#hhx)\n", pkt_data[idx],
-               pkt_data[idx]);
+  std::fprintf(stderr, "NOTICE: Affected rows: %" PRIu64 " (%#" PRIx64 ")\n",
+               affected_rows, affected_rows);
 #endif
-  ++idx;
+  idx += bytes_read;
+
+  if (idx >= 4092 || idx >= pkt_size) {
+    close(fd);
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
 
   // Last insert id.
-  if (pkt_data[idx] < 0xFB) {
+  uint64_t last_insert_id;
+  std::tie(last_insert_id, bytes_read) = parse_len_enc_int(pkt_data + idx);
 #ifndef NDEBUG
-    std::fprintf(stderr, "NOTICE: Last insert id: %#hhx\n", pkt_data[idx]);
+  std::fprintf(stderr, "NOTICE: Last insert id: %#" PRIx64 "\n",
+               last_insert_id);
 #endif
-    ++idx;
-  } else if (pkt_data[idx] == 0xFC) {
-    ++idx;
-    uint16_t u16;
-    uint8_t *u16_8 = reinterpret_cast<uint8_t *>(&u16);
-    u16_8[0] = pkt_data[idx++];
-    u16_8[1] = pkt_data[idx++];
-
-#ifndef NDEBUG
-    std::fprintf(stderr, "NOTICE: Last insert id: %" PRIu16 " (%#" PRIx16 ")\n",
-                 u16, u16);
-#endif
-  } else if (pkt_data[idx] == 0xFD) {
-    ++idx;
-    uint32_t u32;
-    uint8_t *u32_8 = reinterpret_cast<uint8_t *>(&u32);
-    u32_8[0] = pkt_data[idx++];
-    u32_8[1] = pkt_data[idx++];
-    u32_8[2] = pkt_data[idx++];
-    u32_8[3] = 0;
-#ifndef NDEBUG
-    std::fprintf(stderr, "NOTICE: Last insert id: %" PRIu32 " (%#" PRIx32 ")\n",
-                 u32, u32);
-#endif
-  } else if (pkt_data[idx] == 0xFE) {
-    ++idx;
-    uint64_t u64;
-    uint8_t *u64_8 = reinterpret_cast<uint8_t *>(&u64);
-    u64_8[0] = pkt_data[idx++];
-    u64_8[1] = pkt_data[idx++];
-    u64_8[2] = pkt_data[idx++];
-    u64_8[3] = pkt_data[idx++];
-    u64_8[4] = pkt_data[idx++];
-    u64_8[5] = pkt_data[idx++];
-    u64_8[6] = pkt_data[idx++];
-    u64_8[7] = pkt_data[idx++];
-#ifndef NDEBUG
-    std::fprintf(stderr, "NOTICE: Last insert id: %" PRIu64 " (%#" PRIx64 ")\n",
-                 u64, u64);
-#endif
-  } else if (pkt_data[idx] == 0xFB) {
-    ++idx;
-    std::fprintf(stderr, "NOTICE: Last insert id is NULL\n");
-  } else {
-    ++idx;
-    std::fprintf(stderr, "WARNING: Got 0xFF for last insert id!\n");
-  }
+  idx += bytes_read;
 
   if (idx >= 4092 || idx >= pkt_size) {
     close(fd);
@@ -1177,11 +1142,25 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   std::fprintf(stderr, "NOTICE: Server warning count: %" PRIu16 "\n",
                warning_count);
 
-  if (idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
+  if (idx == pkt_size) {
+    return MSQLConnection(fd, connection_id);
   }
+
+  uint64_t str_len;
+  std::tie(str_len, bytes_read) = parse_len_enc_int(pkt_data + idx);
+  if (bytes_read > 0) {
+    idx += bytes_read;
+  } else {
+    return MSQLConnection(fd, connection_id);
+  }
+
+  // TODO maybe remove handling extra data handling.
+
+  // if (str_len > 0) {
+  //   auto size = static_cast<std::string::size_type>(pkt_size - idx);
+  //   std::string str(reinterpret_cast<char *>(pkt_data + idx), size);
+  //   PMA_Println("{}", str);
+  // }
 
   return MSQLConnection(fd, connection_id);
 }
@@ -1260,46 +1239,12 @@ void PMA_MSQL::print_error_pkt(uint8_t *data, size_t size) {
       return;
     }
 
-    size_t str_len = 0;
-    if (data[idx] < 0xFB) {
-      str_len = data[idx + 1];
-      idx += 2;
-      std::string progress(reinterpret_cast<char *>(data + idx), str_len);
-      std::fprintf(stderr, "Progress String: %s\n", progress.c_str());
-    } else if (data[idx] == 0xFB) {
-      std::fprintf(stderr, "NULL progress info\n");
-    } else if (data[idx] == 0xFC) {
-      ++idx;
-      u16_8[0] = data[idx++];
-      u16_8[1] = data[idx++];
-      std::string progress(reinterpret_cast<char *>(data + idx), u16);
-      std::fprintf(stderr, "Progress String: %s\n", progress.c_str());
-    } else if (data[idx] == 0xFD) {
-      ++idx;
-      u32_8[0] = data[idx++];
-      u32_8[1] = data[idx++];
-      u32_8[2] = data[idx++];
-      u32_8[3] = 0;
-      std::string progress(reinterpret_cast<char *>(data + idx), u32);
-      std::fprintf(stderr, "Progress String: %s\n", progress.c_str());
-    } else if (data[idx] == 0xFE) {
-      ++idx;
-      uint64_t u64;
-      uint8_t *u64_8 = reinterpret_cast<uint8_t *>(&u64);
-      u64_8[0] = data[idx++];
-      u64_8[1] = data[idx++];
-      u64_8[2] = data[idx++];
-      u64_8[3] = data[idx++];
-      u64_8[4] = data[idx++];
-      u64_8[5] = data[idx++];
-      u64_8[6] = data[idx++];
-      u64_8[7] = data[idx++];
-      std::string progress(reinterpret_cast<char *>(data + idx), u64);
-      std::fprintf(stderr, "Progress String: %s\n", progress.c_str());
-    } else {
-      std::fprintf(stderr, "Got 0xFF processing progress string.\n");
-      return;
-    }
+    uint64_t str_len;
+    uint_fast8_t bytes_read;
+    std::tie(str_len, bytes_read) = parse_len_enc_int(data + idx);
+    idx += bytes_read;
+    std::string progress(reinterpret_cast<char *>(data + idx), str_len);
+    PMA_EPrintln("Progress String: {}", progress);
     return;
   }
 
