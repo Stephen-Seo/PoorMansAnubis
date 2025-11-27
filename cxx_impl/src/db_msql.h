@@ -46,7 +46,8 @@ struct MSQLPacket {
   uint8_t *body;
 };
 
-struct MSQLConnection {
+class MSQLConnection {
+ public:
   MSQLConnection();
   ~MSQLConnection();
 
@@ -60,6 +61,15 @@ struct MSQLConnection {
   MSQLConnection(MSQLConnection &&);
   MSQLConnection &operator=(MSQLConnection &&);
 
+  bool is_valid() const;
+
+  // Returns error code, 0 on success, 1 if is_valid() is false, 2 for other
+  // error.
+  int execute_stmt(const std::string &stmt);
+
+  void close_stmt(uint32_t stmt_id);
+
+ private:
   // 0 - invalid connection if set.
   std::bitset<32> flags;
   int fd;
@@ -78,6 +88,10 @@ std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
                                               std::string pass);
 
 void print_error_pkt(uint8_t *data, size_t size);
+
+// Integer value and bytes read.
+// Bytes read is 0 on error. Value is 0 on null.
+std::tuple<uint64_t, uint_fast8_t> parse_len_enc_int(uint8_t *data);
 
 }  // Namespace PMA_MSQL
 
