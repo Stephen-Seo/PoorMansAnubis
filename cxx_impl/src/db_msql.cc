@@ -493,7 +493,9 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
       std::fprintf(stderr, "ERROR: Recv Err pkt after exec pkt sent!\n");
       print_error_pkt(recv_part.data + idx, pkt_size);
       return 2;
-    } else if (recv_part.data[idx] == 0xFE) {
+    } else if (recv_part.data[idx] == 0xFE ||
+               (recv_part.data[idx] == 0 &&
+                next_pkt_enum == NextPkt::COLUMN_COUNT)) {
       const auto [ret, bytes_read] =
           handle_ok_pkt(recv_part.data + idx, pkt_size);
       idx += bytes_read;
