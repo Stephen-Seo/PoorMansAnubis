@@ -183,7 +183,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf("w");
+          std::fprintf(stderr, "w");
 #endif
           continue;
         } else {
@@ -195,7 +195,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         continue;
       } else {
 #ifndef NDEBUG
-        std::printf("\n");
+        std::fprintf(stderr, "\n");
 #endif
         break;
       }
@@ -214,7 +214,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf("r");
+          std::fprintf(stderr, "r");
 #endif
           continue;
         }
@@ -224,7 +224,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         return 2;
       } else {
 #ifndef NDEBUG
-        std::printf("\n");
+        std::fprintf(stderr, "\n");
 #endif
         break;
       }
@@ -342,7 +342,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf("w");
+          std::fprintf(stderr, "w");
 #endif
           continue;
         } else {
@@ -354,7 +354,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         remaining -= static_cast<size_t>(write_ret);
       } else {
 #ifndef NDEBUG
-        std::printf("\n");
+        std::fprintf(stderr, "\n");
 #endif
         break;
       }
@@ -386,7 +386,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
           }
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf("r");
+          std::fprintf(stderr, "r");
 #endif
           continue;
         } else {
@@ -398,7 +398,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
       } else {
         size = static_cast<size_t>(read_ret);
 #ifndef NDEBUG
-        std::printf("\n");
+        std::fprintf(stderr, "\n");
 #endif
         break;
       }
@@ -685,7 +685,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
         // NONBLOCKING nothing to read.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-        std::printf("r");
+        std::fprintf(stderr, "r");
 #endif
         continue;
       } else {
@@ -699,7 +699,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
       return std::nullopt;
     } else {
 #ifndef NDEBUG
-      std::printf("\n");
+      std::fprintf(stderr, "\n");
 #endif
       break;
     }
@@ -864,7 +864,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
           // NONBLOCKING nothing to read.
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-          std::printf("w");
+          std::fprintf(stderr, "w");
 #endif
         } else {
           std::fprintf(
@@ -878,7 +878,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
       }
     }
 #ifndef NDEBUG
-    std::printf("\n");
+    std::fprintf(stderr, "\n");
 #endif
   }
 
@@ -889,7 +889,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
         // NONBLOCKING nothing to read.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
-        std::printf("r");
+        std::fprintf(stderr, "r");
 #endif
         continue;
       } else {
@@ -903,7 +903,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
       return std::nullopt;
     } else {
 #ifndef NDEBUG
-      std::printf("\n");
+      std::fprintf(stderr, "\n");
 #endif
       break;
     }
@@ -1207,8 +1207,8 @@ PMA_MSQL::parse_init_handshake_pkt(uint8_t *data, size_t size) {
   }
 
   // Server version.
-  std::printf("NOTICE: Connecting to server, reported version: %s\n",
-              data + idx);
+  std::fprintf(stderr, "NOTICE: Connecting to server, reported version: %s\n",
+               data + idx);
   while (data[idx] != 0 && idx < size) {
     ++idx;
   }
