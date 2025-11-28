@@ -371,6 +371,8 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
   uint64_t col_count;
   std::vector<uint8_t> field_types;
   size_t row_idx = 0;
+  PMA_HELPER::BinaryPart continue_part;
+  bool attempt_fetch_more = false;
   while (!reached_ok_eof_pkt) {
     uint8_t buf[4096];
     size_t size = 0;
@@ -378,6 +380,10 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
       ssize_t read_ret = read(fd, buf, 4096);
       if (read_ret == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          if (attempt_fetch_more) {
+            PMA_EPrintln("ERROR: No more bytes, but did not reach EOF!");
+            return 2;
+          }
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
           std::printf("r");
@@ -408,22 +414,50 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
     PMA_EPrintln("NOTICE: response to execute pkt size is: {}", size);
 #endif
 
+    PMA_HELPER::BinaryPart recv_part;
+    {
+      PMA_HELPER::BinaryParts recv_parts;
+      if (continue_part.size != 0) {
+        uint8_t *continue_data = new uint8_t[continue_part.size];
+        std::memcpy(continue_data, continue_part.data, continue_part.size);
+        recv_parts.append(continue_part.size, continue_data);
+        continue_part = PMA_HELPER::BinaryPart();
+      }
+      uint8_t *buf_data = new uint8_t[size];
+      std::memcpy(buf_data, buf, size);
+      recv_parts.append(size, buf_data);
+      recv_part = recv_parts.combine();
+    }
+
+    attempt_fetch_more = true;
     size_t idx = 0;
 
   EXECUTE_STMT_PARSE_EXECUTE_RESP_PKT:
     uint32_t pkt_size;
     uint8_t *pkt_size_bytes = reinterpret_cast<uint8_t *>(&pkt_size);
-    pkt_size_bytes[0] = buf[idx++];
-    pkt_size_bytes[1] = buf[idx++];
-    pkt_size_bytes[2] = buf[idx++];
+    if (recv_part.size - idx < 4) {
+      size_t remaining = recv_part.size - idx;
+      if (remaining != 0) {
+        uint8_t *remaining_data = new uint8_t[remaining];
+        std::memcpy(remaining_data, recv_part.data + idx, remaining);
+        continue_part = PMA_HELPER::BinaryPart(remaining, remaining_data);
+      }
+#ifndef NDEBUG
+      PMA_EPrintln("NOTICE: Fetching more bytes (not enough for pkt size)...");
+#endif
+      continue;
+    }
+    pkt_size_bytes[0] = recv_part.data[idx++];
+    pkt_size_bytes[1] = recv_part.data[idx++];
+    pkt_size_bytes[2] = recv_part.data[idx++];
     pkt_size_bytes[3] = 0;
 
-    if (idx >= size && idx >= 4096) {
+    if (idx >= recv_part.size) {
       std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
       return 2;
     }
 
-    uint8_t seq_id = buf[idx++];
+    uint8_t seq_id = recv_part.data[idx++];
     if (seq_id != seq) {
       std::fprintf(stderr,
                    "WARNING: execute_stmt: Recv seq %#hhx, should be %#hhx!\n",
@@ -431,17 +465,37 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
     }
     ++seq;
 
-    if (idx >= size && idx >= 4096) {
+    if (recv_part.size - idx < static_cast<size_t>(pkt_size)) {
+      idx -= 4;
+      --seq;
+
+      size_t remaining = recv_part.size - idx;
+      if (remaining != 0) {
+#ifndef NDEBUG
+        PMA_EPrintln("Remaining bytes {}, fetching more...", remaining);
+#endif
+        uint8_t *remaining_data = new uint8_t[remaining];
+        std::memcpy(remaining_data, recv_part.data + idx, remaining);
+        continue_part = PMA_HELPER::BinaryPart(remaining, remaining_data);
+      }
+#ifndef NDEBUG
+      PMA_EPrintln("NOTICE: Fetching more bytes (not enough for pkt)...");
+#endif
+      continue;
+    }
+
+    if (idx >= recv_part.size) {
       std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
       return 2;
     }
 
-    if (buf[idx] == 0xFF) {
+    if (recv_part.data[idx] == 0xFF) {
       std::fprintf(stderr, "ERROR: Recv Err pkt after exec pkt sent!\n");
-      print_error_pkt(buf + idx, pkt_size);
+      print_error_pkt(recv_part.data + idx, pkt_size);
       return 2;
-    } else if (buf[idx] == 0xFE) {
-      const auto [ret, bytes_read] = handle_ok_pkt(buf + idx, pkt_size);
+    } else if (recv_part.data[idx] == 0xFE) {
+      const auto [ret, bytes_read] =
+          handle_ok_pkt(recv_part.data + idx, pkt_size);
       idx += bytes_read;
 
       reached_ok_eof_pkt = true;
@@ -453,7 +507,8 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
 
     switch (next_pkt_enum) {
       case NextPkt::COLUMN_COUNT: {
-        auto col_count_opt = parse_column_count_pkt(buf + idx, pkt_size);
+        auto col_count_opt =
+            parse_column_count_pkt(recv_part.data + idx, pkt_size);
         if (!col_count_opt.has_value()) {
           PMA_EPrintln("ERROR: Failed to parse column-count pkt!");
           close_stmt(stmt_id);
@@ -465,14 +520,15 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         PMA_EPrintln("NOTICE: stmt result col count: {}", col_count);
 #endif
         next_pkt_enum = NextPkt::COLUMN_DEF;
-        if (idx < size) {
+        if (idx < recv_part.size) {
           goto EXECUTE_STMT_PARSE_EXECUTE_RESP_PKT;
         } else {
           continue;
         }
       }
       case NextPkt::COLUMN_DEF: {
-        int ret = parse_col_type_pkt(buf + idx, pkt_size, field_types);
+        int ret =
+            parse_col_type_pkt(recv_part.data + idx, pkt_size, field_types);
         if (ret != 0) {
           PMA_EPrintln("ERROR: Failed to parse column def {}!",
                        field_types.size());
@@ -489,7 +545,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         } else if (field_types.size() == col_count) {
           next_pkt_enum = NextPkt::ROW;
         }
-        if (idx < size) {
+        if (idx < recv_part.size) {
           goto EXECUTE_STMT_PARSE_EXECUTE_RESP_PKT;
         } else {
           continue;
@@ -499,7 +555,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
 #ifndef NDEBUG
         PMA_EPrintln("NOTICE: Parsing ROW {}", row_idx);
 #endif
-        int ret = parse_row_pkt(buf + idx, pkt_size, field_types);
+        int ret = parse_row_pkt(recv_part.data + idx, pkt_size, field_types);
         if (ret != 0) {
           PMA_EPrintln("ERROR: Failed to parse row pkt!");
           close_stmt(stmt_id);
@@ -507,7 +563,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         }
         ++row_idx;
         idx += pkt_size;
-        if (idx < size) {
+        if (idx < recv_part.size) {
           goto EXECUTE_STMT_PARSE_EXECUTE_RESP_PKT;
         } else {
           continue;
