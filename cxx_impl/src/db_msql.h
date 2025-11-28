@@ -67,13 +67,13 @@ class Connection {
   // error.
   int execute_stmt(const std::string &stmt);
 
-  void close_stmt(uint32_t stmt_id);
-
  private:
   // 0 - invalid connection if set.
   std::bitset<32> flags;
   int fd;
   uint32_t connection_id;
+
+  void close_stmt(uint32_t stmt_id);
 };
 
 // Copies "data" into the returned packet struct(s).
@@ -104,8 +104,20 @@ parse_init_handshake_pkt(uint8_t *data, size_t size);
 
 // Returns err int, stmt id.
 // err int is 0 on success, 1 on error.
-std::optional<std::tuple<int, uint32_t> > parse_prepare_resp_pkt(uint8_t *data,
+std::optional<std::tuple<int, uint32_t> > parse_prepare_resp_pkt(uint8_t *buf,
                                                                  size_t size);
+
+// Returns column count.
+std::optional<uint64_t> parse_column_count_pkt(uint8_t *buf, size_t size);
+
+// Returns 0 on success. Updates field_types vec.
+int parse_col_type_pkt(uint8_t *buf, size_t size,
+                       std::vector<uint8_t> &field_types);
+
+// Returns 0 on success.
+// TODO return row values.
+int parse_row_pkt(uint8_t *buf, size_t size,
+                  const std::vector<uint8_t> &field_types);
 
 }  // Namespace PMA_MSQL
 
