@@ -96,6 +96,12 @@ void print_error_pkt(uint8_t *data, size_t size);
 // Bytes read is 0 on error. Value is 0 on null.
 std::tuple<uint64_t, uint_fast8_t> parse_len_enc_int(uint8_t *data);
 
+// Returns server_caps_1, server_caps_2, server_caps_3, seed, auth_plugin_name,
+// and connection_id.
+std::optional<std::tuple<uint16_t, uint16_t, uint32_t, std::vector<uint8_t>,
+                         std::string, uint32_t> >
+parse_init_handshake_pkt(uint8_t *data, size_t size);
+
 }  // Namespace PMA_MSQL
 
 #endif
