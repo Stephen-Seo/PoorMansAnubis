@@ -234,71 +234,18 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
                    buf[idx]);
       return 2;
     }
-    ++idx;
 
-    stmt_id_bytes[0] = buf[idx++];
-    stmt_id_bytes[1] = buf[idx++];
-    stmt_id_bytes[2] = buf[idx++];
-    stmt_id_bytes[3] = buf[idx++];
-
-#ifndef NDEBUG
-    std::fprintf(stderr, "NOTICE: stmt id %" PRIu32 " (%#" PRIx32 ")\n",
-                 stmt_id, stmt_id);
-#endif
-
-    if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
-      std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
-      close_stmt(stmt_id);
+    auto res_opt = parse_prepare_resp_pkt(buf + idx, pkt_size);
+    if (!res_opt.has_value()) {
+      PMA_EPrintln("ERROR: Failed to parse prepare response pkt!");
       return 2;
     }
-
-    uint16_t cols;
-    uint8_t *cols_bytes = reinterpret_cast<uint8_t *>(&cols);
-    cols_bytes[0] = buf[idx++];
-    cols_bytes[1] = buf[idx++];
-    if (cols != 0) {
-      std::fprintf(stderr, "WARNING: Got non-zero cols %" PRIu16 "!\n", cols);
-    }
-
-    if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
-      std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+    int ret;
+    std::tie(ret, stmt_id) = std::move(res_opt.value());
+    if (ret != 0) {
+      PMA_EPrintln("ERROR: Failed to parse prepare response pkt!");
       close_stmt(stmt_id);
       return 2;
-    }
-
-    uint16_t params;
-    uint8_t *params_bytes = reinterpret_cast<uint8_t *>(&params);
-    params_bytes[0] = buf[idx++];
-    params_bytes[1] = buf[idx++];
-
-    if (params != 0) {
-      std::fprintf(stderr, "ERROR: stmt requires %" PRIu16 " binded params!\n",
-                   params);
-      close_stmt(stmt_id);
-      return 2;
-    }
-
-    // unused 1 byte.
-    ++idx;
-
-    if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
-      std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
-      close_stmt(stmt_id);
-      return 2;
-    }
-
-    uint16_t warnings;
-    uint8_t *warn_bytes = reinterpret_cast<uint8_t *>(&warnings);
-    warn_bytes[0] = buf[idx++];
-    warn_bytes[1] = buf[idx++];
-
-    if (warnings > 0) {
-      std::fprintf(stderr, "NOTICE: %" PRIu16 " warnings!\n", warnings);
-    }
-
-    if (idx < static_cast<size_t>(read_ret)) {
-      std::fprintf(stderr, "WARNING: execute_stmt: trailing bytes %zu!\n",
-                   static_cast<size_t>(read_ret) - idx);
     }
   }
 
@@ -1743,4 +1690,73 @@ PMA_MSQL::parse_init_handshake_pkt(uint8_t *data, size_t size) {
   return std::make_tuple(server_capabilities_1, server_capabilities_2,
                          server_capabilities_3, seed, auth_plugin_name,
                          connection_id);
+}
+
+std::optional<std::tuple<int, uint32_t> > PMA_MSQL::parse_prepare_resp_pkt(
+    uint8_t *buf, size_t size) {
+  size_t idx = 0;
+  if (buf[idx] != 0) {
+    return std::nullopt;
+  }
+  ++idx;
+
+  uint32_t stmt_id;
+  uint8_t *stmt_id_bytes = reinterpret_cast<uint8_t *>(&stmt_id);
+  stmt_id_bytes[0] = buf[idx++];
+  stmt_id_bytes[1] = buf[idx++];
+  stmt_id_bytes[2] = buf[idx++];
+  stmt_id_bytes[3] = buf[idx++];
+
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: stmt id %" PRIu32 " (%#" PRIx32 ")\n", stmt_id,
+               stmt_id);
+#endif
+
+  if (idx >= size) {
+    std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+    return std::make_tuple(1, stmt_id);
+  }
+
+  uint16_t cols;
+  uint8_t *cols_bytes = reinterpret_cast<uint8_t *>(&cols);
+  cols_bytes[0] = buf[idx++];
+  cols_bytes[1] = buf[idx++];
+  if (cols != 0) {
+    std::fprintf(stderr, "WARNING: Got non-zero cols %" PRIu16 "!\n", cols);
+  }
+
+  if (idx >= size) {
+    std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+    return std::make_tuple(1, stmt_id);
+  }
+
+  uint16_t params;
+  uint8_t *params_bytes = reinterpret_cast<uint8_t *>(&params);
+  params_bytes[0] = buf[idx++];
+  params_bytes[1] = buf[idx++];
+
+  if (params != 0) {
+    std::fprintf(stderr, "ERROR: stmt requires %" PRIu16 " binded params!\n",
+                 params);
+    return std::make_tuple(1, stmt_id);
+  }
+
+  // unused 1 byte.
+  ++idx;
+
+  if (idx >= size) {
+    std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+    return std::make_tuple(1, stmt_id);
+  }
+
+  uint16_t warnings;
+  uint8_t *warn_bytes = reinterpret_cast<uint8_t *>(&warnings);
+  warn_bytes[0] = buf[idx++];
+  warn_bytes[1] = buf[idx++];
+
+  if (warnings > 0) {
+    std::fprintf(stderr, "NOTICE: %" PRIu16 " warnings!\n", warnings);
+  }
+
+  return std::make_tuple(0, stmt_id);
 }

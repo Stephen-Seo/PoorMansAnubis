@@ -102,6 +102,11 @@ std::optional<std::tuple<uint16_t, uint16_t, uint32_t, std::vector<uint8_t>,
                          std::string, uint32_t> >
 parse_init_handshake_pkt(uint8_t *data, size_t size);
 
+// Returns err int, stmt id.
+// err int is 0 on success, 1 on error.
+std::optional<std::tuple<int, uint32_t> > parse_prepare_resp_pkt(uint8_t *data,
+                                                                 size_t size);
+
 }  // Namespace PMA_MSQL
 
 #endif
