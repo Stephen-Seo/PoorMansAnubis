@@ -138,7 +138,7 @@ int PMA_HELPER::set_signal_handler(int signal, void (*handler)(int)) {
 PMA_HELPER::BinaryPart::BinaryPart() : size(0), data(nullptr) {}
 
 PMA_HELPER::BinaryPart::~BinaryPart() {
-  if (data) {
+  if (data && size != 0) {
     delete[] data;
   }
 }
@@ -152,9 +152,15 @@ PMA_HELPER::BinaryPart::BinaryPart(BinaryPart &&other)
 }
 
 PMA_HELPER::BinaryPart &PMA_HELPER::BinaryPart::operator=(BinaryPart &&other) {
+  if (data && size != 0) {
+    delete[] data;
+  }
+
   this->size = other.size;
   this->data = other.data;
+
   other.data = nullptr;
+
   return *this;
 }
 
