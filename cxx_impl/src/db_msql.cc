@@ -1092,194 +1092,20 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
 
   uint8_t *pkt_data = buf + 4;
 
-  ssize_t idx = 0;
-  // Protocol version.
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: Protocol version: {}", pkt_data[idx]);
-#endif
-  ++idx;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
+  auto parse_handshake_opt = parse_init_handshake_pkt(pkt_data, pkt_size);
+  if (!parse_handshake_opt.has_value()) {
     close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    PMA_EPrintln("ERROR: Failed to parse init handshake pkt!");
     return std::nullopt;
   }
-
-  // Server version.
-  std::printf("NOTICE: Connecting to server, reported version: %s\n",
-              pkt_data + idx);
-  while (pkt_data[idx] != 0 && idx < 4092 && idx < pkt_size) {
-    ++idx;
-  }
-  ++idx;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: idx after server version: {}", idx);
-#endif
-
-  // Connection id.
-  uint32_t connection_id = static_cast<uint32_t>(pkt_data[idx]) |
-                           (static_cast<uint32_t>(pkt_data[idx + 1]) << 8) |
-                           (static_cast<uint32_t>(pkt_data[idx + 2]) << 16) |
-                           (static_cast<uint32_t>(pkt_data[idx + 3]) << 24);
-  idx += 4;
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: Connection id {} ({:#x})", connection_id,
-               connection_id);
-#endif
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Auth plugin data.
-  std::unique_ptr<uint8_t[]> auth_plugin_data = std::make_unique<uint8_t[]>(64);
-  std::memcpy(auth_plugin_data.get(), pkt_data + idx, 8);
-  idx += 8;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Reserved byte.
-  idx += 1;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Server capabilities (1st part).
-  uint16_t server_capabilities_1 =
-      *reinterpret_cast<uint16_t *>(pkt_data + idx);
-  server_capabilities_1 = PMA_HELPER::le_swap_u16(server_capabilities_1);
-#ifndef NDEBUG
-  std::fprintf(stderr, "NOTICE: Server capabilities 1: %#hx\n",
-               server_capabilities_1);
-#endif
-  idx += 2;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Server default collation.
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: Server default collation: {} ({:#x})", pkt_data[idx],
-               pkt_data[idx]);
-#endif
-  idx += 1;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // status flags.
-  idx += 2;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Server capabilities (2nd part).
-  uint16_t server_capabilities_2 =
-      *reinterpret_cast<uint16_t *>(pkt_data + idx);
-  server_capabilities_2 = PMA_HELPER::le_swap_u16(server_capabilities_2);
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: Server capabilities 2: {:#x}", server_capabilities_2);
-#endif
-  idx += 2;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Plugin auth.
-  uint8_t plugin_data_length = 0;
-  if (server_capabilities_2 & 0x8) {
-    plugin_data_length = pkt_data[idx];
-    idx += 1;
-#ifndef NDEBUG
-    PMA_EPrintln("NOTICE: plugin_data_length: {}", plugin_data_length);
-#endif
-  } else {
-    idx += 1;
-  }
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Filler
-  idx += 6;
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // CLIENT_MYSQL or server_capabilities_3
-  uint32_t server_capabilities_3 = 0;
-  if (server_capabilities_1 & 1) {
-    // filler
-    idx += 4;
-  } else {
-    server_capabilities_3 = *reinterpret_cast<uint32_t *>(pkt_data + idx);
-    server_capabilities_3 = PMA_HELPER::le_swap_u32(server_capabilities_3);
-    idx += 4;
-  }
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // CLIENT_SECURE_CONNECTION
-  size_t auth_plugin_data_size = 8;
-  if (server_capabilities_1 & 0x80) {
-    size_t size_max = 12;
-    if (static_cast<size_t>(plugin_data_length) - 9 > size_max) {
-      size_max = plugin_data_length - 9;
-    }
-    auth_plugin_data_size += size_max;
-#ifndef NDEBUG
-    PMA_EPrintln("NOTICE: Writing size {} to auth_plugin_data offset 8",
-                 size_max);
-#endif
-    std::memcpy(auth_plugin_data.get() + 8, pkt_data + idx, size_max);
-    idx += size_max;
-    idx += 1;
-  }
-  if (idx >= read_ret || idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
+  uint16_t server_caps_1;
+  uint16_t server_caps_2;
+  uint32_t server_caps_3;
+  std::vector<uint8_t> seed;
   std::string auth_plugin_name;
-  if (server_capabilities_2 & 0x8) {
-#ifndef NDEBUG
-    PMA_EPrintln("NOTICE: at auth_plugin_name: pkt_size {}, idx {}", pkt_size,
-                 idx);
-#endif
-    auto str_size =
-        static_cast<std::string::allocator_type::size_type>(pkt_size - idx);
-    auth_plugin_name =
-        std::string(reinterpret_cast<char *>(pkt_data + idx), str_size);
-#ifndef NDEBUG
-    PMA_EPrintln("NOTICE: auth_plugin_name: {}", auth_plugin_name);
-#endif
-  }
+  uint32_t connection_id;
+  std::tie(server_caps_1, server_caps_2, server_caps_3, seed, auth_plugin_name,
+           connection_id) = std::move(parse_handshake_opt.value());
 
   // Response.
   PMA_HELPER::BinaryParts parts;
@@ -1325,18 +1151,8 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
   parts.append(user.length() + 1, cli_buf);
 
   // Pass native auth.
-  if (auth_plugin_data_size != 20) {
-    std::fprintf(stderr, "ERROR: seed from server is not 20 bytes!\n");
-    close(fd);
-    return std::nullopt;
-  }
-  std::vector<uint8_t> seed_vec;
-  for (size_t sidx = 0; sidx < auth_plugin_data_size; ++sidx) {
-    seed_vec.push_back(auth_plugin_data[sidx]);
-  }
-
-  std::array<uint8_t, 20> auth_arr = msql_native_auth_resp(seed_vec, pass);
-  if (server_capabilities_2 & (1 << (21 - 16))) {
+  std::array<uint8_t, 20> auth_arr = msql_native_auth_resp(seed, pass);
+  if (server_caps_2 & (1 << (21 - 16))) {
 #ifndef NDEBUG
     std::fprintf(stderr, "NOTICE: LENENC auth response.\n");
 #endif
@@ -1347,7 +1163,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
     cli_buf = new uint8_t[auth_arr.size()];
     std::memcpy(cli_buf, auth_arr.data(), auth_arr.size());
     parts.append(auth_arr.size(), cli_buf);
-  } else if (server_capabilities_1 & (1 << 15)) {
+  } else if (server_caps_1 & (1 << 15)) {
 #ifndef NDEBUG
     std::fprintf(stderr, "NOTICE: 1 byte size auth response.\n");
 #endif
@@ -1365,7 +1181,7 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
     parts.append(1 + auth_arr.size(), cli_buf);
   }
 
-  if (server_capabilities_1 & 8) {
+  if (server_caps_1 & 8) {
     cli_buf = new uint8_t[1 + dbname.size()];
     std::memcpy(cli_buf, dbname.c_str(), dbname.size() + 1);
     parts.append(1 + dbname.size(), cli_buf);
@@ -1479,10 +1295,10 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
 #endif
 
   pkt_data = buf + 4;
-  idx = 0;
+  size_t idx = 0;
 
   // "Header" byte.
-  if (server_capabilities_2 & (1 << (24 - 16))) {
+  if (server_caps_2 & (1 << (24 - 16))) {
     // CLIENT_DEPRECATE_EOF set.
     if (pkt_data[idx] == 0) {
 #ifndef NDEBUG
@@ -1813,4 +1629,190 @@ std::tuple<uint64_t, uint_fast8_t> PMA_MSQL::parse_len_enc_int(uint8_t *data) {
   }
 
   return {0, 0};
+}
+
+std::optional<std::tuple<uint16_t, uint16_t, uint32_t, std::vector<uint8_t>,
+                         std::string, uint32_t> >
+PMA_MSQL::parse_init_handshake_pkt(uint8_t *data, size_t size) {
+  size_t idx = 0;
+  // Protocol version.
+#ifndef NDEBUG
+  PMA_EPrintln("NOTICE: Protocol version: {}", data[idx]);
+#endif
+  ++idx;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Server version.
+  std::printf("NOTICE: Connecting to server, reported version: %s\n",
+              data + idx);
+  while (data[idx] != 0 && idx < size) {
+    ++idx;
+  }
+  ++idx;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+#ifndef NDEBUG
+  PMA_EPrintln("NOTICE: idx after server version: {}", idx);
+#endif
+
+  // Connection id.
+  uint32_t connection_id = static_cast<uint32_t>(data[idx]) |
+                           (static_cast<uint32_t>(data[idx + 1]) << 8) |
+                           (static_cast<uint32_t>(data[idx + 2]) << 16) |
+                           (static_cast<uint32_t>(data[idx + 3]) << 24);
+  idx += 4;
+#ifndef NDEBUG
+  PMA_EPrintln("NOTICE: Connection id {} ({:#x})", connection_id,
+               connection_id);
+#endif
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Auth plugin data.
+  std::unique_ptr<uint8_t[]> auth_plugin_data = std::make_unique<uint8_t[]>(64);
+  std::memcpy(auth_plugin_data.get(), data + idx, 8);
+  idx += 8;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Reserved byte.
+  idx += 1;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Server capabilities (1st part).
+  uint16_t server_capabilities_1 = *reinterpret_cast<uint16_t *>(data + idx);
+  server_capabilities_1 = PMA_HELPER::le_swap_u16(server_capabilities_1);
+#ifndef NDEBUG
+  std::fprintf(stderr, "NOTICE: Server capabilities 1: %#hx\n",
+               server_capabilities_1);
+#endif
+  idx += 2;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Server default collation.
+#ifndef NDEBUG
+  PMA_EPrintln("NOTICE: Server default collation: {} ({:#x})", data[idx],
+               data[idx]);
+#endif
+  idx += 1;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // status flags.
+  idx += 2;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Server capabilities (2nd part).
+  uint16_t server_capabilities_2 = *reinterpret_cast<uint16_t *>(data + idx);
+  server_capabilities_2 = PMA_HELPER::le_swap_u16(server_capabilities_2);
+#ifndef NDEBUG
+  PMA_EPrintln("NOTICE: Server capabilities 2: {:#x}", server_capabilities_2);
+#endif
+  idx += 2;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Plugin auth.
+  uint8_t plugin_data_length = 0;
+  if (server_capabilities_2 & 0x8) {
+    plugin_data_length = data[idx];
+    idx += 1;
+#ifndef NDEBUG
+    PMA_EPrintln("NOTICE: plugin_data_length: {}", plugin_data_length);
+#endif
+  } else {
+    idx += 1;
+  }
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // Filler
+  idx += 6;
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // CLIENT_MYSQL or server_capabilities_3
+  uint32_t server_capabilities_3 = 0;
+  if (server_capabilities_1 & 1) {
+    // filler
+    idx += 4;
+  } else {
+    server_capabilities_3 = *reinterpret_cast<uint32_t *>(data + idx);
+    server_capabilities_3 = PMA_HELPER::le_swap_u32(server_capabilities_3);
+    idx += 4;
+  }
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  // CLIENT_SECURE_CONNECTION
+  size_t auth_plugin_data_size = 8;
+  if (server_capabilities_1 & 0x80) {
+    size_t size_max = 12;
+    if (static_cast<size_t>(plugin_data_length) - 9 > size_max) {
+      size_max = plugin_data_length - 9;
+    }
+    auth_plugin_data_size += size_max;
+#ifndef NDEBUG
+    PMA_EPrintln("NOTICE: Writing size {} to auth_plugin_data offset 8",
+                 size_max);
+#endif
+    std::memcpy(auth_plugin_data.get() + 8, data + idx, size_max);
+    idx += size_max;
+    idx += 1;
+  }
+  if (idx >= size) {
+    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    return std::nullopt;
+  }
+
+  std::string auth_plugin_name;
+  if (server_capabilities_2 & 0x8) {
+#ifndef NDEBUG
+    PMA_EPrintln("NOTICE: at auth_plugin_name: pkt_size {}, idx {}", size, idx);
+#endif
+    auto str_size =
+        static_cast<std::string::allocator_type::size_type>(size - idx);
+    auth_plugin_name =
+        std::string(reinterpret_cast<char *>(data + idx), str_size);
+#ifndef NDEBUG
+    PMA_EPrintln("NOTICE: auth_plugin_name: {}", auth_plugin_name);
+#endif
+  }
+
+  std::vector<uint8_t> seed;
+  for (size_t sidx = 0; sidx < auth_plugin_data_size; ++sidx) {
+    seed.push_back(auth_plugin_data[sidx]);
+  }
+
+  return std::make_tuple(server_capabilities_1, server_capabilities_2,
+                         server_capabilities_3, seed, auth_plugin_name,
+                         connection_id);
 }
