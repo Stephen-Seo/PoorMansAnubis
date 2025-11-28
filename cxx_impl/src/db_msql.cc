@@ -130,15 +130,11 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
       uint32_t u32 = pkt.packet_length;
       uint8_t *u32_8 = reinterpret_cast<uint8_t *>(&u32);
 
-      uint8_t *buf = new uint8_t[1];
+      uint8_t *buf = new uint8_t[3];
       buf[0] = u32_8[0];
-      parts.append(1, buf);
-      buf = new uint8_t[1];
-      buf[0] = u32_8[1];
-      parts.append(1, buf);
-      buf = new uint8_t[1];
-      buf[0] = u32_8[2];
-      parts.append(1, buf);
+      buf[1] = u32_8[1];
+      buf[2] = u32_8[2];
+      parts.append(3, buf);
 
       buf = new uint8_t[1];
       buf[0] = pkt.seq;
@@ -1324,82 +1320,13 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
       return std::nullopt;
     }
   }
-  ++idx;
 
-  // Affected rows.
-  uint64_t affected_rows;
-  uint_fast8_t bytes_read;
-  std::tie(affected_rows, bytes_read) = parse_len_enc_int(pkt_data + idx);
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: Affected rows: {} ({:#x})", affected_rows,
-               affected_rows);
-#endif
-  idx += bytes_read;
-
-  if (idx >= 4092 || idx >= pkt_size) {
+  const auto [handle_status, ok_bytes_read] = handle_ok_pkt(pkt_data, pkt_size);
+  if (handle_status != 0) {
     close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
+    PMA_EPrintln("ERROR: Failed to handle ok packet after init handshake!");
     return std::nullopt;
   }
-
-  // Last insert id.
-  uint64_t last_insert_id;
-  std::tie(last_insert_id, bytes_read) = parse_len_enc_int(pkt_data + idx);
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: Last insert id: {:#x}", last_insert_id);
-#endif
-  idx += bytes_read;
-
-  if (idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Server status 16 bits.
-  uint16_t server_status;
-  uint8_t *server_status_bytes = reinterpret_cast<uint8_t *>(&server_status);
-  server_status_bytes[0] = pkt_data[idx++];
-  server_status_bytes[1] = pkt_data[idx++];
-
-#ifndef NDEBUG
-  PMA_EPrintln("NOTICE: Server status: {:#x}", server_status);
-#endif
-
-  if (idx >= 4092 || idx >= pkt_size) {
-    close(fd);
-    std::fprintf(stderr, "idx (%zd) out of bounds: %u\n", idx, __LINE__);
-    return std::nullopt;
-  }
-
-  // Warning count.
-  uint16_t warning_count;
-  uint8_t *warning_count_bytes = reinterpret_cast<uint8_t *>(&warning_count);
-  warning_count_bytes[0] = pkt_data[idx++];
-  warning_count_bytes[1] = pkt_data[idx++];
-
-  std::fprintf(stderr, "NOTICE: Server warning count: %" PRIu16 "\n",
-               warning_count);
-
-  if (idx == pkt_size) {
-    return Connection(fd, connection_id);
-  }
-
-  uint64_t str_len;
-  std::tie(str_len, bytes_read) = parse_len_enc_int(pkt_data + idx);
-  if (bytes_read > 0) {
-    idx += bytes_read;
-  } else {
-    return Connection(fd, connection_id);
-  }
-
-  // TODO maybe remove handling extra data handling.
-
-  // if (str_len > 0) {
-  //   auto size = static_cast<std::string::size_type>(pkt_size - idx);
-  //   std::string str(reinterpret_cast<char *>(pkt_data + idx), size);
-  //   PMA_Println("{}", str);
-  // }
 
   return Connection(fd, connection_id);
 }
@@ -1509,7 +1436,8 @@ std::tuple<int, size_t> PMA_MSQL::handle_ok_pkt(uint8_t *buf, size_t size) {
 
   std::string str(reinterpret_cast<char *>(buf + idx), info_string_size);
 
-  PMA_EPrintln("Info string: {}", str);
+  // TODO Determine if this is necessary.
+  // PMA_EPrintln("Info string: {}", str);
   return {0, idx + info_string_size};
 }
 
