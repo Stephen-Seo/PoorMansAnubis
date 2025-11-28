@@ -141,9 +141,11 @@ int main(int argc, char **argv) {
   auto msql_conn_opt = PMA_MSQL::connect_msql("127.0.0.1", 3306, "pmauser",
                                               "pmauserpass", "PMA");
   if (msql_conn_opt.has_value()) {
+    PMA_EPrintln("Create table if not exists...");
     msql_conn_opt->execute_stmt(
         "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
         "PRIMARY KEY, test INT)");
+    PMA_EPrintln("Select...");
     msql_conn_opt->execute_stmt("SELECT id, test FROM TEST_TABLE");
   }
 
