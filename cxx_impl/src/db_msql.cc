@@ -35,24 +35,23 @@
 #include "http.h"
 #include "poor_mans_print.h"
 
-PMA_MSQL::MSQLPacket::MSQLPacket() : packet_length(0), seq(0), body(nullptr) {}
+PMA_MSQL::Packet::Packet() : packet_length(0), seq(0), body(nullptr) {}
 
-PMA_MSQL::MSQLPacket::~MSQLPacket() {
+PMA_MSQL::Packet::~Packet() {
   if (body) {
     delete[] body;
   }
 }
 
-PMA_MSQL::MSQLPacket::MSQLPacket(uint32_t len, uint8_t seq, uint8_t *data)
+PMA_MSQL::Packet::Packet(uint32_t len, uint8_t seq, uint8_t *data)
     : packet_length(len & 0xFFFFFF), seq(seq), body(data) {}
 
-PMA_MSQL::MSQLPacket::MSQLPacket(MSQLPacket &&other)
+PMA_MSQL::Packet::Packet(Packet &&other)
     : packet_length(other.packet_length), seq(other.seq), body(other.body) {
   other.body = nullptr;
 }
 
-PMA_MSQL::MSQLPacket &PMA_MSQL::MSQLPacket::operator=(
-    PMA_MSQL::MSQLPacket &&other) {
+PMA_MSQL::Packet &PMA_MSQL::Packet::operator=(PMA_MSQL::Packet &&other) {
   if (this->body) {
     delete[] this->body;
   }
@@ -66,29 +65,28 @@ PMA_MSQL::MSQLPacket &PMA_MSQL::MSQLPacket::operator=(
   return *this;
 }
 
-PMA_MSQL::MSQLConnection::MSQLConnection() : flags() { flags.set(0); }
+PMA_MSQL::Connection::Connection() : flags() { flags.set(0); }
 
-PMA_MSQL::MSQLConnection::~MSQLConnection() {
+PMA_MSQL::Connection::~Connection() {
   if (fd >= 0) {
     close(fd);
   }
 }
 
-PMA_MSQL::MSQLConnection::MSQLConnection(int fd, uint32_t connection_id)
+PMA_MSQL::Connection::Connection(int fd, uint32_t connection_id)
     : flags(), fd(fd), connection_id(connection_id) {
   if (fd < 0) {
     flags.set(0);
   }
 }
 
-PMA_MSQL::MSQLConnection::MSQLConnection(MSQLConnection &&other)
+PMA_MSQL::Connection::Connection(Connection &&other)
     : flags(other.flags), fd(other.fd), connection_id(other.connection_id) {
   other.fd = -1;
   other.flags.set(0);
 }
 
-PMA_MSQL::MSQLConnection &PMA_MSQL::MSQLConnection::operator=(
-    MSQLConnection &&other) {
+PMA_MSQL::Connection &PMA_MSQL::Connection::operator=(Connection &&other) {
   if (this->fd >= 0) {
     close(this->fd);
   }
@@ -103,11 +101,11 @@ PMA_MSQL::MSQLConnection &PMA_MSQL::MSQLConnection::operator=(
   return *this;
 }
 
-bool PMA_MSQL::MSQLConnection::is_valid() const {
+bool PMA_MSQL::Connection::is_valid() const {
   return fd >= 0 && !flags.test(0);
 }
 
-int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
+int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
   if (!is_valid()) {
     return 1;
   }
@@ -115,7 +113,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
   uint8_t seq = 0;
 
   // Setup prepare stmt packet(s).
-  std::vector<MSQLPacket> pkts;
+  std::vector<Packet> pkts;
   {
     uint8_t *buf = new uint8_t[stmt.size() + 1];
     buf[0] = 0x16;
@@ -125,7 +123,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
     delete[] buf;
   }
 
-  for (const MSQLPacket &pkt : pkts) {
+  for (const Packet &pkt : pkts) {
     PMA_HELPER::BinaryPart part;
     {
       PMA_HELPER::BinaryParts parts;
@@ -341,7 +339,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
   }
 
   // Send execute pkt(s).
-  for (const MSQLPacket &pkt : pkts) {
+  for (const Packet &pkt : pkts) {
     PMA_HELPER::BinaryPart part;
     {
       PMA_HELPER::BinaryParts parts;
@@ -952,7 +950,7 @@ int PMA_MSQL::MSQLConnection::execute_stmt(const std::string &stmt) {
   return 0;
 }
 
-void PMA_MSQL::MSQLConnection::close_stmt(uint32_t stmt_id) {
+void PMA_MSQL::Connection::close_stmt(uint32_t stmt_id) {
   if (!is_valid()) {
     return;
   }
@@ -991,10 +989,10 @@ void PMA_MSQL::MSQLConnection::close_stmt(uint32_t stmt_id) {
   }
 }
 
-std::vector<PMA_MSQL::MSQLPacket> PMA_MSQL::create_packets(uint8_t *data,
-                                                           size_t data_size,
-                                                           uint8_t *seq) {
-  std::vector<MSQLPacket> ret;
+std::vector<PMA_MSQL::Packet> PMA_MSQL::create_packets(uint8_t *data,
+                                                       size_t data_size,
+                                                       uint8_t *seq) {
+  std::vector<Packet> ret;
 
   size_t offset = 0;
   while (data_size != 0) {
@@ -1019,9 +1017,11 @@ std::vector<PMA_MSQL::MSQLPacket> PMA_MSQL::create_packets(uint8_t *data,
   return ret;
 }
 
-std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
-    std::string addr, uint16_t port, std::string user, std::string pass,
-    std::string dbname) {
+std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
+                                                           uint16_t port,
+                                                           std::string user,
+                                                           std::string pass,
+                                                           std::string dbname) {
   PMA_HTTP::ErrorT errt = PMA_HTTP::ErrorT::INVALID_STATE;
   std::string errm;
   int fd;
@@ -1385,7 +1385,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   PMA_EPrintln("NOTICE: Client send size: {}", combined.size);
 #endif
   sequence_id += 1;
-  std::vector<MSQLPacket> write_pkts =
+  std::vector<Packet> write_pkts =
       create_packets(combined.data, combined.size, &sequence_id);
   ssize_t write_ret = 0;
   for (size_t pkts_idx = 0; pkts_idx < write_pkts.size(); ++pkts_idx) {
@@ -1566,7 +1566,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
                warning_count);
 
   if (idx == pkt_size) {
-    return MSQLConnection(fd, connection_id);
+    return Connection(fd, connection_id);
   }
 
   uint64_t str_len;
@@ -1574,7 +1574,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   if (bytes_read > 0) {
     idx += bytes_read;
   } else {
-    return MSQLConnection(fd, connection_id);
+    return Connection(fd, connection_id);
   }
 
   // TODO maybe remove handling extra data handling.
@@ -1585,7 +1585,7 @@ std::optional<PMA_MSQL::MSQLConnection> PMA_MSQL::connect_msql(
   //   PMA_Println("{}", str);
   // }
 
-  return MSQLConnection(fd, connection_id);
+  return Connection(fd, connection_id);
 }
 
 std::array<uint8_t, 20> PMA_MSQL::msql_native_auth_resp(

@@ -26,19 +26,19 @@
 
 namespace PMA_MSQL {
 
-struct MSQLPacket {
-  MSQLPacket();
-  ~MSQLPacket();
+struct Packet {
+  Packet();
+  ~Packet();
 
-  MSQLPacket(uint32_t, uint8_t, uint8_t *);
+  Packet(uint32_t, uint8_t, uint8_t *);
 
   // No copy
-  MSQLPacket(const MSQLPacket &) = delete;
-  MSQLPacket &operator=(const MSQLPacket &) = delete;
+  Packet(const Packet &) = delete;
+  Packet &operator=(const Packet &) = delete;
 
   // Allow move
-  MSQLPacket(MSQLPacket &&);
-  MSQLPacket &operator=(MSQLPacket &&);
+  Packet(Packet &&);
+  Packet &operator=(Packet &&);
 
   // Treat this as 3 bytes.
   uint32_t packet_length : 24;
@@ -46,20 +46,20 @@ struct MSQLPacket {
   uint8_t *body;
 };
 
-class MSQLConnection {
+class Connection {
  public:
-  MSQLConnection();
-  ~MSQLConnection();
+  Connection();
+  ~Connection();
 
-  MSQLConnection(int fd, uint32_t connection_id);
+  Connection(int fd, uint32_t connection_id);
 
   // No copy
-  MSQLConnection(const MSQLConnection &) = delete;
-  MSQLConnection &operator=(const MSQLConnection &) = delete;
+  Connection(const Connection &) = delete;
+  Connection &operator=(const Connection &) = delete;
 
   // Allow move
-  MSQLConnection(MSQLConnection &&);
-  MSQLConnection &operator=(MSQLConnection &&);
+  Connection(Connection &&);
+  Connection &operator=(Connection &&);
 
   bool is_valid() const;
 
@@ -77,12 +77,12 @@ class MSQLConnection {
 };
 
 // Copies "data" into the returned packet struct(s).
-std::vector<MSQLPacket> create_packets(uint8_t *data, size_t data_size,
-                                       uint8_t *seq);
+std::vector<Packet> create_packets(uint8_t *data, size_t data_size,
+                                   uint8_t *seq);
 
-std::optional<MSQLConnection> connect_msql(std::string addr, uint16_t port,
-                                           std::string user, std::string pass,
-                                           std::string dbname);
+std::optional<Connection> connect_msql(std::string addr, uint16_t port,
+                                       std::string user, std::string pass,
+                                       std::string dbname);
 
 std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
                                               std::string pass);
