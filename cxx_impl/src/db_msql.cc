@@ -1650,7 +1650,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
   }
 
   ++idx;
-  size_t null_bitmap_size = (7 + field_types.size()) / 8;
+  size_t null_bitmap_size = (7 + 2 + field_types.size()) / 8;
 
   uint8_t *bitmap_buf = nullptr;
   GenericCleanup<uint8_t **> bitmap_buf_cleanup(&bitmap_buf,
