@@ -23,18 +23,18 @@ all: ../cxx_backend_impl
 ../cxx_backend_impl: out/lib/libsqlite3.a out/lib/libblake3.a out/lib/libcurl.a
 	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -llz4 -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include" RELEASE=1 ${MAKE} -C ..
 
-out/lib/libsqlite3.a out/include/sqlite3.h: download_cache/sqlite-autoconf-3510000.tar.gz
+out/lib/libsqlite3.a out/include/sqlite3.h: download_cache/sqlite-autoconf-3510100.tar.gz
 	@mkdir -p sqlite_build
-	tar -xf download_cache/sqlite-autoconf-3510000.tar.gz -C sqlite_build
-	cd sqlite_build/sqlite-autoconf-3510000 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --disable-shared && ${MAKE} libsqlite3.a
-	install -D -m444 sqlite_build/sqlite-autoconf-3510000/libsqlite3.a out/lib/libsqlite3.a
-	install -D -m444 sqlite_build/sqlite-autoconf-3510000/sqlite3.h out/include/sqlite3.h
+	tar -xf download_cache/sqlite-autoconf-3510100.tar.gz -C sqlite_build
+	cd sqlite_build/sqlite-autoconf-3510100 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --disable-shared && ${MAKE} libsqlite3.a
+	install -D -m444 sqlite_build/sqlite-autoconf-3510100/libsqlite3.a out/lib/libsqlite3.a
+	install -D -m444 sqlite_build/sqlite-autoconf-3510100/sqlite3.h out/include/sqlite3.h
 	rm -rf sqlite_build
 
-download_cache/sqlite-autoconf-3510000.tar.gz:
+download_cache/sqlite-autoconf-3510100.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://sqlite.org/2025/sqlite-autoconf-3510000.tar.gz
-	sha256sum -c SHA256SUM_sqlite-3.51.0.txt || (rm -f download_cache/sqlite-autoconf-3510000.tar.gz && false)
+	cd download_cache && curl -OL https://sqlite.org/2025/sqlite-autoconf-3510100.tar.gz
+	sha256sum -c SHA256SUM_sqlite-3.51.1.txt || (rm -f download_cache/sqlite-autoconf-3510100.tar.gz && false)
 
 out/lib/libblake3.a out/include/blake3.h: download_cache/blake3_1.8.2.tar.gz
 	@mkdir -p blake3_build
