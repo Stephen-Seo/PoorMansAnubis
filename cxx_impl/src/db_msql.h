@@ -64,6 +64,10 @@ class Value {
   Value(Value &&);
   Value &operator=(Value &&);
 
+  // Helpers to specify specific int types.
+  static Value new_int(int64_t i);
+  static Value new_uint(uint64_t u);
+
   enum TypeE { STRING, SIGNED_INT, UNSIGNED_INT, DOUBLE };
 
   TypeE get_type() const;

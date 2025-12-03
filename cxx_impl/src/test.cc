@@ -1134,6 +1134,46 @@ int main() {
     value = std::move(other_value);
     CHECK_TRUE(value.get_str().has_value());
     CHECK_TRUE(*value.get_str().value() == "Another Another");
+
+    value = PMA_MSQL::Value::new_int(-987);
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::SIGNED_INT);
+    {
+      auto opt_v = value.get_str();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_signed_int();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == -987);
+    }
+    {
+      auto opt_v = value.get_unsigned_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_double();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+
+    value = PMA_MSQL::Value::new_uint(6543210);
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::UNSIGNED_INT);
+    {
+      auto opt_v = value.get_str();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_signed_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_unsigned_int();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == 6543210);
+    }
+    {
+      auto opt_v = value.get_double();
+      CHECK_TRUE(!opt_v.has_value());
+    }
   }
 
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),

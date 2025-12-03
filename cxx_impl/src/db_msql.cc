@@ -167,6 +167,10 @@ PMA_MSQL::Value &PMA_MSQL::Value::operator=(Value &&other) {
   return *this;
 }
 
+PMA_MSQL::Value PMA_MSQL::Value::new_int(int64_t i) { return Value(i); }
+
+PMA_MSQL::Value PMA_MSQL::Value::new_uint(uint64_t u) { return Value(u); }
+
 PMA_MSQL::Value::TypeE PMA_MSQL::Value::get_type() const { return type_enum; }
 
 std::optional<std::string *> PMA_MSQL::Value::get_str() {
