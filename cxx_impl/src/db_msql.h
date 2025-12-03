@@ -68,7 +68,7 @@ class Value {
   static Value new_int(int64_t i);
   static Value new_uint(uint64_t u);
 
-  enum TypeE { STRING, SIGNED_INT, UNSIGNED_INT, DOUBLE };
+  enum TypeE { SIGNED_INT, UNSIGNED_INT, DOUBLE, STRING };
 
   TypeE get_type() const;
 
