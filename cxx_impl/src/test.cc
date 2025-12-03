@@ -1122,6 +1122,18 @@ int main() {
       CHECK_TRUE(opt_v.has_value());
       CHECK_TRUE(*opt_v.value() == 1.5);
     }
+
+    value = PMA_MSQL::Value("Test String Again");
+    PMA_MSQL::Value other_value = PMA_MSQL::Value("Another Test String");
+
+    value = other_value;
+    CHECK_TRUE(value.get_str().has_value());
+    CHECK_TRUE(*value.get_str().value() == "Another Test String");
+
+    other_value = PMA_MSQL::Value("Another Another");
+    value = std::move(other_value);
+    CHECK_TRUE(value.get_str().has_value());
+    CHECK_TRUE(*value.get_str().value() == "Another Another");
   }
 
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),

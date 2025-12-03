@@ -122,7 +122,7 @@ PMA_MSQL::Value &PMA_MSQL::Value::operator=(const Value &other) {
 PMA_MSQL::Value::Value(Value &&other) : u(), type_enum(other.type_enum) {
   switch (type_enum) {
     case STRING:
-      new (&u.str) std::string(other.u.str);
+      new (&u.str) std::string(std::forward<std::string>(other.u.str));
       break;
     case SIGNED_INT:
       u.sint = other.u.sint;
@@ -134,6 +134,9 @@ PMA_MSQL::Value::Value(Value &&other) : u(), type_enum(other.type_enum) {
       u.d = other.u.d;
       break;
   }
+
+  other.type_enum = SIGNED_INT;
+  other.u.sint = 0;
 }
 
 PMA_MSQL::Value &PMA_MSQL::Value::operator=(Value &&other) {
@@ -145,7 +148,7 @@ PMA_MSQL::Value &PMA_MSQL::Value::operator=(Value &&other) {
 
   switch (this->type_enum) {
     case STRING:
-      new (&u.str) std::string(other.u.str);
+      new (&u.str) std::string(std::forward<std::string>(other.u.str));
       break;
     case SIGNED_INT:
       this->u.sint = other.u.sint;
@@ -157,6 +160,9 @@ PMA_MSQL::Value &PMA_MSQL::Value::operator=(Value &&other) {
       this->u.d = other.u.d;
       break;
   }
+
+  other.type_enum = SIGNED_INT;
+  other.u.sint = 0;
 
   return *this;
 }
