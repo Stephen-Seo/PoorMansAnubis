@@ -1024,15 +1024,14 @@ int main() {
   // Test PMA_MSQL::Value
   {
     PMA_MSQL::Value value;
-    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::SIGNED_INT);
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::INVALID);
     {
       auto opt_v = value.get_str();
       CHECK_TRUE(!opt_v.has_value());
     }
     {
       auto opt_v = value.get_signed_int();
-      CHECK_TRUE(opt_v.has_value());
-      CHECK_TRUE(*opt_v.value() == 0);
+      CHECK_TRUE(!opt_v.has_value());
     }
     {
       auto opt_v = value.get_unsigned_int();
@@ -1174,6 +1173,31 @@ int main() {
       auto opt_v = value.get_double();
       CHECK_TRUE(!opt_v.has_value());
     }
+
+    const PMA_MSQL::Value const_value = PMA_MSQL::Value::new_uint(12345);
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::UNSIGNED_INT);
+    {
+      auto opt_v = const_value.get_str();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = const_value.get_signed_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = const_value.get_unsigned_int();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == 12345);
+    }
+    {
+      auto opt_v = const_value.get_double();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+
+    PMA_MSQL::Value string_v = PMA_MSQL::Value("Test De/Allocation");
+    PMA_MSQL::Value int_v = PMA_MSQL::Value::new_int(123);
+    PMA_MSQL::Value uint_v = PMA_MSQL::Value::new_uint(456);
+    PMA_MSQL::Value double_v = PMA_MSQL::Value(1.23);
   }
 
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),

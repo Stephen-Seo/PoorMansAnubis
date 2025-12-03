@@ -20,6 +20,7 @@
 #include <array>
 #include <bitset>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -68,34 +69,36 @@ class Value {
   static Value new_int(int64_t i);
   static Value new_uint(uint64_t u);
 
-  enum TypeE { SIGNED_INT, UNSIGNED_INT, DOUBLE, STRING };
+  enum TypeE { INVALID, STRING, SIGNED_INT, UNSIGNED_INT, DOUBLE };
 
   TypeE get_type() const;
 
-  std::optional<std::string *> get_str();
-  std::optional<int64_t *> get_signed_int();
-  std::optional<uint64_t *> get_unsigned_int();
-  std::optional<double *> get_double();
+  std::optional<std::shared_ptr<std::string> > get_str();
+  std::optional<std::shared_ptr<int64_t> > get_signed_int();
+  std::optional<std::shared_ptr<uint64_t> > get_unsigned_int();
+  std::optional<std::shared_ptr<double> > get_double();
 
-  std::optional<const std::string *> get_str() const;
-  std::optional<const int64_t *> get_signed_int() const;
-  std::optional<const uint64_t *> get_unsigned_int() const;
-  std::optional<const double *> get_double() const;
+  std::optional<std::shared_ptr<const std::string> > get_str() const;
+  std::optional<std::shared_ptr<const int64_t> > get_signed_int() const;
+  std::optional<std::shared_ptr<const uint64_t> > get_unsigned_int() const;
+  std::optional<std::shared_ptr<const double> > get_double() const;
 
  private:
   union U {
-    std::string str;
-    int64_t sint;
-    uint64_t uint;
-    double d;
+    std::shared_ptr<std::string> str;
+    std::shared_ptr<int64_t> sint;
+    std::shared_ptr<uint64_t> uint;
+    std::shared_ptr<double> d;
 
     U();
     ~U();
+
     U(std::string);
     U(int64_t);
     U(uint64_t);
     U(double);
   } u;
+
   TypeE type_enum;
 };
 

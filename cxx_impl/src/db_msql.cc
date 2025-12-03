@@ -65,54 +65,77 @@ PMA_MSQL::Packet &PMA_MSQL::Packet::operator=(PMA_MSQL::Packet &&other) {
   return *this;
 }
 
-PMA_MSQL::Value::Value() : u(), type_enum(PMA_MSQL::Value::SIGNED_INT) {}
+PMA_MSQL::Value::Value() : u(), type_enum(PMA_MSQL::Value::INVALID) {}
 PMA_MSQL::Value::Value(std::string str) : u(str), type_enum(STRING) {}
 PMA_MSQL::Value::Value(int64_t i) : u(i), type_enum(SIGNED_INT) {}
 PMA_MSQL::Value::Value(uint64_t u) : u(u), type_enum(UNSIGNED_INT) {}
 PMA_MSQL::Value::Value(double d) : u(d), type_enum(DOUBLE) {}
 
 PMA_MSQL::Value::~Value() {
-  if (type_enum == STRING) {
-    this->u.str.~basic_string();
+  switch (type_enum) {
+    case SIGNED_INT:
+      this->u.sint.~shared_ptr<int64_t>();
+      break;
+    case UNSIGNED_INT:
+      this->u.uint.~shared_ptr<uint64_t>();
+      break;
+    case DOUBLE:
+      this->u.d.~shared_ptr<double>();
+      break;
+    case STRING:
+      this->u.str.~shared_ptr<std::string>();
+      break;
+    case INVALID:
+      break;
   }
 }
 
 PMA_MSQL::Value::Value(const Value &other) : u(), type_enum(other.type_enum) {
   switch (type_enum) {
-    case STRING:
-      new (&u.str) std::string(other.u.str);
-      break;
     case SIGNED_INT:
-      u.sint = other.u.sint;
+      new (&this->u.sint) std::shared_ptr<int64_t>();
+      this->u.sint = std::make_shared<int64_t>(*other.u.sint.get());
       break;
     case UNSIGNED_INT:
-      u.uint = other.u.uint;
+      new (&this->u.uint) std::shared_ptr<uint64_t>();
+      this->u.uint = std::make_shared<uint64_t>(*other.u.uint.get());
       break;
     case DOUBLE:
-      u.d = other.u.d;
+      new (&this->u.d) std::shared_ptr<double>();
+      this->u.d = std::make_shared<double>(*other.u.d.get());
+      break;
+    case STRING:
+      new (&this->u.str) std::shared_ptr<std::string>();
+      this->u.str = std::make_shared<std::string>(*other.u.str.get());
+      break;
+    case INVALID:
       break;
   }
 }
 
 PMA_MSQL::Value &PMA_MSQL::Value::operator=(const Value &other) {
-  if (this->type_enum == STRING) {
-    this->u.str.~basic_string();
-  }
+  this->~Value();
 
   this->type_enum = other.type_enum;
 
   switch (this->type_enum) {
-    case STRING:
-      new (&u.str) std::string(other.u.str);
-      break;
     case SIGNED_INT:
-      this->u.sint = other.u.sint;
+      new (&this->u.sint) std::shared_ptr<int64_t>();
+      this->u.sint = std::make_shared<int64_t>(*other.u.sint.get());
       break;
     case UNSIGNED_INT:
-      this->u.uint = other.u.uint;
+      new (&this->u.uint) std::shared_ptr<uint64_t>();
+      this->u.uint = std::make_shared<uint64_t>(*other.u.uint.get());
       break;
     case DOUBLE:
-      this->u.d = other.u.d;
+      new (&this->u.d) std::shared_ptr<double>();
+      this->u.d = std::make_shared<double>(*other.u.d.get());
+      break;
+    case STRING:
+      new (&this->u.str) std::shared_ptr<std::string>();
+      this->u.str = std::make_shared<std::string>(*other.u.str.get());
+      break;
+    case INVALID:
       break;
   }
 
@@ -121,48 +144,55 @@ PMA_MSQL::Value &PMA_MSQL::Value::operator=(const Value &other) {
 
 PMA_MSQL::Value::Value(Value &&other) : u(), type_enum(other.type_enum) {
   switch (type_enum) {
-    case STRING:
-      new (&u.str) std::string(std::forward<std::string>(other.u.str));
-      break;
     case SIGNED_INT:
-      u.sint = other.u.sint;
+      new (&this->u.sint) std::shared_ptr<int64_t>();
+      this->u.sint = std::move(other.u.sint);
       break;
     case UNSIGNED_INT:
-      u.uint = other.u.uint;
+      new (&this->u.uint) std::shared_ptr<uint64_t>();
+      this->u.uint = std::move(other.u.uint);
       break;
     case DOUBLE:
-      u.d = other.u.d;
+      new (&this->u.d) std::shared_ptr<double>();
+      this->u.d = std::move(other.u.d);
+      break;
+    case STRING:
+      new (&this->u.str) std::shared_ptr<std::string>();
+      this->u.str = std::move(other.u.str);
+      break;
+    case INVALID:
       break;
   }
-
-  other.type_enum = SIGNED_INT;
-  other.u.sint = 0;
 }
 
 PMA_MSQL::Value &PMA_MSQL::Value::operator=(Value &&other) {
-  if (this->type_enum == STRING) {
-    this->u.str.~basic_string();
-  }
+  this->~Value();
 
   this->type_enum = other.type_enum;
 
   switch (this->type_enum) {
-    case STRING:
-      new (&u.str) std::string(std::forward<std::string>(other.u.str));
-      break;
     case SIGNED_INT:
-      this->u.sint = other.u.sint;
+      new (&this->u.sint) std::shared_ptr<int64_t>();
+      this->u.sint = std::move(other.u.sint);
       break;
     case UNSIGNED_INT:
-      this->u.uint = other.u.uint;
+      new (&this->u.uint) std::shared_ptr<uint64_t>();
+      this->u.uint = std::move(other.u.uint);
       break;
     case DOUBLE:
-      this->u.d = other.u.d;
+      new (&this->u.d) std::shared_ptr<double>();
+      this->u.d = std::move(other.u.d);
+      break;
+    case STRING:
+      new (&this->u.str) std::shared_ptr<std::string>();
+      this->u.str = std::move(other.u.str);
+      break;
+    case INVALID:
       break;
   }
 
-  other.type_enum = SIGNED_INT;
-  other.u.sint = 0;
+  other.~Value();
+  other.type_enum = INVALID;
 
   return *this;
 }
@@ -173,76 +203,92 @@ PMA_MSQL::Value PMA_MSQL::Value::new_uint(uint64_t u) { return Value(u); }
 
 PMA_MSQL::Value::TypeE PMA_MSQL::Value::get_type() const { return type_enum; }
 
-std::optional<std::string *> PMA_MSQL::Value::get_str() {
+std::optional<std::shared_ptr<std::string> > PMA_MSQL::Value::get_str() {
   if (type_enum == STRING) {
-    return &u.str;
+    return u.str;
   } else {
     return std::nullopt;
   }
 }
 
-std::optional<int64_t *> PMA_MSQL::Value::get_signed_int() {
+std::optional<std::shared_ptr<int64_t> > PMA_MSQL::Value::get_signed_int() {
   if (type_enum == SIGNED_INT) {
-    return &u.sint;
+    return u.sint;
   } else {
     return std::nullopt;
   }
 }
 
-std::optional<uint64_t *> PMA_MSQL::Value::get_unsigned_int() {
+std::optional<std::shared_ptr<uint64_t> > PMA_MSQL::Value::get_unsigned_int() {
   if (type_enum == UNSIGNED_INT) {
-    return &u.uint;
+    return u.uint;
   } else {
     return std::nullopt;
   }
 }
 
-std::optional<double *> PMA_MSQL::Value::get_double() {
+std::optional<std::shared_ptr<double> > PMA_MSQL::Value::get_double() {
   if (type_enum == DOUBLE) {
-    return &u.d;
+    return u.d;
   } else {
     return std::nullopt;
   }
 }
 
-std::optional<const std::string *> PMA_MSQL::Value::get_str() const {
+std::optional<std::shared_ptr<const std::string> > PMA_MSQL::Value::get_str()
+    const {
   if (type_enum == STRING) {
-    return &u.str;
+    return u.str;
   } else {
     return std::nullopt;
   }
 }
 
-std::optional<const int64_t *> PMA_MSQL::Value::get_signed_int() const {
+std::optional<std::shared_ptr<const int64_t> > PMA_MSQL::Value::get_signed_int()
+    const {
   if (type_enum == SIGNED_INT) {
-    return &u.sint;
+    return u.sint;
   } else {
     return std::nullopt;
   }
 }
 
-std::optional<const uint64_t *> PMA_MSQL::Value::get_unsigned_int() const {
+std::optional<std::shared_ptr<const uint64_t> >
+PMA_MSQL::Value::get_unsigned_int() const {
   if (type_enum == UNSIGNED_INT) {
-    return &u.uint;
+    return u.uint;
   } else {
     return std::nullopt;
   }
 }
 
-std::optional<const double *> PMA_MSQL::Value::get_double() const {
+std::optional<std::shared_ptr<const double> > PMA_MSQL::Value::get_double()
+    const {
   if (type_enum == DOUBLE) {
-    return &u.d;
+    return u.d;
   } else {
     return std::nullopt;
   }
 }
 
-PMA_MSQL::Value::U::U() : sint(0) {}
+PMA_MSQL::Value::U::U() {}
 PMA_MSQL::Value::U::~U() {}
-PMA_MSQL::Value::U::U(std::string s) { new (&this->str) std::string(s); }
-PMA_MSQL::Value::U::U(int64_t i) : sint(i) {}
-PMA_MSQL::Value::U::U(uint64_t u) : uint(u) {}
-PMA_MSQL::Value::U::U(double d) : d(d) {}
+PMA_MSQL::Value::U::U(std::string s) {
+  new (&this->str) std::shared_ptr<std::string>();
+  this->str = std::make_shared<std::string>(std::forward<std::string>(s));
+}
+PMA_MSQL::Value::U::U(int64_t i) {
+  new (&this->sint) std::shared_ptr<int64_t>();
+  this->sint = std::make_shared<int64_t>(i);
+}
+PMA_MSQL::Value::U::U(uint64_t u) {
+  new (&this->uint) std::shared_ptr<uint64_t>();
+  this->uint = std::make_shared<uint64_t>(u);
+}
+PMA_MSQL::Value::U::U(double d) {
+  new (&this->d) std::shared_ptr<double>();
+  this->d = std::make_shared<double>(d);
+}
 
 PMA_MSQL::Connection::Connection() : flags() { flags.set(0); }
 
