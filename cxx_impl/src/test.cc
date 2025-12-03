@@ -1044,6 +1044,7 @@ int main() {
     }
 
     value = PMA_MSQL::Value(std::string("Test String"));
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::STRING);
     {
       auto opt_v = value.get_str();
       CHECK_TRUE(opt_v.has_value());
@@ -1063,6 +1064,7 @@ int main() {
     }
 
     value = PMA_MSQL::Value(static_cast<int64_t>(-123));
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::SIGNED_INT);
     {
       auto opt_v = value.get_str();
       CHECK_TRUE(!opt_v.has_value());
@@ -1082,6 +1084,7 @@ int main() {
     }
 
     value = PMA_MSQL::Value(static_cast<uint64_t>(456789));
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::UNSIGNED_INT);
     {
       auto opt_v = value.get_str();
       CHECK_TRUE(!opt_v.has_value());
@@ -1101,6 +1104,7 @@ int main() {
     }
 
     value = PMA_MSQL::Value(1.5);
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::DOUBLE);
     {
       auto opt_v = value.get_str();
       CHECK_TRUE(!opt_v.has_value());
