@@ -65,6 +65,175 @@ PMA_MSQL::Packet &PMA_MSQL::Packet::operator=(PMA_MSQL::Packet &&other) {
   return *this;
 }
 
+PMA_MSQL::Value::Value() : u(), type_enum(PMA_MSQL::Value::SIGNED_INT) {}
+PMA_MSQL::Value::Value(std::string str) : u(str), type_enum(STRING) {}
+PMA_MSQL::Value::Value(int64_t i) : u(i), type_enum(SIGNED_INT) {}
+PMA_MSQL::Value::Value(uint64_t u) : u(u), type_enum(UNSIGNED_INT) {}
+PMA_MSQL::Value::Value(double d) : u(d), type_enum(DOUBLE) {}
+
+PMA_MSQL::Value::~Value() {
+  if (type_enum == STRING) {
+    this->u.str.~basic_string();
+  }
+}
+
+PMA_MSQL::Value::Value(const Value &other) : u(), type_enum(other.type_enum) {
+  switch (type_enum) {
+    case STRING:
+      new (&u.str) std::string(other.u.str);
+      break;
+    case SIGNED_INT:
+      u.sint = other.u.sint;
+      break;
+    case UNSIGNED_INT:
+      u.uint = other.u.uint;
+      break;
+    case DOUBLE:
+      u.d = other.u.d;
+      break;
+  }
+}
+
+PMA_MSQL::Value &PMA_MSQL::Value::operator=(const Value &other) {
+  if (this->type_enum == STRING) {
+    this->u.str.~basic_string();
+  }
+
+  this->type_enum = other.type_enum;
+
+  switch (this->type_enum) {
+    case STRING:
+      new (&u.str) std::string(other.u.str);
+      break;
+    case SIGNED_INT:
+      this->u.sint = other.u.sint;
+      break;
+    case UNSIGNED_INT:
+      this->u.uint = other.u.uint;
+      break;
+    case DOUBLE:
+      this->u.d = other.u.d;
+      break;
+  }
+
+  return *this;
+}
+
+PMA_MSQL::Value::Value(Value &&other) : u(), type_enum(other.type_enum) {
+  switch (type_enum) {
+    case STRING:
+      new (&u.str) std::string(other.u.str);
+      break;
+    case SIGNED_INT:
+      u.sint = other.u.sint;
+      break;
+    case UNSIGNED_INT:
+      u.uint = other.u.uint;
+      break;
+    case DOUBLE:
+      u.d = other.u.d;
+      break;
+  }
+}
+
+PMA_MSQL::Value &PMA_MSQL::Value::operator=(Value &&other) {
+  if (this->type_enum == STRING) {
+    this->u.str.~basic_string();
+  }
+
+  this->type_enum = other.type_enum;
+
+  switch (this->type_enum) {
+    case STRING:
+      new (&u.str) std::string(other.u.str);
+      break;
+    case SIGNED_INT:
+      this->u.sint = other.u.sint;
+      break;
+    case UNSIGNED_INT:
+      this->u.uint = other.u.uint;
+      break;
+    case DOUBLE:
+      this->u.d = other.u.d;
+      break;
+  }
+
+  return *this;
+}
+
+PMA_MSQL::Value::TypeE PMA_MSQL::Value::get_type() const { return type_enum; }
+
+std::optional<std::string *> PMA_MSQL::Value::get_str() {
+  if (type_enum == STRING) {
+    return &u.str;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<int64_t *> PMA_MSQL::Value::get_signed_int() {
+  if (type_enum == SIGNED_INT) {
+    return &u.sint;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<uint64_t *> PMA_MSQL::Value::get_unsigned_int() {
+  if (type_enum == UNSIGNED_INT) {
+    return &u.uint;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<double *> PMA_MSQL::Value::get_double() {
+  if (type_enum == DOUBLE) {
+    return &u.d;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<const std::string *> PMA_MSQL::Value::get_str() const {
+  if (type_enum == STRING) {
+    return &u.str;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<const int64_t *> PMA_MSQL::Value::get_signed_int() const {
+  if (type_enum == SIGNED_INT) {
+    return &u.sint;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<const uint64_t *> PMA_MSQL::Value::get_unsigned_int() const {
+  if (type_enum == UNSIGNED_INT) {
+    return &u.uint;
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<const double *> PMA_MSQL::Value::get_double() const {
+  if (type_enum == DOUBLE) {
+    return &u.d;
+  } else {
+    return std::nullopt;
+  }
+}
+
+PMA_MSQL::Value::U::U() : sint(0) {}
+PMA_MSQL::Value::U::~U() {}
+PMA_MSQL::Value::U::U(std::string s) { new (&this->str) std::string(s); }
+PMA_MSQL::Value::U::U(int64_t i) : sint(i) {}
+PMA_MSQL::Value::U::U(uint64_t u) : uint(u) {}
+PMA_MSQL::Value::U::U(double d) : d(d) {}
+
 PMA_MSQL::Connection::Connection() : flags() { flags.set(0); }
 
 PMA_MSQL::Connection::~Connection() {

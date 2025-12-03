@@ -46,6 +46,55 @@ struct Packet {
   uint8_t *body;
 };
 
+class Value {
+ public:
+  Value();
+  Value(std::string str);
+  Value(int64_t sint);
+  Value(uint64_t uint);
+  Value(double d);
+
+  ~Value();
+
+  // allow copy
+  Value(const Value &);
+  Value &operator=(const Value &);
+
+  // allow move
+  Value(Value &&);
+  Value &operator=(Value &&);
+
+  enum TypeE { STRING, SIGNED_INT, UNSIGNED_INT, DOUBLE };
+
+  TypeE get_type() const;
+
+  std::optional<std::string *> get_str();
+  std::optional<int64_t *> get_signed_int();
+  std::optional<uint64_t *> get_unsigned_int();
+  std::optional<double *> get_double();
+
+  std::optional<const std::string *> get_str() const;
+  std::optional<const int64_t *> get_signed_int() const;
+  std::optional<const uint64_t *> get_unsigned_int() const;
+  std::optional<const double *> get_double() const;
+
+ private:
+  union U {
+    std::string str;
+    int64_t sint;
+    uint64_t uint;
+    double d;
+
+    U();
+    ~U();
+    U(std::string);
+    U(int64_t);
+    U(uint64_t);
+    U(double);
+  } u;
+  TypeE type_enum;
+};
+
 class Connection {
  public:
   Connection();

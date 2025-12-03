@@ -21,6 +21,7 @@
 
 // local includes
 #include "args.h"
+#include "db_msql.h"
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
@@ -1018,6 +1019,105 @@ int main() {
     CHECK_TRUE(std::strncmp(hex.data(),
                             "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3",
                             40) == 0);
+  }
+
+  // Test PMA_MSQL::Value
+  {
+    PMA_MSQL::Value value;
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::SIGNED_INT);
+    {
+      auto opt_v = value.get_str();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_signed_int();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == 0);
+    }
+    {
+      auto opt_v = value.get_unsigned_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_double();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+
+    value = PMA_MSQL::Value(std::string("Test String"));
+    {
+      auto opt_v = value.get_str();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == "Test String");
+    }
+    {
+      auto opt_v = value.get_signed_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_unsigned_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_double();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+
+    value = PMA_MSQL::Value(static_cast<int64_t>(-123));
+    {
+      auto opt_v = value.get_str();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_signed_int();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == -123);
+    }
+    {
+      auto opt_v = value.get_unsigned_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_double();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+
+    value = PMA_MSQL::Value(static_cast<uint64_t>(456789));
+    {
+      auto opt_v = value.get_str();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_signed_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_unsigned_int();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == 456789);
+    }
+    {
+      auto opt_v = value.get_double();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+
+    value = PMA_MSQL::Value(1.5);
+    {
+      auto opt_v = value.get_str();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_signed_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_unsigned_int();
+      CHECK_TRUE(!opt_v.has_value());
+    }
+    {
+      auto opt_v = value.get_double();
+      CHECK_TRUE(opt_v.has_value());
+      CHECK_TRUE(*opt_v.value() == 1.5);
+    }
   }
 
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
