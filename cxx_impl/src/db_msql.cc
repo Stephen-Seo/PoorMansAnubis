@@ -533,13 +533,13 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     // Params.
     if (!bind_params.empty()) {
       // NULL bitmap.
-      const size_t bitmap_size = (bind_params.size() + 7 + 2) / 8;
+      const size_t bitmap_size = (bind_params.size() + 7) / 8;
       uint8_t *bitmap_ptr = new uint8_t[bitmap_size];
       std::memset(bitmap_ptr, 0, bitmap_size);
       for (size_t pidx = 0; pidx < bind_params.size(); ++pidx) {
         if (bind_params.at(pidx).get_type() == Value::INV_NULL) {
           size_t bitmap_byte = 0;
-          size_t offset = 2 + pidx;
+          size_t offset = pidx;
           while (offset > 7) {
             ++bitmap_byte;
             offset -= 8;
@@ -558,7 +558,11 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
       for (size_t pidx = 0; pidx < bind_params.size(); ++pidx) {
         switch (bind_params.at(pidx).get_type()) {
           case Value::INV_NULL:
-            continue;
+            buf = new uint8_t[2];
+            buf[0] = 6;
+            buf[1] = 0;
+            parts.append(2, buf);
+            break;
           case Value::STRING: {
             buf = new uint8_t[2];
             buf[0] = 254;
