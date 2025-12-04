@@ -173,7 +173,6 @@ int parse_col_type_pkt(uint8_t *buf, size_t size,
                        std::vector<uint16_t> &field_details);
 
 // Returns 0 on success.
-// TODO return row values.
 int parse_row_pkt(uint8_t *buf, size_t size,
                   const std::vector<uint8_t> &field_types,
                   const std::vector<uint16_t> &field_details,
