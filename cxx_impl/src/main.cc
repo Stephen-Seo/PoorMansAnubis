@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
     PMA_EPrintln("Create table if not exists...");
     msql_conn_opt->execute_stmt(
         "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
-        "PRIMARY KEY, test INT, f FLOAT, s TEXT)",
+        "PRIMARY KEY, test INT, f FLOAT, s TEXT, c CHAR(3))",
         {});
     PMA_EPrintln("Inserting into table...");
     msql_conn_opt->execute_stmt(
@@ -173,9 +173,12 @@ int main(int argc, char **argv) {
     msql_conn_opt->execute_stmt(
         "INSERT INTO TEST_TABLE (id, f, s) VALUES (?, ?, ?)",
         {PMA_MSQL::Value::new_int(7), 7.5, {"Test inserting float."}});
+    msql_conn_opt->execute_stmt(
+        "INSERT INTO TEST_TABLE (id, c, s) VALUES (?, ?, ?)",
+        {PMA_MSQL::Value::new_int(8), {"PMA"}, {"Test inserting CHAR(3)."}});
     PMA_EPrintln("Select...");
     auto ret_vec_opt = msql_conn_opt->execute_stmt(
-        "SELECT id, test, f, s FROM TEST_TABLE", {});
+        "SELECT id, test, f, s, c FROM TEST_TABLE", {});
     if (ret_vec_opt.has_value()) {
       PMA_EPrintln("Select results:");
       for (const std::vector<PMA_MSQL::Value> &row : ret_vec_opt.value()) {
