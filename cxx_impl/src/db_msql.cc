@@ -358,9 +358,10 @@ bool PMA_MSQL::Connection::is_valid() const {
   return fd >= 0 && !flags.test(0);
 }
 
-int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
+PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
+    const std::string &stmt, std::vector<Value> bind_params) {
   if (!is_valid()) {
-    return 1;
+    return std::nullopt;
   }
 
   uint8_t seq = 0;
@@ -413,7 +414,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
           continue;
         } else {
           std::fprintf(stderr, "ERROR: execute_stmt: Failed to send stmt!\n");
-          return 2;
+          return std::nullopt;
         }
       } else if (static_cast<size_t>(write_ret) < remaining) {
         remaining -= static_cast<size_t>(write_ret);
@@ -446,7 +447,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
       } else if (read_ret == 0) {
         std::fprintf(stderr,
                      "ERROR: execute_stmt: Recv EOF after sending stmt!\n");
-        return 2;
+        return std::nullopt;
       } else {
 #ifndef NDEBUG
         std::fprintf(stderr, "\n");
@@ -467,7 +468,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
 
     if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
       std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
-      return 2;
+      return std::nullopt;
     }
 
     uint8_t seq_id = buf[idx++];
@@ -481,24 +482,24 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
       std::fprintf(stderr,
                    "ERROR: execute_stmt: Err pkt in response to stmt!\n");
       print_error_pkt(buf + idx, pkt_size);
-      return 2;
+      return std::nullopt;
     } else if (buf[idx] != 0) {
       std::fprintf(stderr, "ERROR: execute_stmt: Not OK pkt (%#hhx)!\n",
                    buf[idx]);
-      return 2;
+      return std::nullopt;
     }
 
     auto res_opt = parse_prepare_resp_pkt(buf + idx, pkt_size);
     if (!res_opt.has_value()) {
       PMA_EPrintln("ERROR: Failed to parse prepare response pkt!");
-      return 2;
+      return std::nullopt;
     }
     int ret;
     std::tie(ret, stmt_id) = std::move(res_opt.value());
     if (ret != 0) {
       PMA_EPrintln("ERROR: Failed to parse prepare response pkt!");
       close_stmt(stmt_id);
-      return 2;
+      return std::nullopt;
     }
   }
 
@@ -528,6 +529,178 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
     buf[2] = 0;
     buf[3] = 0;
     parts.append(4, buf);
+
+    // Params.
+    if (!bind_params.empty()) {
+      // NULL bitmap.
+      const size_t bitmap_size = (bind_params.size() + 7 + 2) / 8;
+      uint8_t *bitmap_ptr = new uint8_t[bitmap_size];
+      std::memset(bitmap_ptr, 0, bitmap_size);
+      for (size_t pidx = 0; pidx < bind_params.size(); ++pidx) {
+        if (bind_params.at(pidx).get_type() == Value::INV_NULL) {
+          size_t bitmap_byte = 0;
+          size_t offset = 2 + pidx;
+          while (offset > 7) {
+            ++bitmap_byte;
+            offset -= 8;
+          }
+          bitmap_ptr[bitmap_byte] |= 1 << offset;
+        }
+      }
+      parts.append(bitmap_size, bitmap_ptr);
+
+      // Per param type enabled.
+      buf = new uint8_t[1];
+      buf[0] = 1;
+      parts.append(1, buf);
+
+      // Per param type.
+      for (size_t pidx = 0; pidx < bind_params.size(); ++pidx) {
+        switch (bind_params.at(pidx).get_type()) {
+          case Value::INV_NULL:
+            continue;
+          case Value::STRING: {
+            buf = new uint8_t[2];
+            buf[0] = 254;
+            buf[1] = 0;
+            parts.append(2, buf);
+            break;
+          }
+          case Value::SIGNED_INT: {
+            buf = new uint8_t[2];
+            buf[0] = 8;
+            buf[1] = 0;
+            parts.append(2, buf);
+            break;
+          }
+          case Value::UNSIGNED_INT: {
+            buf = new uint8_t[2];
+            buf[0] = 8;
+            buf[1] = 128;
+            parts.append(2, buf);
+            break;
+          }
+          case Value::DOUBLE: {
+            buf = new uint8_t[2];
+            buf[0] = 5;
+            buf[1] = 0;
+            parts.append(2, buf);
+            break;
+          }
+        }
+      }
+
+      // The params themselves.
+      for (const Value &v : bind_params) {
+        switch (v.get_type()) {
+          case Value::INV_NULL:
+            continue;
+          case Value::STRING: {
+            auto str_opt = v.get_str();
+            if (str_opt.value()->size() < 0xFB) {
+              buf = new uint8_t[1];
+              buf[0] = static_cast<uint8_t>(str_opt.value()->size());
+              parts.append(1, buf);
+            } else if (str_opt.value()->size() >= 0xFB &&
+                       str_opt.value()->size() <= 0xFFFF) {
+              buf = new uint8_t[3];
+              buf[0] = 0xFC;
+              const uint16_t size =
+                  static_cast<uint16_t>(str_opt.value()->size());
+              const uint8_t *size_ptr =
+                  reinterpret_cast<const uint8_t *>(&size);
+              buf[1] = size_ptr[0];
+              buf[2] = size_ptr[1];
+              parts.append(3, buf);
+            } else if (str_opt.value()->size() > 0xFFFF &&
+                       str_opt.value()->size() <= 0xFFFFFF) {
+              buf = new uint8_t[4];
+              buf[0] = 0xFD;
+              const uint32_t size =
+                  static_cast<uint32_t>(str_opt.value()->size());
+              const uint8_t *size_ptr =
+                  reinterpret_cast<const uint8_t *>(&size);
+              buf[1] = size_ptr[0];
+              buf[2] = size_ptr[1];
+              buf[3] = size_ptr[2];
+              parts.append(4, buf);
+            } else if (str_opt.value()->size() > 0xFFFFFF) {
+              buf = new uint8_t[9];
+              buf[0] = 0xFE;
+              const uint64_t size = str_opt.value()->size();
+              const uint8_t *size_ptr =
+                  reinterpret_cast<const uint8_t *>(&size);
+              buf[1] = size_ptr[0];
+              buf[2] = size_ptr[1];
+              buf[3] = size_ptr[2];
+              buf[4] = size_ptr[3];
+              buf[5] = size_ptr[4];
+              buf[6] = size_ptr[5];
+              buf[7] = size_ptr[6];
+              buf[8] = size_ptr[7];
+              parts.append(9, buf);
+            } else {
+              PMA_EPrintln("ERROR: Failed to bind string parameter!");
+              close_stmt(stmt_id);
+              return std::nullopt;
+            }
+
+            buf = new uint8_t[str_opt.value()->size()];
+            std::memcpy(buf, str_opt.value()->data(), str_opt.value()->size());
+            parts.append(str_opt.value()->size(), buf);
+            break;
+          }
+          case Value::SIGNED_INT: {
+            auto i_opt = v.get_signed_int();
+            const uint8_t *ptr =
+                reinterpret_cast<const uint8_t *>(i_opt.value().get());
+            buf = new uint8_t[8];
+            buf[0] = ptr[0];
+            buf[1] = ptr[1];
+            buf[2] = ptr[2];
+            buf[3] = ptr[3];
+            buf[4] = ptr[4];
+            buf[5] = ptr[5];
+            buf[6] = ptr[6];
+            buf[7] = ptr[7];
+            parts.append(8, buf);
+            break;
+          }
+          case Value::UNSIGNED_INT: {
+            auto u_opt = v.get_unsigned_int();
+            const uint8_t *ptr =
+                reinterpret_cast<const uint8_t *>(u_opt.value().get());
+            buf = new uint8_t[8];
+            buf[0] = ptr[0];
+            buf[1] = ptr[1];
+            buf[2] = ptr[2];
+            buf[3] = ptr[3];
+            buf[4] = ptr[4];
+            buf[5] = ptr[5];
+            buf[6] = ptr[6];
+            buf[7] = ptr[7];
+            parts.append(8, buf);
+            break;
+          }
+          case Value::DOUBLE: {
+            auto d_opt = v.get_double();
+            const uint8_t *ptr =
+                reinterpret_cast<const uint8_t *>(d_opt.value().get());
+            buf = new uint8_t[8];
+            buf[0] = ptr[0];
+            buf[1] = ptr[1];
+            buf[2] = ptr[2];
+            buf[3] = ptr[3];
+            buf[4] = ptr[4];
+            buf[5] = ptr[5];
+            buf[6] = ptr[6];
+            buf[7] = ptr[7];
+            parts.append(8, buf);
+            break;
+          }
+        }
+      }
+    }
 
     PMA_HELPER::BinaryPart part = parts.combine();
 
@@ -573,7 +746,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         } else {
           std::fprintf(stderr, "Failed to send execute stmt pkt (errno %d)!\n",
                        errno);
-          return 2;
+          return std::nullopt;
         }
       } else if (static_cast<size_t>(write_ret) < remaining) {
         remaining -= static_cast<size_t>(write_ret);
@@ -595,9 +768,11 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
   } next_pkt_enum = NextPkt::COLUMN_COUNT;
   uint64_t col_count;
   std::vector<uint8_t> field_types;
+  std::vector<uint16_t> field_details;
   size_t row_idx = 0;
   PMA_HELPER::BinaryPart continue_part;
   bool attempt_fetch_more = false;
+  std::vector<std::vector<Value> > ret_vecs;
   while (!reached_ok_eof_pkt) {
     uint8_t buf[4096];
     size_t size = 0;
@@ -607,7 +782,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           if (attempt_fetch_more) {
             PMA_EPrintln("ERROR: No more bytes, but did not reach EOF!");
-            return 2;
+            return std::nullopt;
           }
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #ifndef NDEBUG
@@ -618,7 +793,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
           std::fprintf(stderr,
                        "ERROR: Failed to recv after exec pkt (errno %d)!\n",
                        errno);
-          return 2;
+          return std::nullopt;
         }
       } else {
         size = static_cast<size_t>(read_ret);
@@ -632,7 +807,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
     if (size == 0) {
       std::fprintf(stderr,
                    "ERROR: Recv 0 bytes after sending exec stmt pkt!\n");
-      return 2;
+      return std::nullopt;
     }
 
 #ifndef NDEBUG
@@ -679,7 +854,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
 
     if (idx >= recv_part.size) {
       std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
-      return 2;
+      return std::nullopt;
     }
 
     uint8_t seq_id = recv_part.data[idx++];
@@ -711,13 +886,13 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
 
     if (idx >= recv_part.size) {
       std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
-      return 2;
+      return std::nullopt;
     }
 
     if (recv_part.data[idx] == 0xFF) {
       std::fprintf(stderr, "ERROR: Recv Err pkt after exec pkt sent!\n");
       print_error_pkt(recv_part.data + idx, pkt_size);
-      return 2;
+      return std::nullopt;
     } else if (recv_part.data[idx] == 0xFE ||
                (recv_part.data[idx] == 0 &&
                 next_pkt_enum == NextPkt::COLUMN_COUNT)) {
@@ -727,7 +902,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
 
       reached_ok_eof_pkt = true;
       if (ret != 0) {
-        return 2;
+        return std::nullopt;
       }
       continue;
     }
@@ -739,7 +914,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         if (!col_count_opt.has_value()) {
           PMA_EPrintln("ERROR: Failed to parse column-count pkt!");
           close_stmt(stmt_id);
-          return 2;
+          return std::nullopt;
         }
         col_count = col_count_opt.value();
         idx += pkt_size;
@@ -754,13 +929,13 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
         }
       }
       case NextPkt::COLUMN_DEF: {
-        int ret =
-            parse_col_type_pkt(recv_part.data + idx, pkt_size, field_types);
+        int ret = parse_col_type_pkt(recv_part.data + idx, pkt_size,
+                                     field_types, field_details);
         if (ret != 0) {
           PMA_EPrintln("ERROR: Failed to parse column def {}!",
                        field_types.size());
           close_stmt(stmt_id);
-          return 2;
+          return std::nullopt;
         }
         idx += pkt_size;
         if (field_types.size() > col_count) {
@@ -768,7 +943,7 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
               "ERROR: Invalid count of field types! Have {}, must be {}",
               field_types.size(), col_count);
           close_stmt(stmt_id);
-          return 2;
+          return std::nullopt;
         } else if (field_types.size() == col_count) {
           next_pkt_enum = NextPkt::ROW;
         }
@@ -782,11 +957,13 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
 #ifndef NDEBUG
         PMA_EPrintln("NOTICE: Parsing ROW {}", row_idx);
 #endif
-        int ret = parse_row_pkt(recv_part.data + idx, pkt_size, field_types);
+        ret_vecs.emplace_back();
+        int ret = parse_row_pkt(recv_part.data + idx, pkt_size, field_types,
+                                field_details, &ret_vecs.back());
         if (ret != 0) {
           PMA_EPrintln("ERROR: Failed to parse row pkt!");
           close_stmt(stmt_id);
-          return 2;
+          return std::nullopt;
         }
         ++row_idx;
         idx += pkt_size;
@@ -799,11 +976,11 @@ int PMA_MSQL::Connection::execute_stmt(const std::string &stmt) {
       default:
         PMA_EPrintln("ERROR: Invalid next_pkt_enum value (internal error!)");
         close_stmt(stmt_id);
-        return 2;
+        return std::nullopt;
     }
   }
   close_stmt(stmt_id);
-  return 0;
+  return ret_vecs;
 }
 
 void PMA_MSQL::Connection::close_stmt(uint32_t stmt_id) {
@@ -1648,12 +1825,6 @@ std::optional<std::tuple<int, uint32_t> > PMA_MSQL::parse_prepare_resp_pkt(
   params_bytes[0] = buf[idx++];
   params_bytes[1] = buf[idx++];
 
-  if (params != 0) {
-    std::fprintf(stderr, "ERROR: stmt requires %" PRIu16 " binded params!\n",
-                 params);
-    return std::make_tuple(1, stmt_id);
-  }
-
   // unused 1 byte.
   ++idx;
 
@@ -1688,7 +1859,8 @@ std::optional<uint64_t> PMA_MSQL::parse_column_count_pkt(uint8_t *buf,
 }
 
 int PMA_MSQL::parse_col_type_pkt(uint8_t *buf, size_t size,
-                                 std::vector<uint8_t> &field_types) {
+                                 std::vector<uint8_t> &field_types,
+                                 std::vector<uint16_t> &field_details) {
   size_t idx = 0;
   uint64_t catalog_len;
   uint_fast8_t bytes_read;
@@ -1843,6 +2015,7 @@ int PMA_MSQL::parse_col_type_pkt(uint8_t *buf, size_t size,
 #ifndef NDEBUG
   PMA_EPrintln("Field detail flag: {:#x}", field_detail);
 #endif
+  field_details.push_back(field_detail);
 
   uint8_t decimals = buf[idx++];
   if (idx >= size || idx >= 4096) {
@@ -1867,7 +2040,9 @@ int PMA_MSQL::parse_col_type_pkt(uint8_t *buf, size_t size,
 }
 
 int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
-                            const std::vector<uint8_t> &field_types) {
+                            const std::vector<uint8_t> &field_types,
+                            const std::vector<uint16_t> &field_details,
+                            std::vector<Value> *out) {
   size_t idx = 0;
 
   if (buf[idx] != 0) {
@@ -1908,6 +2083,9 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
 #ifndef NDEBUG
       PMA_EPrintln(" Col {} is NULL", bidx);
 #endif
+      if (out) {
+        out->emplace_back();
+      }
     } else {
 #ifndef NDEBUG
       PMA_EPrintln(" Col {} is NOT NULL", bidx);
@@ -1927,50 +2105,116 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
                          "ERROR: Recv after exec parsing out of bounds!\n");
             return 1;
           }
+          PMA_EPrintln("WARNING: \"DECIMAL\" handling implementation pending!");
+          if (out) {
+            out->emplace_back();
+          }
           break;
         }
         case 1: {
-          uint8_t tiny = buf[idx++];
-          if (idx > size || idx >= 4096) {
-            std::fprintf(stderr,
-                         "ERROR: Recv after exec parsing out of bounds!\n");
-            return 1;
-          }
+          if (field_details.at(bidx) & 0x20) {
+            uint8_t tiny = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
 #ifndef NDEBUG
-          PMA_EPrintln("  Value TINY: {}", tiny);
+            PMA_EPrintln("  Value TINY: {:d}", tiny);
 #endif
+            if (out) {
+              out->emplace_back(static_cast<uint64_t>(tiny));
+            }
+          } else {
+            int8_t tiny = static_cast<int8_t>(buf[idx++]);
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
+#ifndef NDEBUG
+            PMA_EPrintln("  Value TINY: {:d}", tiny);
+#endif
+            if (out) {
+              out->emplace_back(static_cast<int64_t>(tiny));
+            }
+          }
           break;
         }
         case 2: {
-          uint16_t small;
-          uint8_t *small_bytes = reinterpret_cast<uint8_t *>(&small);
-          small_bytes[0] = buf[idx++];
-          small_bytes[1] = buf[idx++];
-          if (idx > size || idx >= 4096) {
-            std::fprintf(stderr,
-                         "ERROR: Recv after exec parsing out of bounds!\n");
-            return 1;
-          }
+          if (field_details.at(bidx) & 0x20) {
+            uint16_t small;
+            uint8_t *small_bytes = reinterpret_cast<uint8_t *>(&small);
+            small_bytes[0] = buf[idx++];
+            small_bytes[1] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
 #ifndef NDEBUG
-          PMA_EPrintln("  Value SMALL: {}", small);
+            PMA_EPrintln("  Value SMALL: {}", small);
 #endif
+            if (out) {
+              out->emplace_back(static_cast<uint64_t>(small));
+            }
+          } else {
+            int16_t small;
+            uint8_t *small_bytes = reinterpret_cast<uint8_t *>(&small);
+            small_bytes[0] = buf[idx++];
+            small_bytes[1] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
+#ifndef NDEBUG
+            PMA_EPrintln("  Value SMALL: {}", small);
+#endif
+            if (out) {
+              out->emplace_back(static_cast<int64_t>(small));
+            }
+          }
           break;
         }
         case 3: {
-          uint32_t long_int;
-          uint8_t *long_bytes = reinterpret_cast<uint8_t *>(&long_int);
-          long_bytes[0] = buf[idx++];
-          long_bytes[1] = buf[idx++];
-          long_bytes[2] = buf[idx++];
-          long_bytes[3] = buf[idx++];
-          if (idx > size || idx >= 4096) {
-            std::fprintf(stderr,
-                         "ERROR: Recv after exec parsing out of bounds!\n");
-            return 1;
-          }
+          if (field_details.at(bidx) & 0x20) {
+            uint32_t long_int;
+            uint8_t *long_bytes = reinterpret_cast<uint8_t *>(&long_int);
+            long_bytes[0] = buf[idx++];
+            long_bytes[1] = buf[idx++];
+            long_bytes[2] = buf[idx++];
+            long_bytes[3] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
 #ifndef NDEBUG
-          PMA_EPrintln("  Value LONG: {}", long_int);
+            PMA_EPrintln("  Value LONG: {}", long_int);
 #endif
+            if (out) {
+              out->emplace_back(static_cast<uint64_t>(long_int));
+            }
+          } else {
+            int32_t long_int;
+            uint8_t *long_bytes = reinterpret_cast<uint8_t *>(&long_int);
+            long_bytes[0] = buf[idx++];
+            long_bytes[1] = buf[idx++];
+            long_bytes[2] = buf[idx++];
+            long_bytes[3] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
+#ifndef NDEBUG
+            PMA_EPrintln("  Value LONG: {}", long_int);
+#endif
+            if (out) {
+              out->emplace_back(static_cast<int64_t>(long_int));
+            }
+          }
           break;
         }
         case 4: {
@@ -1988,6 +2232,9 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
 #ifndef NDEBUG
           PMA_EPrintln("  Value FLOAT: {}", float_val);
 #endif
+          if (out) {
+            out->emplace_back(float_val);
+          }
           break;
         }
         case 5: {
@@ -2009,6 +2256,9 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
 #ifndef NDEBUG
           PMA_EPrintln("  Value DOUBLE: {}", double_val);
 #endif
+          if (out) {
+            out->emplace_back(double_val);
+          }
           break;
         }
         case 6:
@@ -2018,41 +2268,129 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           PMA_EPrintln("ERROR: Unimplemented handling of TIMESTAMP!");
           return 1;
         case 8: {
-          uint64_t long_long;
-          uint8_t *bytes = reinterpret_cast<uint8_t *>(&long_long);
-          bytes[0] = buf[idx++];
-          bytes[1] = buf[idx++];
-          bytes[2] = buf[idx++];
-          bytes[3] = buf[idx++];
-          bytes[4] = buf[idx++];
-          bytes[5] = buf[idx++];
-          bytes[6] = buf[idx++];
-          bytes[7] = buf[idx++];
-          if (idx > size || idx >= 4096) {
-            std::fprintf(stderr,
-                         "ERROR: Recv after exec parsing out of bounds!\n");
-            return 1;
-          }
+          if (field_details.at(bidx) & 0x20) {
+            uint64_t long_long;
+            uint8_t *bytes = reinterpret_cast<uint8_t *>(&long_long);
+            bytes[0] = buf[idx++];
+            bytes[1] = buf[idx++];
+            bytes[2] = buf[idx++];
+            bytes[3] = buf[idx++];
+            bytes[4] = buf[idx++];
+            bytes[5] = buf[idx++];
+            bytes[6] = buf[idx++];
+            bytes[7] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
 #ifndef NDEBUG
-          PMA_EPrintln("  Value LONGLONG: {}", long_long);
+            PMA_EPrintln("  Value LONGLONG: {}", long_long);
 #endif
+            if (out) {
+              out->emplace_back(long_long);
+            }
+          } else {
+            int64_t long_long;
+            uint8_t *bytes = reinterpret_cast<uint8_t *>(&long_long);
+            bytes[0] = buf[idx++];
+            bytes[1] = buf[idx++];
+            bytes[2] = buf[idx++];
+            bytes[3] = buf[idx++];
+            bytes[4] = buf[idx++];
+            bytes[5] = buf[idx++];
+            bytes[6] = buf[idx++];
+            bytes[7] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
+#ifndef NDEBUG
+            PMA_EPrintln("  Value LONGLONG: {}", long_long);
+#endif
+            if (out) {
+              out->emplace_back(long_long);
+            }
+          }
           break;
         }
         case 9: {
-          uint32_t int24;
-          uint8_t *bytes = reinterpret_cast<uint8_t *>(&int24);
-          bytes[0] = buf[idx++];
-          bytes[1] = buf[idx++];
-          bytes[2] = buf[idx++];
-          bytes[3] = buf[idx++];
-          if (idx > size || idx >= 4096) {
-            std::fprintf(stderr,
-                         "ERROR: Recv after exec parsing out of bounds!\n");
-            return 1;
-          }
+          if (field_details.at(bidx) & 0x20) {
+            uint32_t int24;
+            uint8_t *bytes = reinterpret_cast<uint8_t *>(&int24);
+            bytes[0] = buf[idx++];
+            bytes[1] = buf[idx++];
+            bytes[2] = buf[idx++];
+            bytes[3] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
 #ifndef NDEBUG
-          PMA_EPrintln("  Value INT24: {}", int24);
+            PMA_EPrintln("  Value INT24: {}", int24);
 #endif
+            if (out) {
+              out->emplace_back(static_cast<uint64_t>(int24));
+            }
+          } else {
+            int32_t int24;
+            uint8_t *bytes = reinterpret_cast<uint8_t *>(&int24);
+            bytes[0] = buf[idx++];
+            bytes[1] = buf[idx++];
+            bytes[2] = buf[idx++];
+            bytes[3] = buf[idx++];
+            if (idx > size || idx >= 4096) {
+              std::fprintf(stderr,
+                           "ERROR: Recv after exec parsing out of bounds!\n");
+              return 1;
+            }
+#ifndef NDEBUG
+            PMA_EPrintln("  Value INT24: {}", int24);
+#endif
+            if (out) {
+              out->emplace_back(static_cast<int64_t>(int24));
+            }
+          }
+          break;
+        }
+        case 252: {
+          const auto [value, b_read] = parse_len_enc_int(buf + idx);
+          idx += b_read;
+          bool is_ascii = true;
+          for (size_t blob_idx = idx; blob_idx < idx + value; ++blob_idx) {
+            if (buf[blob_idx] > 0x7F) {
+              is_ascii = false;
+              break;
+            }
+          }
+          std::string str;
+          if (is_ascii) {
+            str = std::string(reinterpret_cast<char *>(buf + idx), value);
+          } else {
+            str = "Not ASCII";
+          }
+          idx += value;
+#ifndef NDEBUG
+          PMA_EPrintln("  Value Blob: {}", str);
+#endif
+          if (out) {
+            out->emplace_back(std::move(str));
+          }
+          break;
+        }
+        case 254: {
+          const auto [value, b_read] = parse_len_enc_int(buf + idx);
+          idx += b_read;
+          std::string str(reinterpret_cast<char *>(buf + idx), value);
+          idx += value;
+#ifndef NDEBUG
+          PMA_EPrintln("  Value String: {}", str);
+#endif
+          if (out) {
+            out->emplace_back(std::move(str));
+          }
           break;
         }
         default:

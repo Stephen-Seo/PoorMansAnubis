@@ -119,9 +119,10 @@ class Connection {
 
   bool is_valid() const;
 
-  // Returns error code, 0 on success, 1 if is_valid() is false, 2 for other
-  // error.
-  int execute_stmt(const std::string &stmt);
+  // No value on failure. Vector on success. Non-empty vector if there are
+  // results.
+  using StmtRet = std::optional<std::vector<std::vector<Value> > >;
+  StmtRet execute_stmt(const std::string &stmt, std::vector<Value> bind_params);
 
  private:
   // 0 - invalid connection if set.
@@ -168,12 +169,15 @@ std::optional<uint64_t> parse_column_count_pkt(uint8_t *buf, size_t size);
 
 // Returns 0 on success. Updates field_types vec.
 int parse_col_type_pkt(uint8_t *buf, size_t size,
-                       std::vector<uint8_t> &field_types);
+                       std::vector<uint8_t> &field_types,
+                       std::vector<uint16_t> &field_details);
 
 // Returns 0 on success.
 // TODO return row values.
 int parse_row_pkt(uint8_t *buf, size_t size,
-                  const std::vector<uint8_t> &field_types);
+                  const std::vector<uint8_t> &field_types,
+                  const std::vector<uint16_t> &field_details,
+                  std::vector<Value> *out);
 
 }  // Namespace PMA_MSQL
 
