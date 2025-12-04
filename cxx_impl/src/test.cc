@@ -1024,7 +1024,7 @@ int main() {
   // Test PMA_MSQL::Value
   {
     PMA_MSQL::Value value;
-    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::INVALID);
+    CHECK_TRUE(value.get_type() == PMA_MSQL::Value::INV_NULL);
     {
       auto opt_v = value.get_str();
       CHECK_TRUE(!opt_v.has_value());

@@ -65,7 +65,7 @@ PMA_MSQL::Packet &PMA_MSQL::Packet::operator=(PMA_MSQL::Packet &&other) {
   return *this;
 }
 
-PMA_MSQL::Value::Value() : u(), type_enum(PMA_MSQL::Value::INVALID) {}
+PMA_MSQL::Value::Value() : u(), type_enum(PMA_MSQL::Value::INV_NULL) {}
 PMA_MSQL::Value::Value(std::string str) : u(str), type_enum(STRING) {}
 PMA_MSQL::Value::Value(int64_t i) : u(i), type_enum(SIGNED_INT) {}
 PMA_MSQL::Value::Value(uint64_t u) : u(u), type_enum(UNSIGNED_INT) {}
@@ -85,7 +85,7 @@ PMA_MSQL::Value::~Value() {
     case STRING:
       this->u.str.~shared_ptr<std::string>();
       break;
-    case INVALID:
+    case INV_NULL:
       break;
   }
 }
@@ -108,7 +108,7 @@ PMA_MSQL::Value::Value(const Value &other) : u(), type_enum(other.type_enum) {
       new (&this->u.str) std::shared_ptr<std::string>();
       this->u.str = std::make_shared<std::string>(*other.u.str.get());
       break;
-    case INVALID:
+    case INV_NULL:
       break;
   }
 }
@@ -135,7 +135,7 @@ PMA_MSQL::Value &PMA_MSQL::Value::operator=(const Value &other) {
       new (&this->u.str) std::shared_ptr<std::string>();
       this->u.str = std::make_shared<std::string>(*other.u.str.get());
       break;
-    case INVALID:
+    case INV_NULL:
       break;
   }
 
@@ -160,7 +160,7 @@ PMA_MSQL::Value::Value(Value &&other) : u(), type_enum(other.type_enum) {
       new (&this->u.str) std::shared_ptr<std::string>();
       this->u.str = std::move(other.u.str);
       break;
-    case INVALID:
+    case INV_NULL:
       break;
   }
 }
@@ -187,12 +187,12 @@ PMA_MSQL::Value &PMA_MSQL::Value::operator=(Value &&other) {
       new (&this->u.str) std::shared_ptr<std::string>();
       this->u.str = std::move(other.u.str);
       break;
-    case INVALID:
+    case INV_NULL:
       break;
   }
 
   other.~Value();
-  other.type_enum = INVALID;
+  other.type_enum = INV_NULL;
 
   return *this;
 }
