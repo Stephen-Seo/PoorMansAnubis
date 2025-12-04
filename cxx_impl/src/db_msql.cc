@@ -1054,11 +1054,9 @@ std::vector<PMA_MSQL::Packet> PMA_MSQL::create_packets(uint8_t *data,
   return ret;
 }
 
-std::optional<PMA_MSQL::Connection> PMA_MSQL::connect_msql(std::string addr,
-                                                           uint16_t port,
-                                                           std::string user,
-                                                           std::string pass,
-                                                           std::string dbname) {
+std::optional<PMA_MSQL::Connection> PMA_MSQL::Connection::connect_msql(
+    std::string addr, uint16_t port, std::string user, std::string pass,
+    std::string dbname) {
   PMA_HTTP::ErrorT errt = PMA_HTTP::ErrorT::INVALID_STATE;
   std::string errm;
   int fd;

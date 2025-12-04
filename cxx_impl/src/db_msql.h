@@ -104,10 +104,13 @@ class Value {
 
 class Connection {
  public:
+  static std::optional<Connection> connect_msql(std::string addr, uint16_t port,
+                                                std::string user,
+                                                std::string pass,
+                                                std::string dbname);
+
   Connection();
   ~Connection();
-
-  Connection(int fd, uint32_t connection_id);
 
   // No copy
   Connection(const Connection &) = delete;
@@ -130,16 +133,13 @@ class Connection {
   int fd;
   uint32_t connection_id;
 
+  Connection(int fd, uint32_t connection_id);
   void close_stmt(uint32_t stmt_id);
 };
 
 // Copies "data" into the returned packet struct(s).
 std::vector<Packet> create_packets(uint8_t *data, size_t data_size,
                                    uint8_t *seq);
-
-std::optional<Connection> connect_msql(std::string addr, uint16_t port,
-                                       std::string user, std::string pass,
-                                       std::string dbname);
 
 std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
                                               std::string pass);

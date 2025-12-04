@@ -138,8 +138,8 @@ int main(int argc, char **argv) {
   }
 
   // TODO DEBUG
-  auto msql_conn_opt = PMA_MSQL::connect_msql("127.0.0.1", 3306, "pmauser",
-                                              "pmauserpass", "PMA");
+  auto msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+      "127.0.0.1", 3306, "pmauser", "pmauserpass", "PMA");
   if (msql_conn_opt.has_value()) {
     PMA_EPrintln("Drop table if exists...");
     msql_conn_opt->execute_stmt("DROP TABLE IF EXISTS TEST_TABLE", {});
