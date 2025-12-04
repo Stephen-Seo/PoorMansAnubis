@@ -2362,19 +2362,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
         case 252: {
           const auto [value, b_read] = parse_len_enc_int(buf + idx);
           idx += b_read;
-          bool is_ascii = true;
-          for (size_t blob_idx = idx; blob_idx < idx + value; ++blob_idx) {
-            if (buf[blob_idx] > 0x7F) {
-              is_ascii = false;
-              break;
-            }
-          }
-          std::string str;
-          if (is_ascii) {
-            str = std::string(reinterpret_cast<char *>(buf + idx), value);
-          } else {
-            str = "Not ASCII";
-          }
+          std::string str(reinterpret_cast<char *>(buf + idx), value);
           idx += value;
 #ifndef NDEBUG
           PMA_EPrintln("  Value Blob: {}", str);
