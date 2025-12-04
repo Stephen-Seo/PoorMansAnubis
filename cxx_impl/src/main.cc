@@ -162,6 +162,11 @@ int main(int argc, char **argv) {
                                  {"String that says: test integer is NULL"}});
     msql_conn_opt->execute_stmt("INSERT INTO TEST_TABLE (id) VALUES (?)",
                                 {PMA_MSQL::Value::new_int(4)});
+    msql_conn_opt->execute_stmt(
+        "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
+        {PMA_MSQL::Value::new_int(5),
+         PMA_MSQL::Value::new_int(-5),
+         {"Test negative integer row."}});
     PMA_EPrintln("Select...");
     auto ret_vec_opt =
         msql_conn_opt->execute_stmt("SELECT id, test, s FROM TEST_TABLE", {});
