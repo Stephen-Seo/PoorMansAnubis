@@ -17,6 +17,7 @@
 #ifndef SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_DB_MSQL_H_
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_CXX_BACKEND_DB_MSQL_H_
 
+// Standard library includes.
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -25,6 +26,9 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+// Local includes.
+#include "helpers.h"
 
 namespace PMA_MSQL {
 
@@ -125,6 +129,11 @@ class Connection {
 
   bool is_valid() const;
 
+  // Checks that the connection is valid with a ping.
+  // If this fails, the fd is closed, the mutex is unlocked, and this
+  // Connection becomes no longer valid.
+  bool ping_check();
+
   // No value on failure. Vector on success. Non-empty vector if there are
   // results.
   using StmtRet = std::optional<std::vector<std::vector<Value> > >;
@@ -145,6 +154,10 @@ class Connection {
 // Copies "data" into the returned packet struct(s).
 std::vector<Packet> create_packets(uint8_t *data, size_t data_size,
                                    uint8_t *seq);
+
+// Serializes Packets.
+std::vector<PMA_HELPER::BinaryPart> packets_to_parts(
+    const std::vector<Packet> &);
 
 std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
                                               std::string pass);

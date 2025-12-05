@@ -441,6 +441,106 @@ bool PMA_MSQL::Connection::is_valid() const {
   return fd >= 0 && !flags.test(0);
 }
 
+bool PMA_MSQL::Connection::ping_check() {
+  if (!is_valid()) {
+    return false;
+  }
+
+  uint8_t ping = 0xE;
+  uint8_t seq = 0;
+  auto pkts = PMA_MSQL::create_packets(&ping, 1, &seq);
+  auto parts = PMA_MSQL::packets_to_parts(pkts);
+
+  for (const PMA_HELPER::BinaryPart &part : parts) {
+    size_t remaining = part.size;
+    while (remaining != 0) {
+      ssize_t write_ret =
+          write(this->fd, part.data + (part.size - remaining), remaining);
+      if (write_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#ifndef NDEBUG
+          PMA_EPrint("w");
+#endif
+          continue;
+        } else {
+          close(this->fd);
+          this->flags.set(0);
+          m.unlock();
+          return false;
+        }
+      } else if (static_cast<size_t>(write_ret) < remaining) {
+        remaining -= static_cast<size_t>(write_ret);
+      } else {
+        break;
+      }
+    }
+  }
+#ifndef NDEBUG
+  PMA_EPrintln_e();
+#endif
+
+  uint8_t buf[4096];
+  size_t size;
+  while (true) {
+    ssize_t read_ret = read(this->fd, buf, 4096);
+    if (read_ret == -1) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#ifndef NDEBUG
+        PMA_EPrint("r");
+#endif
+        continue;
+      } else {
+        close(this->fd);
+        this->flags.set(0);
+        m.unlock();
+        return false;
+      }
+    } else if (read_ret == 0) {
+      close(this->fd);
+      this->flags.set(0);
+      m.unlock();
+      return false;
+    } else {
+      size = static_cast<size_t>(read_ret);
+      break;
+    }
+  }
+#ifndef NDEBUG
+  PMA_EPrintln_e();
+#endif
+
+  if (size < 4) {
+    close(this->fd);
+    this->flags.set(0);
+    m.unlock();
+    return false;
+  }
+
+  uint32_t plen;
+  uint8_t *plen_bytes = reinterpret_cast<uint8_t *>(&plen);
+  plen_bytes[0] = buf[0];
+  plen_bytes[1] = buf[1];
+  plen_bytes[2] = buf[2];
+  plen_bytes[3] = 0;
+
+  // uint8_t recv_seq = buf[3];
+
+  uint8_t *buf_ptr = buf + 4;
+  size = plen;
+
+  const auto [result, bytes_read] = handle_ok_pkt(buf_ptr, size);
+  if (result == 0 && bytes_read == size) {
+    return true;
+  } else {
+    close(this->fd);
+    this->flags.set(0);
+    m.unlock();
+    return false;
+  }
+}
+
 PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     const std::string &stmt, std::vector<Value> bind_params) {
   if (!is_valid()) {
@@ -450,40 +550,19 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
   uint8_t seq = 0;
 
   // Setup prepare stmt packet(s).
-  std::vector<Packet> pkts;
+  std::vector<PMA_HELPER::BinaryPart> part_vec;
   {
     uint8_t *buf = new uint8_t[stmt.size() + 1];
     buf[0] = 0x16;
     std::memcpy(buf + 1, stmt.data(), stmt.size());
 
-    pkts = PMA_MSQL::create_packets(buf, stmt.size() + 1, &seq);
+    auto pkts = PMA_MSQL::create_packets(buf, stmt.size() + 1, &seq);
     delete[] buf;
+
+    part_vec = packets_to_parts(pkts);
   }
 
-  for (const Packet &pkt : pkts) {
-    PMA_HELPER::BinaryPart part;
-    {
-      PMA_HELPER::BinaryParts parts;
-      uint32_t u32 = pkt.packet_length;
-      uint8_t *u32_8 = reinterpret_cast<uint8_t *>(&u32);
-
-      uint8_t *buf = new uint8_t[3];
-      buf[0] = u32_8[0];
-      buf[1] = u32_8[1];
-      buf[2] = u32_8[2];
-      parts.append(3, buf);
-
-      buf = new uint8_t[1];
-      buf[0] = pkt.seq;
-      parts.append(1, buf);
-
-      buf = new uint8_t[pkt.packet_length];
-      std::memcpy(buf, pkt.body, pkt.packet_length);
-      parts.append(pkt.packet_length, buf);
-
-      part = parts.combine();
-    }
-
+  for (const PMA_HELPER::BinaryPart &part : part_vec) {
     size_t remaining = part.size;
     while (true) {
       ssize_t write_ret =
@@ -791,34 +870,12 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
 
     PMA_HELPER::BinaryPart part = parts.combine();
 
-    pkts = PMA_MSQL::create_packets(part.data, part.size, &seq);
+    auto pkts = PMA_MSQL::create_packets(part.data, part.size, &seq);
+    part_vec = PMA_MSQL::packets_to_parts(pkts);
   }
 
   // Send execute pkt(s).
-  for (const Packet &pkt : pkts) {
-    PMA_HELPER::BinaryPart part;
-    {
-      PMA_HELPER::BinaryParts parts;
-
-      uint32_t size = pkt.packet_length;
-      uint8_t *size_bytes = reinterpret_cast<uint8_t *>(&size);
-      uint8_t *buf = new uint8_t[3];
-      buf[0] = size_bytes[0];
-      buf[1] = size_bytes[1];
-      buf[2] = size_bytes[2];
-      parts.append(3, buf);
-
-      buf = new uint8_t[1];
-      buf[0] = pkt.seq;
-      parts.append(1, buf);
-
-      buf = new uint8_t[size];
-      std::memcpy(buf, pkt.body, size);
-      parts.append(size, buf);
-
-      part = parts.combine();
-    }
-
+  for (const PMA_HELPER::BinaryPart &part : part_vec) {
     size_t remaining = part.size;
     while (true) {
       ssize_t write_ret =
@@ -1135,6 +1192,37 @@ std::vector<PMA_MSQL::Packet> PMA_MSQL::create_packets(uint8_t *data,
   }
 
   return ret;
+}
+
+std::vector<PMA_HELPER::BinaryPart> PMA_MSQL::packets_to_parts(
+    const std::vector<Packet> &pkts) {
+  std::vector<PMA_HELPER::BinaryPart> part_vec;
+  for (const Packet &pkt : pkts) {
+    PMA_HELPER::BinaryPart part;
+    {
+      PMA_HELPER::BinaryParts parts;
+      uint32_t u32 = pkt.packet_length;
+      uint8_t *u32_8 = reinterpret_cast<uint8_t *>(&u32);
+
+      uint8_t *buf = new uint8_t[3];
+      buf[0] = u32_8[0];
+      buf[1] = u32_8[1];
+      buf[2] = u32_8[2];
+      parts.append(3, buf);
+
+      buf = new uint8_t[1];
+      buf[0] = pkt.seq;
+      parts.append(1, buf);
+
+      buf = new uint8_t[pkt.packet_length];
+      std::memcpy(buf, pkt.body, pkt.packet_length);
+      parts.append(pkt.packet_length, buf);
+
+      part = parts.combine();
+    }
+    part_vec.emplace_back(std::move(part));
+  }
+  return part_vec;
 }
 
 std::optional<PMA_MSQL::Connection> PMA_MSQL::Connection::connect_msql(

@@ -211,6 +211,18 @@ int main(int argc, char **argv) {
     }
   }
 
+  for (size_t idx = 0; idx < 10; ++idx) {
+    bool ping_result = msql_conn_opt->ping_check();
+    if (!ping_result) {
+      PMA_EPrintln("\nping result was false!\n");
+      return 0;
+    } else {
+      PMA_EPrint(".");
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(333));
+  }
+  PMA_EPrintln_e();
+
   return 0;
 
   curl_global_init(CURL_GLOBAL_SSL);
