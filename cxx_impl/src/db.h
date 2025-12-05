@@ -162,6 +162,12 @@ get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
 std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
                                                          std::string ipaddr,
                                                          uint16_t port);
+
+uint64_t rand_uint64_t();
+
+uint64_t rng_next_id(uint64_t value);
+
+std::string next_hash(uint64_t value);
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////
