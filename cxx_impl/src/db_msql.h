@@ -209,14 +209,15 @@ std::optional<bool> set_challenge_factor(Connection &c, std::string ip,
 std::optional<uint16_t> get_id_to_port_port(Connection &c, std::string id);
 
 std::optional<std::tuple<bool, uint16_t> > validate_client(
-    Connection &c, uint64_t cleanup_minutes, std::string id,
+    Connection &c, uint64_t chall_factors_timeout, std::string id,
     std::string factors_hash, std::string client_ip);
 
 std::optional<bool> client_is_allowed(Connection &c, std::string ip,
-                                      uint16_t port, uint64_t minutes_timeout);
+                                      uint16_t port,
+                                      uint64_t allowed_ips_timeout);
 
 std::optional<std::string> init_id_to_port(Connection &c, uint16_t port,
-                                           uint64_t minutes_timeout);
+                                           uint64_t id_to_port_timeout);
 
 }  // Namespace PMA_MSQL
 

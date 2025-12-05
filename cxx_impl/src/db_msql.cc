@@ -2734,7 +2734,7 @@ std::optional<uint16_t> PMA_MSQL::get_id_to_port_port(Connection &c,
 }
 
 std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
-    Connection &c, uint64_t cleanup_minutes, std::string id,
+    Connection &c, uint64_t chall_factors_timeout, std::string id,
     std::string factors_hash, std::string client_ip) {
   if (!c.is_valid()) {
     return std::nullopt;
@@ -2749,7 +2749,7 @@ std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
   }
 
   // cleanup first.
-  if (!c.execute_stmt(DB_CLEANUP_CHAL_FACT, {cleanup_minutes})) {
+  if (!c.execute_stmt(DB_CLEANUP_CHAL_FACT, {chall_factors_timeout})) {
     c.execute_stmt("UNLOCK TABLES", {});
     PMA_EPrintln(
         "ERROR: Failed to cleanup challenge factors while validating client!");
@@ -2801,7 +2801,7 @@ std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
 
 std::optional<bool> PMA_MSQL::client_is_allowed(Connection &c, std::string ip,
                                                 uint16_t port,
-                                                uint64_t minutes_timeout) {
+                                                uint64_t allowed_ips_timeout) {
   if (!c.is_valid()) {
     return std::nullopt;
   }
@@ -2809,7 +2809,7 @@ std::optional<bool> PMA_MSQL::client_is_allowed(Connection &c, std::string ip,
   if (!c.execute_stmt("LOCK TABLE CXX_ALLOWED_IPS WRITE", {}).has_value()) {
     PMA_EPrintln("ERROR: Failed to lock Allowed IPs table (write)!");
     return std::nullopt;
-  } else if (!c.execute_stmt(DB_CLEANUP_ALLOWED_IPS, {minutes_timeout})
+  } else if (!c.execute_stmt(DB_CLEANUP_ALLOWED_IPS, {allowed_ips_timeout})
                   .has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
     PMA_EPrintln("ERROR: Failed to cleanup Allowed IPs table!");
@@ -2836,9 +2836,8 @@ std::optional<bool> PMA_MSQL::client_is_allowed(Connection &c, std::string ip,
   }
 }
 
-std::optional<std::string> PMA_MSQL::init_id_to_port(Connection &c,
-                                                     uint16_t port,
-                                                     uint64_t minutes_timeout) {
+std::optional<std::string> PMA_MSQL::init_id_to_port(
+    Connection &c, uint16_t port, uint64_t id_to_port_timeout) {
   if (!c.is_valid()) {
     return std::nullopt;
   }
@@ -2854,7 +2853,7 @@ std::optional<std::string> PMA_MSQL::init_id_to_port(Connection &c,
     return std::nullopt;
   }
 
-  c.execute_stmt(DB_CLEANUP_ID_TO_PORT, {minutes_timeout});
+  c.execute_stmt(DB_CLEANUP_ID_TO_PORT, {id_to_port_timeout});
 
   bool same_id_exists = true;
   std::string id_hashed;
