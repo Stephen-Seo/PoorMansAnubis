@@ -2843,8 +2843,14 @@ std::optional<std::string> PMA_MSQL::init_id_to_port(Connection &c,
     return std::nullopt;
   }
 
+  std::optional<std::uint64_t> seq_next_opt = get_next_seq_id(c);
+  if (!seq_next_opt.has_value()) {
+    PMA_EPrintln("ERROR: Failed to get next seq id (init id to port)!");
+    return std::nullopt;
+  }
+
   if (!c.execute_stmt("LOCK TABLE CXX_ID_TO_PORT WRITE", {}).has_value()) {
-    PMA_EPrintln("ERROR: Failed to lcok ID to Port table (write)!");
+    PMA_EPrintln("ERROR: Failed to lock ID to Port table (write)!");
     return std::nullopt;
   }
 
@@ -2853,12 +2859,6 @@ std::optional<std::string> PMA_MSQL::init_id_to_port(Connection &c,
   bool same_id_exists = true;
   std::string id_hashed;
   do {
-    std::optional<std::uint64_t> seq_next_opt = get_next_seq_id(c);
-    if (!seq_next_opt.has_value()) {
-      c.execute_stmt("UNLOCK TABLES", {});
-      PMA_EPrintln("ERROR: Failed to get next seq id (init id to port)!");
-      return std::nullopt;
-    }
     id_hashed = PMA_SQL::next_hash(seq_next_opt.value());
     auto vec_opt = c.execute_stmt(DB_GET_PORT_ID_TO_PORT, {id_hashed});
     if (!vec_opt.has_value()) {
