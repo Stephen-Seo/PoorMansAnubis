@@ -31,9 +31,86 @@
 #include <thread>
 
 // Local includes.
+#include "db.h"
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
+
+static const char *DB_INIT_TABLE_SEQ_ID =
+    "CREATE TABLE IF NOT EXISTS CXX_SEQ_ID ("
+    "  ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+    "  SEQ_ID INT UNSIGNED NOT NULL"
+    ")";
+
+static const char *DB_INIT_TABLE_CHALLENGE_FACTORS =
+    "CREATE TABLE IF NOT EXISTS CXX_CHALLENGE_FACTORS ("
+    "  ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,"
+    "  IP VARCHAR(45) NOT NULL,"
+    "  FACTORS CHAR(64) CHARACTER SET ascii NOT NULL,"
+    "  PORT INT UNSIGNED NOT NULL,"
+    "  GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+    "  INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)"
+    ")";
+
+static const char *DB_INIT_TABLE_ALLOWED_IPS =
+    "CREATE TABLE IF NOT EXISTS CXX_ALLOWED_IPS ("
+    "  ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+    "  IP VARCHAR(45) NOT NULL,"
+    "  PORT INT UNSIGNED NOT NULL,"
+    "  ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+    "  INDEX IP_PORT_INDEX USING HASH (IP, PORT),"
+    "  INDEX ON_TIME_INDEX USING BTREE (ON_TIME)"
+    ")";
+
+static const char *DB_INIT_TABLE_ID_TO_PORT =
+    "CREATE TABLE IF NOT EXISTS CXX_ID_TO_PORT ("
+    "  ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,"
+    "  PORT INT UNSIGNED NOT NULL,"
+    "  ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+    "  INDEX ON_TIME_INDEX USING BTREE (ON_TIME)"
+    ")";
+
+static const char *DB_GET_SEQ_ID = "SELECT ID, SEQ_ID FROM CXX_SEQ_ID";
+static const char *DB_REMOVE_SEQ_ID = "DELETE FROM CXX_SEQ_ID WHERE ID = ?";
+static const char *DB_ADD_SEQ_ID = "INSERT INTO CXX_SEQ_ID (SEQ_ID) VALUES (?)";
+static const char *DB_UPDATE_SEQ_ID = "UPDATE CXX_SEQ_ID SET SEQ_ID = ?";
+
+static const char *DB_SEL_CHAL_FACT_BY_ID =
+    "SELECT ID FROM CXX_CHALLENGE_FACTORS WHERE ID = ?";
+static const char *DB_ADD_CHAL_FACT =
+    "INSERT INTO CXX_CHALLENGE_FACTORS (ID, IP, PORT, FACTORS) VALUES (?, ?, "
+    "?, ?)";
+
+static const char *DB_GET_PORT_ID_TO_PORT =
+    "SELECT PORT FROM CXX_ID_TO_PORT WHERE ID = ?";
+static const char *DB_DEL_ID_TO_PORT_ENTRY =
+    "DELETE FROM CXX_ID_TO_PORT WHERE ID = ?";
+
+static const char *DB_IP_PORT_FROM_CHAL_FACT =
+    "SELECT IP, PORT FROM CXX_CHALLENGE_FACTORS WHERE ID = ? AND FACTORS = ?";
+static const char *DB_DEL_FROM_CHAL_FACT =
+    "DELETE FROM CXX_CHALLENGE_FACTORS WHERE ID = ?";
+static const char *DB_ADD_ALLOWED_IPS_ENTRY =
+    "INSERT INTO CXX_ALLOWED_IPS (IP, PORT) VALUES (?, ?)";
+
+static const char *DB_IS_ALLOWED_IPS =
+    "SELECT IP, ON_TIME FROM CXX_ALLOWED_IPS WHERE IP = ? AND PORT = ?";
+
+static const char *DB_ADD_ID_TO_PORT =
+    "INSERT INTO CXX_ID_TO_PORT (ID, PORT) VALUES (?, ?)";
+
+static const char *DB_CLEANUP_CHAL_FACT =
+    "DELETE FROM CXX_CHALLENGE_FACTORS WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, "
+    "NOW()) >= ?";
+static const char *DB_CLEANUP_ALLOWED_IPS =
+    "DELETE FROM CXX_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) "
+    ">= ?";
+static const char *DB_CLEANUP_ID_TO_PORT =
+    "DELETE FROM CXX_ID_TO_PORT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= "
+    "?";
+
+static std::chrono::milliseconds CONN_TRY_LOCK_DURATION =
+    std::chrono::milliseconds(500);
 
 PMA_MSQL::Packet::Packet() : packet_length(0), seq(0), body(nullptr) {}
 
@@ -290,39 +367,45 @@ PMA_MSQL::Value::U::U(double d) {
   this->d = std::make_shared<double>(d);
 }
 
-PMA_MSQL::Connection::Connection() : flags() { flags.set(0); }
+std::timed_mutex PMA_MSQL::Connection::m = std::timed_mutex();
+
+PMA_MSQL::Connection::Connection() : flags(), fd(-1) { flags.set(0); }
 
 PMA_MSQL::Connection::~Connection() {
-  if (fd >= 0) {
-    std::vector<uint8_t> quit_pkt;
-    quit_pkt.push_back(1);
-    quit_pkt.push_back(0);
-    quit_pkt.push_back(0);
-    quit_pkt.push_back(0);
-    quit_pkt.push_back(1);
-    uint_fast8_t ticks = 0;
-    size_t remaining = 5;
-    while (remaining != 0) {
-      ssize_t write_ret =
-          write(fd, quit_pkt.data() + (5 - remaining), remaining);
-      if (write_ret == -1) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(10));
-          if (ticks++ > 200) {
+  if (!flags.test(0)) {
+    if (fd >= 0) {
+      std::vector<uint8_t> quit_pkt;
+      quit_pkt.push_back(1);
+      quit_pkt.push_back(0);
+      quit_pkt.push_back(0);
+      quit_pkt.push_back(0);
+      quit_pkt.push_back(1);
+      uint_fast8_t ticks = 0;
+      size_t remaining = 5;
+      while (remaining != 0) {
+        ssize_t write_ret =
+            write(fd, quit_pkt.data() + (5 - remaining), remaining);
+        if (write_ret == -1) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (ticks++ > 200) {
+              break;
+            }
+            continue;
+          } else {
             break;
           }
+        } else if (write_ret > 0 &&
+                   static_cast<size_t>(write_ret) <= remaining) {
+          remaining -= static_cast<size_t>(write_ret);
           continue;
         } else {
           break;
         }
-      } else if (write_ret > 0 && static_cast<size_t>(write_ret) <= remaining) {
-        remaining -= static_cast<size_t>(write_ret);
-        continue;
-      } else {
-        break;
       }
+      close(fd);
     }
-    close(fd);
+    m.unlock();
   }
 }
 
@@ -1057,6 +1140,17 @@ std::vector<PMA_MSQL::Packet> PMA_MSQL::create_packets(uint8_t *data,
 std::optional<PMA_MSQL::Connection> PMA_MSQL::Connection::connect_msql(
     std::string addr, uint16_t port, std::string user, std::string pass,
     std::string dbname) {
+  bool locked = Connection::m.try_lock_for(CONN_TRY_LOCK_DURATION);
+  if (!locked) {
+    return std::nullopt;
+  }
+  GenericCleanup<bool *> unlock_on_fail(&locked, [](bool **locked) {
+    if (*locked && **locked) {
+      Connection::m.unlock();
+      **locked = false;
+    }
+  });
+
   PMA_HTTP::ErrorT errt = PMA_HTTP::ErrorT::INVALID_STATE;
   std::string errm;
   int fd;
@@ -1367,6 +1461,8 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::Connection::connect_msql(
     return std::nullopt;
   }
 
+  // Prevent unlock, Connection implicitly owns the lock now.
+  locked = false;
   return Connection(fd, connection_id);
 }
 
@@ -2390,4 +2486,308 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
     }
   }
   return 0;
+}
+
+void PMA_MSQL::init_db(PMA_MSQL::Connection &c) {
+  if (!c.is_valid()) {
+    return;
+  }
+
+  c.execute_stmt(DB_INIT_TABLE_SEQ_ID, {});
+  c.execute_stmt(DB_INIT_TABLE_CHALLENGE_FACTORS, {});
+  c.execute_stmt(DB_INIT_TABLE_ALLOWED_IPS, {});
+  c.execute_stmt(DB_INIT_TABLE_ID_TO_PORT, {});
+}
+
+std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
+  if (!c.is_valid()) {
+    return std::nullopt;
+  }
+
+  auto exec_ret = c.execute_stmt("START TRANSACTION", {});
+  if (!exec_ret.has_value()) {
+    PMA_EPrint("ERROR: Failed to START TRANSACTION; get next seq id");
+    return std::nullopt;
+  }
+
+  exec_ret = c.execute_stmt(DB_GET_SEQ_ID, {});
+  if (!exec_ret.has_value()) {
+    c.execute_stmt("ROLLBACK", {});
+    PMA_EPrintln("ERROR: Failed to fetch seq id from msql db!");
+    return std::nullopt;
+  } else if (exec_ret->empty()) {
+    uint64_t seq = 0;
+    if (!c.execute_stmt(DB_ADD_SEQ_ID, {seq + 1}).has_value()) {
+      c.execute_stmt("ROLLBACK", {});
+      PMA_EPrintln("ERROR: Failed to add seq id to msql db!");
+      return std::nullopt;
+    }
+    c.execute_stmt("COMMIT", {});
+    return seq;
+  } else if (exec_ret->size() > 1) {
+    std::vector<Value> last = exec_ret->back();
+    exec_ret->pop_back();
+    for (std::vector<Value> &row : exec_ret.value()) {
+      c.execute_stmt(DB_REMOVE_SEQ_ID, {row.at(0)});
+    }
+    if (last.at(1).get_type() == Value::UNSIGNED_INT) {
+      uint64_t seq = *last.at(1).get_unsigned_int().value();
+      if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
+        c.execute_stmt("ROLLBACK", {});
+        PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+        return std::nullopt;
+      }
+      c.execute_stmt("COMMIT", {});
+      return seq;
+    } else {
+      c.execute_stmt("ROLLBACK", {});
+      PMA_EPrintln("ERROR: SEQ_ID in DB is not Unsigned!");
+      return std::nullopt;
+    }
+  } else {
+    if (exec_ret->at(0).at(1).get_type() == Value::UNSIGNED_INT) {
+      uint64_t seq = *exec_ret->at(0).at(1).get_unsigned_int().value();
+      if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
+        c.execute_stmt("ROLLBACK", {});
+        PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+        return std::nullopt;
+      }
+      c.execute_stmt("COMMIT", {});
+      return seq;
+    } else {
+      c.execute_stmt("ROLLBACK", {});
+      PMA_EPrintln("ERROR: SEQ_ID in DB is not Unsigned!");
+      return std::nullopt;
+    }
+  }
+}
+
+std::optional<bool> PMA_MSQL::has_challenge_factor_id(Connection &c,
+                                                      std::string hash) {
+  if (!c.is_valid()) {
+    return std::nullopt;
+  }
+
+  auto vec_opt = c.execute_stmt(DB_SEL_CHAL_FACT_BY_ID, {hash});
+  if (vec_opt.has_value()) {
+    if (vec_opt.value().size() == 1) {
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::optional<bool> PMA_MSQL::set_challenge_factor(Connection &c,
+                                                   std::string ip,
+                                                   std::string hash,
+                                                   uint16_t port,
+                                                   std::string factors_hash) {
+  if (!c.is_valid()) {
+    return std::nullopt;
+  }
+
+  if (!c.execute_stmt("LOCK TABLE CXX_CHALLENGE_FACTORS WRITE", {})
+           .has_value()) {
+    PMA_EPrintln(
+        "ERROR: Failed to lock db table challenge factors for writing!");
+    return std::nullopt;
+  } else if (!c.execute_stmt(DB_ADD_CHAL_FACT,
+                             {hash, ip, Value::new_uint(port), factors_hash})
+                  .has_value()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Failed to add to challenge factors!");
+    return std::nullopt;
+  }
+
+  c.execute_stmt("UNLOCK TABLES", {});
+  return true;
+}
+
+std::optional<uint16_t> PMA_MSQL::get_id_to_port_port(Connection &c,
+                                                      std::string id) {
+  if (!c.is_valid()) {
+    return std::nullopt;
+  }
+
+  if (!c.execute_stmt("LOCK TABLE CXX_ID_TO_PORT WRITE", {}).has_value()) {
+    PMA_EPrintln("ERROR: Failed to lock db table ID_TO_PORT for writing!");
+    return std::nullopt;
+  }
+
+  auto vec_opt = c.execute_stmt(DB_GET_PORT_ID_TO_PORT, {id});
+  if (!vec_opt.has_value()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Failed to select port from ID_TO_PORT!");
+    return std::nullopt;
+  } else if (vec_opt->empty()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Port from ID_TO_PORT not found with given id!");
+    return std::nullopt;
+  } else if (vec_opt->at(0).at(0).get_type() == Value::UNSIGNED_INT) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Port from ID_TO_PORT is not unsigned int!");
+    return std::nullopt;
+  }
+
+  uint16_t port =
+      static_cast<uint16_t>(*vec_opt->at(0).at(0).get_unsigned_int().value());
+  vec_opt = c.execute_stmt(DB_DEL_ID_TO_PORT_ENTRY, {id});
+  if (!vec_opt.has_value()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Failed to delete entry from ID_TO_PORT!");
+    return std::nullopt;
+  }
+
+  c.execute_stmt("UNLOCK TABLES", {});
+  return port;
+}
+
+std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
+    Connection &c, uint64_t cleanup_minutes, std::string id,
+    std::string factors_hash, std::string client_ip) {
+  if (!c.is_valid()) {
+    return std::nullopt;
+  }
+
+  if (!c.execute_stmt("LOCK TABLE CXX_CHALLENGE_FACTORS WRITE", {})
+           .has_value()) {
+    PMA_EPrintln(
+        "ERROR: Failed to lock table challenge factors while validating "
+        "client!");
+    return std::nullopt;
+  }
+
+  // cleanup first.
+  if (!c.execute_stmt(DB_CLEANUP_CHAL_FACT, {cleanup_minutes})) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln(
+        "ERROR: Failed to cleanup challenge factors while validating client!");
+    return std::nullopt;
+  }
+
+  // validate.
+  auto vec_opt = c.execute_stmt(DB_IP_PORT_FROM_CHAL_FACT, {id, factors_hash});
+  if (!vec_opt.has_value()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Failed to validate client; failed to fetch from db!");
+    return std::nullopt;
+  } else if (vec_opt->empty()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    return std::make_tuple(false, 0);
+  } else if (vec_opt->at(0).at(0).get_type() != Value::STRING) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln(
+        "ERROR: Failed to validate client; First col is not a String!");
+    return std::nullopt;
+  } else if (vec_opt->at(0).at(1).get_type() != Value::UNSIGNED_INT) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln(
+        "ERROR: Failed to validate client; Second col is not an Unsigned Int!");
+    return std::nullopt;
+  } else if (*vec_opt->at(0).at(0).get_str().value() != client_ip) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln(
+        "ERROR: Matching factors hash, but ip address does not match req ip "
+        "{}!",
+        client_ip);
+    return std::nullopt;
+  }
+  uint16_t port =
+      static_cast<uint16_t>(*vec_opt->at(0).at(1).get_unsigned_int().value());
+  c.execute_stmt(DB_DEL_FROM_CHAL_FACT, {id});
+  c.execute_stmt("UNLOCK TABLES", {});
+
+  vec_opt = c.execute_stmt(DB_ADD_ALLOWED_IPS_ENTRY,
+                           {client_ip, Value::new_uint(port)});
+  if (!vec_opt.has_value()) {
+    PMA_EPrintln("ERROR: Failed to add entry to Allowed IPs table for ip {}!",
+                 client_ip);
+    return std::nullopt;
+  }
+
+  return std::make_tuple(true, port);
+}
+
+std::optional<bool> PMA_MSQL::client_is_allowed(Connection &c, std::string ip,
+                                                uint16_t port,
+                                                uint64_t minutes_timeout) {
+  if (!c.is_valid()) {
+    return std::nullopt;
+  }
+
+  if (!c.execute_stmt("LOCK TABLE CXX_ALLOWED_IPS WRITE", {}).has_value()) {
+    PMA_EPrintln("ERROR: Failed to lock Allowed IPs table (write)!");
+    return std::nullopt;
+  } else if (!c.execute_stmt(DB_CLEANUP_ALLOWED_IPS, {minutes_timeout})
+                  .has_value()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Failed to cleanup Allowed IPs table!");
+    return std::nullopt;
+  }
+
+  c.execute_stmt("UNLOCK TABLES", {});
+  if (!c.execute_stmt("LOCK TABLE CXX_ALLOWED_IPS READ", {}).has_value()) {
+    PMA_EPrintln("ERROR: Failed to lock Allowed IPs table (read)!");
+    return std::nullopt;
+  }
+
+  auto vec_opt = c.execute_stmt(DB_IS_ALLOWED_IPS, {ip, Value::new_uint(port)});
+  if (!vec_opt.has_value()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Failed to get from Allowed IPs table!");
+    return std::nullopt;
+  } else if (vec_opt->empty()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    return false;
+  } else {
+    c.execute_stmt("UNLOCK TABLES", {});
+    return true;
+  }
+}
+
+std::optional<std::string> PMA_MSQL::init_id_to_port(Connection &c,
+                                                     uint16_t port,
+                                                     uint64_t minutes_timeout) {
+  if (!c.is_valid()) {
+    return std::nullopt;
+  }
+
+  if (!c.execute_stmt("LOCK TABLE CXX_ID_TO_PORT WRITE", {}).has_value()) {
+    PMA_EPrintln("ERROR: Failed to lcok ID to Port table (write)!");
+    return std::nullopt;
+  }
+
+  c.execute_stmt(DB_CLEANUP_ID_TO_PORT, {minutes_timeout});
+
+  bool same_id_exists = true;
+  std::string id_hashed;
+  do {
+    std::optional<std::uint64_t> seq_next_opt = get_next_seq_id(c);
+    if (!seq_next_opt.has_value()) {
+      c.execute_stmt("UNLOCK TABLES", {});
+      PMA_EPrintln("ERROR: Failed to get next seq id (init id to port)!");
+      return std::nullopt;
+    }
+    id_hashed = PMA_SQL::next_hash(seq_next_opt.value());
+    auto vec_opt = c.execute_stmt(DB_GET_PORT_ID_TO_PORT, {id_hashed});
+    if (!vec_opt.has_value()) {
+      c.execute_stmt("UNLOCK TABLES", {});
+      PMA_EPrintln("ERROR: Failed to check next seq id (init id to port)!");
+      return std::nullopt;
+    } else if (vec_opt->empty()) {
+      same_id_exists = false;
+    }
+  } while (same_id_exists);
+
+  if (!c.execute_stmt(DB_ADD_ID_TO_PORT, {id_hashed, Value::new_uint(port)})
+           .has_value()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln("ERROR: Failed to add new id-to-port entry!");
+    return std::nullopt;
+  }
+
+  return id_hashed;
 }

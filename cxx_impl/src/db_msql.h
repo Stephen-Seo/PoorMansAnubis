@@ -21,6 +21,7 @@
 #include <bitset>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -104,6 +105,8 @@ class Value {
 
 class Connection {
  public:
+  /// There can only be 1 valid Connection instance at a time.
+  /// The private static timed_mutex ensures this.
   static std::optional<Connection> connect_msql(std::string addr, uint16_t port,
                                                 std::string user,
                                                 std::string pass,
@@ -128,6 +131,8 @@ class Connection {
   StmtRet execute_stmt(const std::string &stmt, std::vector<Value> bind_params);
 
  private:
+  // Destructor should unlock this.
+  static std::timed_mutex m;
   // 0 - invalid connection if set.
   std::bitset<32> flags;
   int fd;
@@ -177,6 +182,28 @@ int parse_row_pkt(uint8_t *buf, size_t size,
                   const std::vector<uint8_t> &field_types,
                   const std::vector<uint16_t> &field_details,
                   std::vector<Value> *out);
+
+void init_db(Connection &c);
+
+std::optional<uint64_t> get_next_seq_id(Connection &c);
+
+std::optional<bool> has_challenge_factor_id(Connection &c, std::string hash);
+
+std::optional<bool> set_challenge_factor(Connection &c, std::string ip,
+                                         std::string hash, uint16_t port,
+                                         std::string factors_hash);
+
+std::optional<uint16_t> get_id_to_port_port(Connection &c, std::string id);
+
+std::optional<std::tuple<bool, uint16_t> > validate_client(
+    Connection &c, uint64_t cleanup_minutes, std::string id,
+    std::string factors_hash, std::string client_ip);
+
+std::optional<bool> client_is_allowed(Connection &c, std::string ip,
+                                      uint16_t port, uint64_t minutes_timeout);
+
+std::optional<std::string> init_id_to_port(Connection &c, uint16_t port,
+                                           uint64_t minutes_timeout);
 
 }  // Namespace PMA_MSQL
 
