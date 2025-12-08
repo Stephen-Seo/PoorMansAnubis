@@ -48,6 +48,10 @@ constexpr unsigned int SLEEP_MILLISECONDS = 2;
 // 7 seconds
 constexpr unsigned int TIMEOUT_ITER_TICKS = 7000 / SLEEP_MILLISECONDS;
 
+constexpr size_t CACHED_TIMEOUT_SECONDS = 120;
+constexpr std::chrono::seconds CACHED_TIMEOUT_T =
+    std::chrono::seconds(CACHED_TIMEOUT_SECONDS);
+
 volatile int interrupt_received = 0;
 
 void receive_signal(int sig) {
@@ -130,7 +134,7 @@ size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
 }
 
 // Returns true if "goto PMA_RESPONSE_SEND_LOCATION" is required.
-bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
+void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
                         std::string &body, std::string &status,
                         std::string &content_type, const PMA_HTTP::Request &req,
                         const PMA_ARGS::Args &args) {
@@ -150,7 +154,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to set "
         "curl verbose</p></html>";
-    return true;
+    return;
   }
 #endif
 
@@ -174,7 +178,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl url</p></html>";
-      return true;
+      return;
     }
   } else if (auto url_iter = args.port_to_dest_urls.find(cli_port);
              url_iter != args.port_to_dest_urls.end()) {
@@ -195,7 +199,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl url</p></html>";
-      return true;
+      return;
     }
   } else {
     std::string req_url = args.default_dest_url;
@@ -215,7 +219,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl url</p></html>";
-      return true;
+      return;
     }
   }
 
@@ -231,7 +235,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to set "
         "curl follow redirects</p></html>";
-    return true;
+    return;
   }
 
   // Set curl http headers
@@ -271,7 +275,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to set "
         "curl headers</p></html>";
-    return true;
+    return;
   }
 
   // Set callback for fetched data
@@ -288,7 +292,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to set "
         "callback write function</p></html>";
-    return true;
+    return;
   }
   pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &body);
   if (pma_curl_ret != CURLE_OK) {
@@ -300,7 +304,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to set "
         "callback write function user-data</p></html>";
-    return true;
+    return;
   }
 
   // Set callback for fetched headers
@@ -316,7 +320,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to set "
         "curl header callback</p></html>";
-    return true;
+    return;
   }
 
   pma_curl_ret =
@@ -330,7 +334,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to set "
         "curl header callback user-data</p></html>";
-    return true;
+    return;
   }
 
   // Set callback for sending data
@@ -355,7 +359,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl upload as POST</ p> < / html > ";
-      return true;
+      return;
     }
 
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, nullptr);
@@ -370,7 +374,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl upload as POST (fields)</ p> < / html > ";
-      return true;
+      return;
     }
 
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION,
@@ -385,7 +389,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl upload callback</p></html>";
-      return true;
+      return;
     }
 
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READDATA, ptrs);
@@ -399,7 +403,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl upload callback user-data</p></html>";
-      return true;
+      return;
     }
 
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE_LARGE,
@@ -414,7 +418,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
           "curl POST size</p></html>";
-      return true;
+      return;
     }
   }
 
@@ -428,7 +432,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
         "<html><p>500 Internal Server Error</p><p>Failed to "
         "fetch "
         "with curl</p></html>";
-    return true;
+    return;
   }
 
   long resp_code = 200;
@@ -445,7 +449,7 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to get "
         "curl fetch response code</p></html>";
-    return true;
+    return;
   }
 
   switch (resp_code) {
@@ -502,7 +506,6 @@ bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
         std::format("{}: {}\r\n", header_iter->first, header_iter->second));
   }
   content_type.resize(content_type.size() - 2);
-  return false;
 }
 
 int main(int argc, char **argv) {
@@ -610,10 +613,17 @@ int main(int argc, char **argv) {
   std::deque<int> to_remove_connections;
   std::array<char, REQ_READ_BUF_SIZE> buf;
 
+  std::unordered_map<std::string,
+                     std::chrono::time_point<std::chrono::steady_clock> >
+      cached_allowed;
+  std::chrono::time_point<std::chrono::steady_clock> time_now =
+      std::chrono::steady_clock::now();
+
   int ret;
   const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
   while (!interrupt_received) {
     std::this_thread::sleep_for(sleep_duration);
+    time_now = std::chrono::steady_clock::now();
 
     // Fetch new connections
     for (auto iter = sockets.begin(); iter != sockets.end(); ++iter) {
@@ -856,6 +866,10 @@ int main(int argc, char **argv) {
                                 iter->second.client_addr);
                     content_type = "Content-type: text/plain";
                     body = "Correct";
+                    cached_allowed.insert(std::make_pair(
+                        std::format("{}:{}", iter->second.client_addr,
+                                    iter->second.port),
+                        time_now));
                   } else {
                     status = "HTTP/1.0 400 Bad Request";
                     content_type = "Content-type: text/plain";
@@ -884,6 +898,10 @@ int main(int argc, char **argv) {
                             iter->second.client_addr);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
+                cached_allowed.insert(std::make_pair(
+                    std::format("{}:{}", iter->second.client_addr,
+                                iter->second.port),
+                    time_now));
               }
             }
 
@@ -969,6 +987,18 @@ int main(int argc, char **argv) {
               body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
             }
           } else if (args.flags.test(4)) {
+            if (auto cached_iter = cached_allowed.find(std::format(
+                    "{}:{}", iter->second.client_addr, iter->second.port));
+                cached_iter != cached_allowed.end()) {
+              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
+                cached_allowed.erase(cached_iter);
+              } else {
+                do_curl_forwarding(iter->second.client_addr, iter->second.port,
+                                   body, status, content_type, req, args);
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+            }
+
             bool ping_ok = false;
             if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
               msql_conn_opt = PMA_MSQL::Connection::connect_msql(
@@ -993,11 +1023,14 @@ int main(int argc, char **argv) {
                   iter->second.port, args.allowed_timeout);
               if (bool_opt.has_value()) {
                 if (bool_opt.value()) {
-                  if (do_curl_forwarding(iter->second.client_addr,
-                                         iter->second.port, body, status,
-                                         content_type, req, args)) {
-                    goto PMA_RESPONSE_SEND_LOCATION;
-                  }
+                  cached_allowed.insert(std::make_pair(
+                      std::format("{}:{}", iter->second.client_addr,
+                                  iter->second.port),
+                      time_now));
+                  do_curl_forwarding(iter->second.client_addr,
+                                     iter->second.port, body, status,
+                                     content_type, req, args);
+                  goto PMA_RESPONSE_SEND_LOCATION;
                 } else {
                   auto id_opt = PMA_MSQL::init_id_to_port(
                       msql_conn_opt.value(), iter->second.port,
@@ -1028,6 +1061,18 @@ int main(int argc, char **argv) {
               }
             }
           } else {
+            if (auto cached_iter = cached_allowed.find(std::format(
+                    "{}:{}", iter->second.client_addr, iter->second.port));
+                cached_iter != cached_allowed.end()) {
+              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
+                cached_allowed.erase(cached_iter);
+              } else {
+                do_curl_forwarding(iter->second.client_addr, iter->second.port,
+                                   body, status, content_type, req, args);
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+            }
+
             PMA_SQL::cleanup_stale_entries(sqliteCtx, args.allowed_timeout);
 
             const auto [err, msg, is_allowed] = PMA_SQL::is_allowed_ip_port(
@@ -1042,11 +1087,9 @@ int main(int argc, char **argv) {
                   body, "{JS_FACTORS_URL}",
                   std::format("{}?id={}", args.js_factors_url, id));
             } else {
-              if (do_curl_forwarding(iter->second.client_addr,
-                                     iter->second.port, body, status,
-                                     content_type, req, args)) {
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
+              do_curl_forwarding(iter->second.client_addr, iter->second.port,
+                                 body, status, content_type, req, args);
+              goto PMA_RESPONSE_SEND_LOCATION;
             }
           }
 

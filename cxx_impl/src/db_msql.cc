@@ -552,6 +552,10 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     return std::nullopt;
   }
 
+#ifndef NDEBUG
+  PMA_EPrintln("NOTICE: executing: {}", stmt);
+#endif
+
   uint8_t seq = 0;
 
   // Setup prepare stmt packet(s).
