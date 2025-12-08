@@ -202,15 +202,16 @@ std::optional<uint64_t> get_next_seq_id(Connection &c);
 
 std::optional<bool> has_challenge_factor_id(Connection &c, std::string hash);
 
-std::optional<bool> set_challenge_factor(Connection &c, std::string ip,
-                                         std::string hash, uint16_t port,
-                                         std::string factors_hash);
+// First str is challenge, second is hashed-id.
+std::optional<std::tuple<std::string, std::string> > set_challenge_factor(
+    Connection &c, std::string ip, uint16_t port, uint64_t f_digits,
+    uint64_t chall_factors_timeout);
 
 std::optional<uint16_t> get_id_to_port_port(Connection &c, std::string id);
 
 std::optional<std::tuple<bool, uint16_t> > validate_client(
     Connection &c, uint64_t chall_factors_timeout, std::string id,
-    std::string factors_hash, std::string client_ip);
+    std::string factors, std::string client_ip);
 
 std::optional<bool> client_is_allowed(Connection &c, std::string ip,
                                       uint16_t port,

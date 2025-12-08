@@ -31,11 +31,15 @@
 #include <string>
 #include <thread>
 
+// Third party includes.
+#include <blake3.h>
+
 // Local includes.
 #include "db.h"
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
+#include "work.h"
 
 static const char *DB_INIT_TABLE_SEQ_ID =
     "CREATE TABLE IF NOT EXISTS CXX_SEQ_ID ("
@@ -95,7 +99,7 @@ static const char *DB_ADD_ALLOWED_IPS_ENTRY =
     "INSERT INTO CXX_ALLOWED_IPS (IP, PORT) VALUES (?, ?)";
 
 static const char *DB_IS_ALLOWED_IPS =
-    "SELECT IP, ON_TIME FROM CXX_ALLOWED_IPS WHERE IP = ? AND PORT = ?";
+    "SELECT IP FROM CXX_ALLOWED_IPS WHERE IP = ? AND PORT = ?";
 
 static const char *DB_ADD_ID_TO_PORT =
     "INSERT INTO CXX_ID_TO_PORT (ID, PORT) VALUES (?, ?)";
@@ -1999,7 +2003,9 @@ std::optional<std::tuple<int, uint32_t> > PMA_MSQL::parse_prepare_resp_pkt(
   cols_bytes[0] = buf[idx++];
   cols_bytes[1] = buf[idx++];
   if (cols != 0) {
+#ifndef NDEBUG
     std::fprintf(stderr, "WARNING: Got non-zero cols %" PRIu16 "!\n", cols);
+#endif
   }
 
   if (idx >= size) {
@@ -2555,6 +2561,8 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           }
           break;
         }
+        case 253:
+          [[fallthrough]];
         case 254: {
           const auto [value, b_read] = parse_len_enc_int(buf + idx);
           idx += b_read;
@@ -2569,7 +2577,8 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         default:
-          PMA_EPrintln("ERROR: Unhandled field type");
+          PMA_EPrintln("ERROR: Unhandled field type {} {:x}",
+                       field_types.at(bidx), field_types.at(bidx));
           return 1;
       }
     }
@@ -2669,22 +2678,72 @@ std::optional<bool> PMA_MSQL::has_challenge_factor_id(Connection &c,
   }
 }
 
-std::optional<bool> PMA_MSQL::set_challenge_factor(Connection &c,
-                                                   std::string ip,
-                                                   std::string hash,
-                                                   uint16_t port,
-                                                   std::string factors_hash) {
+std::optional<std::tuple<std::string, std::string> >
+PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
+                               uint64_t f_digits,
+                               uint64_t chall_factors_timeout) {
   if (!c.is_valid()) {
     return std::nullopt;
   }
+
+  std::string factors_hash;
+  std::string challenge_str;
+  // get hash
+  {
+    Work_Factors factors = work_generate_target_factors(f_digits);
+    GenericCleanup<Work_Factors> factors_cleanup(
+        factors, [](Work_Factors *ptr) { work_cleanup_factors(ptr); });
+
+    char *challenge = work_factors_value_to_str2(factors, nullptr);
+    challenge_str = challenge;
+    std::free(challenge);
+
+    char *answer = work_factors_factors_to_str2(factors, nullptr);
+    std::string answer_str = answer;
+    std::free(answer);
+
+    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    blake3_hasher_update(&hasher, answer_str.c_str(), answer_str.size());
+
+    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
+
+    factors_hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
+  }
+
+  std::string id_hashed;
+  do {
+    std::optional<uint64_t> seq_id_opt = get_next_seq_id(c);
+    if (!seq_id_opt.has_value()) {
+      PMA_EPrintln("ERROR: Failed to get next seq id (set challenge)!");
+      return std::nullopt;
+    }
+    id_hashed = PMA_SQL::next_hash(seq_id_opt.value());
+    auto vec_opt = c.execute_stmt(DB_SEL_CHAL_FACT_BY_ID, {id_hashed});
+    if (!vec_opt.has_value()) {
+      PMA_EPrintln("ERROR: Failed to check next seq id (set challenge)!");
+      return std::nullopt;
+    } else if (vec_opt->empty()) {
+      break;
+    }
+  } while (true);
 
   if (!c.execute_stmt("LOCK TABLE CXX_CHALLENGE_FACTORS WRITE", {})
            .has_value()) {
     PMA_EPrintln(
         "ERROR: Failed to lock db table challenge factors for writing!");
     return std::nullopt;
-  } else if (!c.execute_stmt(DB_ADD_CHAL_FACT,
-                             {hash, ip, Value::new_uint(port), factors_hash})
+  } else if (!c.execute_stmt(DB_CLEANUP_CHAL_FACT, {chall_factors_timeout})) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    PMA_EPrintln(
+        "ERROR: Failed to cleanup challenge factors while generating "
+        "challenge!");
+    return std::nullopt;
+  } else if (!c.execute_stmt(
+                   DB_ADD_CHAL_FACT,
+                   {id_hashed, ip, Value::new_uint(port), factors_hash})
                   .has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
     PMA_EPrintln("ERROR: Failed to add to challenge factors!");
@@ -2692,7 +2751,7 @@ std::optional<bool> PMA_MSQL::set_challenge_factor(Connection &c,
   }
 
   c.execute_stmt("UNLOCK TABLES", {});
-  return true;
+  return std::make_tuple(challenge_str, id_hashed);
 }
 
 std::optional<uint16_t> PMA_MSQL::get_id_to_port_port(Connection &c,
@@ -2715,7 +2774,7 @@ std::optional<uint16_t> PMA_MSQL::get_id_to_port_port(Connection &c,
     c.execute_stmt("UNLOCK TABLES", {});
     PMA_EPrintln("ERROR: Port from ID_TO_PORT not found with given id!");
     return std::nullopt;
-  } else if (vec_opt->at(0).at(0).get_type() == Value::UNSIGNED_INT) {
+  } else if (vec_opt->at(0).at(0).get_type() != Value::UNSIGNED_INT) {
     c.execute_stmt("UNLOCK TABLES", {});
     PMA_EPrintln("ERROR: Port from ID_TO_PORT is not unsigned int!");
     return std::nullopt;
@@ -2736,9 +2795,23 @@ std::optional<uint16_t> PMA_MSQL::get_id_to_port_port(Connection &c,
 
 std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
     Connection &c, uint64_t chall_factors_timeout, std::string id,
-    std::string factors_hash, std::string client_ip) {
+    std::string factors, std::string client_ip) {
   if (!c.is_valid()) {
     return std::nullopt;
+  }
+
+  std::string factors_hash;
+  // get hash
+  {
+    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    blake3_hasher_update(&hasher, factors.c_str(), factors.size());
+
+    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
+
+    factors_hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
   }
 
   if (!c.execute_stmt("LOCK TABLE CXX_CHALLENGE_FACTORS WRITE", {})
@@ -2782,7 +2855,7 @@ std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
         "ERROR: Matching factors hash, but ip address does not match req ip "
         "{}!",
         client_ip);
-    return std::nullopt;
+    return std::make_tuple(false, 0);
   }
   uint16_t port =
       static_cast<uint16_t>(*vec_opt->at(0).at(1).get_unsigned_int().value());

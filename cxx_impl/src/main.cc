@@ -129,6 +129,382 @@ size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
   return min;
 }
 
+// Returns true if "goto PMA_RESPONSE_SEND_LOCATION" is required.
+bool do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
+                        std::string &body, std::string &status,
+                        std::string &content_type, const PMA_HTTP::Request &req,
+                        const PMA_ARGS::Args &args) {
+  CURLcode pma_curl_ret;
+  CURL *curl_handle = curl_easy_init();
+  GenericCleanup<CURL *> pma_curl_cleanup(
+      curl_handle, [](CURL **handle) { curl_easy_cleanup(*handle); });
+
+#ifndef NDEBUG
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set curl verbose (client {}, port "
+        "{})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl verbose</p></html>";
+    return true;
+  }
+#endif
+
+  // Set curl destination
+  if (auto header_iter = req.headers.find("override-dest-url");
+      header_iter != req.headers.end() && args.flags.test(1)) {
+    std::string req_url = header_iter->second;
+    while (req_url.ends_with('/')) {
+      req_url.pop_back();
+    }
+    req_url.append(req.full_url);
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl destination (client {}, "
+          "port "
+          "{})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl url</p></html>";
+      return true;
+    }
+  } else if (auto url_iter = args.port_to_dest_urls.find(cli_port);
+             url_iter != args.port_to_dest_urls.end()) {
+    std::string req_url = url_iter->second;
+    while (req_url.ends_with('/')) {
+      req_url.pop_back();
+    }
+    req_url.append(req.full_url);
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl destination (client {}, "
+          "port "
+          "{})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl url</p></html>";
+      return true;
+    }
+  } else {
+    std::string req_url = args.default_dest_url;
+    while (req_url.ends_with('/')) {
+      req_url.pop_back();
+    }
+    req_url.append(req.full_url);
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl destination (client {}, "
+          "port "
+          "{})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl url</p></html>";
+      return true;
+    }
+  }
+
+  // Set curl follow redirects
+  pma_curl_ret =
+      curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, CURLFOLLOW_ALL);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set curl follow redirects (client {}, "
+        "port {})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl follow redirects</p></html>";
+    return true;
+  }
+
+  // Set curl http headers
+  struct curl_slist *headers_list = nullptr;
+  GenericCleanup<struct curl_slist **> headers_cleanup(
+      &headers_list,
+      [](struct curl_slist ***list) { curl_slist_free_all(**list); });
+  headers_list = curl_slist_append(
+      headers_list, "accept: text/html,application/xhtml+xml,*/*");
+  if (auto ip_iter = req.headers.find("x-real-ip");
+      ip_iter != req.headers.end() && args.flags.test(0)) {
+    headers_list = curl_slist_append(
+        headers_list, std::format("x-real-ip: {}", ip_iter->second).c_str());
+  }
+  if (auto type_iter = req.headers.find("content-type");
+      type_iter != req.headers.end()) {
+    headers_list = curl_slist_append(
+        headers_list,
+        std::format("content-type: {}", type_iter->second).c_str());
+  }
+  // for (const auto &pair : req.headers) {
+  //   if (pair.first == "host" || pair.first ==
+  //   "override-dest-url") {
+  //     continue;
+  //   }
+  //   headers_list = curl_slist_append(
+  //       headers_list,
+  //       std::format("{}: {}", pair.first,
+  //       pair.second).c_str());
+  // }
+  pma_curl_ret =
+      curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers_list);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln("ERROR: Failed to set curl headers (client {}, port {})!",
+                 cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl headers</p></html>";
+    return true;
+  }
+
+  // Set callback for fetched data
+  body.clear();
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION,
+                                  pma_curl_data_callback);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set curl write callback (client {}, "
+        "port "
+        "{})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "callback write function</p></html>";
+    return true;
+  }
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &body);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set curl write callback user-data "
+        "(client {}, port {})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "callback write function user-data</p></html>";
+    return true;
+  }
+
+  // Set callback for fetched headers
+  std::unordered_map<std::string, std::string> resp_headers;
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION,
+                                  pma_curl_header_callback);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set header callback (client {}, port "
+        "{})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl header callback</p></html>";
+    return true;
+  }
+
+  pma_curl_ret =
+      curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &resp_headers);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set header callback user-data (client "
+        "{}, port {})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl header callback user-data</p></html>";
+    return true;
+  }
+
+  // Set callback for sending data
+  void **ptrs = reinterpret_cast<void **>(std::malloc(sizeof(void *) * 2));
+  GenericCleanup<void ***> ptrs_cleanup(
+      &ptrs, [](void ****ptrs) { std::free(**ptrs); });
+  size_t count = 0;
+  ptrs[0] = const_cast<std::string *>(&req.body);
+  ptrs[1] = &count;
+  if (!req.body.empty()) {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} request body...", cli_addr);
+#endif
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl upload as POST (client {}, "
+          "port {})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl upload as POST</ p> < / html > ";
+      return true;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, nullptr);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl upload as POST (fields; "
+          "client {}, "
+          "port {})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl upload as POST (fields)</ p> < / html > ";
+      return true;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION,
+                                    pma_curl_body_send_callback);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl upload callback (client {}, "
+          "port {})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl upload callback</p></html>";
+      return true;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READDATA, ptrs);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl upload callback user-data "
+          "(client {}, port {})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl upload callback user-data</p></html>";
+      return true;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE_LARGE,
+                                    req.body.size());
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl POST size (client {}, port "
+          "{})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to "
+          "set "
+          "curl POST size</p></html>";
+      return true;
+    }
+  }
+
+  // Fetch
+  pma_curl_ret = curl_easy_perform(curl_handle);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln("ERROR: Failed to fetch with curl (client {}, port {})!",
+                 cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to "
+        "fetch "
+        "with curl</p></html>";
+    return true;
+  }
+
+  long resp_code = 200;
+
+  pma_curl_ret =
+      curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &resp_code);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to get curl fetch response code (client "
+        "{}, "
+        "port {})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to get "
+        "curl fetch response code</p></html>";
+    return true;
+  }
+
+  switch (resp_code) {
+    case 200:
+      status = "HTTP/1.0 200 OK";
+      break;
+    case 400:
+      status = "HTTP/1.0 400 Bad Request";
+      break;
+    case 401:
+      status = "HTTP/1.0 401 Unauthorized";
+      break;
+    case 403:
+      status = "HTTP/1.0 403 Forbidden";
+      break;
+    case 404:
+      status = "HTTP/1.0 404 Not Found";
+      break;
+    case 502:
+      status = "HTTP/1.0 502 Bad Gateway";
+      break;
+    case 503:
+      status = "HTTP/1.0 503 Service Unavailable";
+      break;
+    case 504:
+      status = "HTTP/1.0 504 Gateway Timeout";
+      break;
+    default:
+      PMA_EPrintln("WARNING: Unhandled response code {} for client {}",
+                   resp_code, cli_addr);
+      [[fallthrough]];
+    case 500:
+      status = "HTTP/1.0 500 Internal Server Error";
+      break;
+  }
+
+  // DEBUG
+  // PMA_Println("Result headers:");
+  // for (auto header_iter = resp_headers.begin();
+  //      header_iter != resp_headers.end(); ++header_iter) {
+  //   PMA_Println("  {}: {}", header_iter->first,
+  //               header_iter->second);
+  // }
+  // PMA_Println("Result data: {}", body);
+
+  content_type.clear();
+  for (auto header_iter = resp_headers.begin();
+       header_iter != resp_headers.end(); ++header_iter) {
+    if (header_iter->first == "content-length" ||
+        header_iter->first == "transfer-encoding") {
+      continue;
+    }
+    content_type.append(
+        std::format("{}: {}\r\n", header_iter->first, header_iter->second));
+  }
+  content_type.resize(content_type.size() - 2);
+  return false;
+}
+
 int main(int argc, char **argv) {
   const PMA_ARGS::Args args(argc, argv);
 
@@ -137,102 +513,24 @@ int main(int argc, char **argv) {
     return 3;
   }
 
-  // TODO DEBUG
-  auto msql_conf_opt = PMA_MSQL::parse_conf_file(args.mysql_conf_path);
-  if (!msql_conf_opt.has_value()) {
-    PMA_EPrintln("ERROR: Failed to get MSQL opts for connection!");
-    return 5;
-  }
-  auto msql_conf = msql_conf_opt.value();
-  auto msql_conn_opt = PMA_MSQL::Connection::connect_msql(
-      msql_conf.addr, msql_conf.port, msql_conf.user, msql_conf.pass,
-      msql_conf.db);
-  if (!msql_conn_opt.has_value()) {
-    PMA_EPrintln("ERROR: Failed to connect to MSQL!");
-    return 6;
-  }
-  PMA_EPrintln("Drop table if exists...");
-  msql_conn_opt->execute_stmt("DROP TABLE IF EXISTS TEST_TABLE", {});
-  PMA_EPrintln("Create table if not exists...");
-  msql_conn_opt->execute_stmt(
-      "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
-      "PRIMARY KEY, test INT, f FLOAT, s TEXT, c CHAR(3))",
-      {});
-  PMA_EPrintln("Inserting into table...");
-  msql_conn_opt->execute_stmt(
-      "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
-      {PMA_MSQL::Value::new_int(1),
-       PMA_MSQL::Value::new_int(1),
-       {"String at IDX 1."}});
-  msql_conn_opt->execute_stmt(
-      "INSERT INTO TEST_TABLE (id, test) VALUES (?, ?)",
-      {PMA_MSQL::Value::new_int(2), PMA_MSQL::Value::new_int(2)});
-  msql_conn_opt->execute_stmt("INSERT INTO TEST_TABLE (id, s) VALUES (?, ?)",
-                              {PMA_MSQL::Value::new_int(3),
-                               {"String that says: test integer is NULL"}});
-  msql_conn_opt->execute_stmt("INSERT INTO TEST_TABLE (id) VALUES (?)",
-                              {PMA_MSQL::Value::new_int(4)});
-  msql_conn_opt->execute_stmt(
-      "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
-      {PMA_MSQL::Value::new_int(5),
-       PMA_MSQL::Value::new_int(-5),
-       {"Test negative integer row."}});
-  msql_conn_opt->execute_stmt(
-      "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
-      {PMA_MSQL::Value::new_int(6), {}, {"Test inserting NULL."}});
-  msql_conn_opt->execute_stmt(
-      "INSERT INTO TEST_TABLE (id, f, s) VALUES (?, ?, ?)",
-      {PMA_MSQL::Value::new_int(7), 7.5, {"Test inserting float."}});
-  msql_conn_opt->execute_stmt(
-      "INSERT INTO TEST_TABLE (id, c, s) VALUES (?, ?, ?)",
-      {PMA_MSQL::Value::new_int(8), {"PMA"}, {"Test inserting CHAR(3)."}});
-  PMA_EPrintln("Select...");
-  auto ret_vec_opt = msql_conn_opt->execute_stmt(
-      "SELECT id, test, f, s, c FROM TEST_TABLE", {});
-  if (ret_vec_opt.has_value()) {
-    PMA_EPrintln("Select results:");
-    for (const std::vector<PMA_MSQL::Value> &row : ret_vec_opt.value()) {
-      bool is_first = true;
-      for (const PMA_MSQL::Value &col : row) {
-        if (!is_first) {
-          PMA_EPrint(", ");
-        }
-        switch (col.get_type()) {
-          case PMA_MSQL::Value::INV_NULL:
-            PMA_EPrint("NULL");
-            break;
-          case PMA_MSQL::Value::STRING:
-            PMA_EPrint("{}", *col.get_str().value().get());
-            break;
-          case PMA_MSQL::Value::SIGNED_INT:
-            PMA_EPrint("{}", *col.get_signed_int().value().get());
-            break;
-          case PMA_MSQL::Value::UNSIGNED_INT:
-            PMA_EPrint("{}", *col.get_unsigned_int().value().get());
-            break;
-          case PMA_MSQL::Value::DOUBLE:
-            PMA_EPrint("{}", *col.get_double().value().get());
-            break;
-        }
-        is_first = false;
-      }
-      PMA_EPrintln("");
+  std::optional<PMA_MSQL::Conf> msql_conf_opt;
+  std::optional<PMA_MSQL::Connection> msql_conn_opt;
+  if (args.flags.test(4)) {
+    msql_conf_opt = PMA_MSQL::parse_conf_file(args.mysql_conf_path);
+    if (!msql_conf_opt.has_value()) {
+      PMA_EPrintln("ERROR: Failed to get MSQL opts for connection!");
+      return 5;
     }
-  }
-
-  for (size_t idx = 0; idx < 10; ++idx) {
-    bool ping_result = msql_conn_opt->ping_check();
-    if (!ping_result) {
-      PMA_EPrintln("\nping result was false!\n");
-      return 0;
-    } else {
-      PMA_EPrint(".");
+    msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+        msql_conf_opt->addr, msql_conf_opt->port, msql_conf_opt->user,
+        msql_conf_opt->pass, msql_conf_opt->db);
+    if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+      PMA_EPrintln("ERROR: Failed to connect to MSQL!");
+      return 6;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(333));
-  }
-  PMA_EPrintln_e();
 
-  return 0;
+    PMA_MSQL::init_db(msql_conn_opt.value());
+  }
 
   curl_global_init(CURL_GLOBAL_SSL);
 
@@ -494,7 +792,13 @@ int main(int argc, char **argv) {
           std::string status = "HTTP/1.0 200 OK";
           std::string content_type = "Content-type: text/html; charset=utf-8";
           std::string body;
-          auto [sqliteCtx, err, msg] = PMA_SQL::init_sqlite(args.sqlite_path);
+          PMA_SQL::SQLITECtx sqliteCtx;
+          PMA_SQL::ErrorT err = PMA_SQL::ErrorT::SUCCESS;
+          std::string msg;
+          if (!args.flags.test(4)) {
+            std::tie(sqliteCtx, err, msg) =
+                PMA_SQL::init_sqlite(args.sqlite_path);
+          }
           if (err != PMA_SQL::ErrorT::SUCCESS) {
             PMA_EPrintln("ERROR: Failed to initialize sqlite: {}, {}",
                          PMA_SQL::error_t_to_string(err), msg);
@@ -519,6 +823,51 @@ int main(int argc, char **argv) {
                            iter->second.client_addr);
               status = "HTTP/1.0 400 Bad Request";
               body = "<html><p>400 Bad Request</p><p>Missing info</p></html>";
+            } else if (args.flags.test(4)) {
+              bool ping_ok = false;
+              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+                msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                    msql_conf_opt->addr, msql_conf_opt->port,
+                    msql_conf_opt->user, msql_conf_opt->pass,
+                    msql_conf_opt->db);
+                if (!msql_conn_opt.has_value() ||
+                    !msql_conn_opt->ping_check()) {
+                  PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Problem with "
+                      "DB</p></html>";
+                } else {
+                  ping_ok = true;
+                }
+              } else {
+                ping_ok = true;
+              }
+              if (ping_ok) {
+                const auto ret_opt = PMA_MSQL::validate_client(
+                    msql_conn_opt.value(), args.challenge_timeout,
+                    json_keyvals.find("id")->second,
+                    json_keyvals.find("factors")->second,
+                    iter->second.client_addr);
+                if (ret_opt.has_value()) {
+                  const auto [ret_bool, ret_port] = ret_opt.value();
+                  if (ret_bool) {
+                    PMA_Println("Challenge success from {}",
+                                iter->second.client_addr);
+                    content_type = "Content-type: text/plain";
+                    body = "Correct";
+                  } else {
+                    status = "HTTP/1.0 400 Bad Request";
+                    content_type = "Content-type: text/plain";
+                    body = "Incorrect";
+                  }
+                } else {
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to "
+                      "validate req</p></html>";
+                }
+              }
             } else {
               const auto [err, msg, port] = PMA_SQL::verify_answer(
                   sqliteCtx, json_keyvals.find("factors")->second,
@@ -537,35 +886,146 @@ int main(int argc, char **argv) {
                 body = "Correct";
               }
             }
+
           } else if (req.url_or_err_msg == args.js_factors_url) {
             if (auto id_iter = req.queries.find("id");
                 id_iter != req.queries.end()) {
-              PMA_SQL::cleanup_stale_challenges(sqliteCtx,
-                                                args.challenge_timeout);
-              const auto [err, msg_or_chal, answ, id] =
-                  PMA_SQL::generate_challenge(sqliteCtx, args.factors,
-                                              iter->second.client_addr,
-                                              id_iter->second);
-              if (err != PMA_SQL::ErrorT::SUCCESS) {
-                PMA_EPrintln(
-                    "ERROR: Failed to prepare challenge for client {}: {}, {}",
-                    iter->second.client_addr, PMA_SQL::error_t_to_string(err),
-                    msg_or_chal);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to "
-                    "prepare challenge</p></html>";
+              if (args.flags.test(4)) {
+                bool ping_ok = false;
+                if (!msql_conn_opt.has_value() ||
+                    !msql_conn_opt->ping_check()) {
+                  msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                      msql_conf_opt->addr, msql_conf_opt->port,
+                      msql_conf_opt->user, msql_conf_opt->pass,
+                      msql_conf_opt->db);
+                  if (!msql_conn_opt.has_value() ||
+                      !msql_conn_opt->ping_check()) {
+                    PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Problem with "
+                        "DB</p></html>";
+                  } else {
+                    ping_ok = true;
+                  }
+                } else {
+                  ping_ok = true;
+                }
+                if (ping_ok) {
+                  auto port_opt = PMA_MSQL::get_id_to_port_port(
+                      msql_conn_opt.value(), id_iter->second);
+                  if (port_opt.has_value()) {
+                    auto chall_opt = PMA_MSQL::set_challenge_factor(
+                        msql_conn_opt.value(), iter->second.client_addr,
+                        port_opt.value(), args.factors, args.challenge_timeout);
+                    if (chall_opt.has_value()) {
+                      const auto [chall, hashed_id] = chall_opt.value();
+                      body = JS_FACTORS_WORKER;
+                      PMA_HELPER::str_replace_all(body, "{API_URL}",
+                                                  args.api_url);
+                      PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}",
+                                                  chall);
+                      PMA_HELPER::str_replace_all(body, "{UUID}", hashed_id);
+                      content_type = "Content-type: text/javascript";
+                    } else {
+                      status = "HTTP/1.0 500 Internal Server Error";
+                      body =
+                          "<html><p>500 Internal Server Error</p><p>Failed to "
+                          "set up challenge</p></html>";
+                    }
+                  } else {
+                    status = "HTTP/1.0 400 Bad Request";
+                    body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
+                  }
+                }
               } else {
-                body = JS_FACTORS_WORKER;
-                PMA_HELPER::str_replace_all(body, "{API_URL}", args.api_url);
-                PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}",
-                                            msg_or_chal);
-                PMA_HELPER::str_replace_all(body, "{UUID}", id);
-                content_type = "Content-type: text/javascript";
+                PMA_SQL::cleanup_stale_challenges(sqliteCtx,
+                                                  args.challenge_timeout);
+                const auto [err, msg_or_chal, answ, id] =
+                    PMA_SQL::generate_challenge(sqliteCtx, args.factors,
+                                                iter->second.client_addr,
+                                                id_iter->second);
+                if (err != PMA_SQL::ErrorT::SUCCESS) {
+                  PMA_EPrintln(
+                      "ERROR: Failed to prepare challenge for client {}: {}, "
+                      "{}",
+                      iter->second.client_addr, PMA_SQL::error_t_to_string(err),
+                      msg_or_chal);
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to "
+                      "prepare challenge</p></html>";
+                } else {
+                  body = JS_FACTORS_WORKER;
+                  PMA_HELPER::str_replace_all(body, "{API_URL}", args.api_url);
+                  PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}",
+                                              msg_or_chal);
+                  PMA_HELPER::str_replace_all(body, "{UUID}", id);
+                  content_type = "Content-type: text/javascript";
+                }
               }
             } else {
               status = "HTTP/1.0 400 Bad Request";
               body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
+            }
+          } else if (args.flags.test(4)) {
+            bool ping_ok = false;
+            if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+              msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                  msql_conf_opt->addr, msql_conf_opt->port, msql_conf_opt->user,
+                  msql_conf_opt->pass, msql_conf_opt->db);
+              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+                PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Problem with "
+                    "DB</p></html>";
+              } else {
+                ping_ok = true;
+              }
+            } else {
+              ping_ok = true;
+            }
+
+            if (ping_ok) {
+              auto bool_opt = PMA_MSQL::client_is_allowed(
+                  msql_conn_opt.value(), iter->second.client_addr,
+                  iter->second.port, args.allowed_timeout);
+              if (bool_opt.has_value()) {
+                if (bool_opt.value()) {
+                  if (do_curl_forwarding(iter->second.client_addr,
+                                         iter->second.port, body, status,
+                                         content_type, req, args)) {
+                    goto PMA_RESPONSE_SEND_LOCATION;
+                  }
+                } else {
+                  auto id_opt = PMA_MSQL::init_id_to_port(
+                      msql_conn_opt.value(), iter->second.port,
+                      args.challenge_timeout);
+                  if (id_opt.has_value()) {
+                    body = HTML_BODY_FACTORS;
+                    PMA_HELPER::str_replace_all(
+                        body, "{JS_FACTORS_URL}",
+                        std::format("{}?id={}", args.js_factors_url,
+                                    id_opt.value()));
+                  } else {
+                    PMA_EPrintln(
+                        "ERROR: Failed to init id-to-port for client {}!",
+                        iter->second.client_addr);
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Failed "
+                        "prepare for client</p></html>";
+                  }
+                }
+              } else {
+                PMA_EPrintln("ERROR: Failed to check if client {} is allowed!",
+                             iter->second.client_addr);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to check "
+                    "client</p></html>";
+              }
             }
           } else {
             PMA_SQL::cleanup_stale_entries(sqliteCtx, args.allowed_timeout);
@@ -582,376 +1042,11 @@ int main(int argc, char **argv) {
                   body, "{JS_FACTORS_URL}",
                   std::format("{}?id={}", args.js_factors_url, id));
             } else {
-              CURLcode pma_curl_ret;
-              CURL *curl_handle = curl_easy_init();
-              GenericCleanup<CURL *> pma_curl_cleanup(
-                  curl_handle,
-                  [](CURL **handle) { curl_easy_cleanup(*handle); });
-
-#ifndef NDEBUG
-              pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to set curl verbose (client {}, port "
-                    "{})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to set "
-                    "curl verbose</p></html>";
+              if (do_curl_forwarding(iter->second.client_addr,
+                                     iter->second.port, body, status,
+                                     content_type, req, args)) {
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
-#endif
-
-              // Set curl destination
-              if (auto header_iter = req.headers.find("override-dest-url");
-                  header_iter != req.headers.end() && args.flags.test(1)) {
-                std::string req_url = header_iter->second;
-                while (req_url.ends_with('/')) {
-                  req_url.pop_back();
-                }
-                req_url.append(req.full_url);
-                pma_curl_ret =
-                    curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl destination (client {}, port "
-                      "{})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl url</p></html>";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-              } else if (auto url_iter =
-                             args.port_to_dest_urls.find(iter->second.port);
-                         url_iter != args.port_to_dest_urls.end()) {
-                std::string req_url = url_iter->second;
-                while (req_url.ends_with('/')) {
-                  req_url.pop_back();
-                }
-                req_url.append(req.full_url);
-                pma_curl_ret =
-                    curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl destination (client {}, port "
-                      "{})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl url</p></html>";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-              } else {
-                std::string req_url = args.default_dest_url;
-                while (req_url.ends_with('/')) {
-                  req_url.pop_back();
-                }
-                req_url.append(req.full_url);
-                pma_curl_ret =
-                    curl_easy_setopt(curl_handle, CURLOPT_URL, req_url.c_str());
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl destination (client {}, port "
-                      "{})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl url</p></html>";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-              }
-
-              // Set curl follow redirects
-              pma_curl_ret = curl_easy_setopt(
-                  curl_handle, CURLOPT_FOLLOWLOCATION, CURLFOLLOW_ALL);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to set curl follow redirects (client {}, "
-                    "port {})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to set "
-                    "curl follow redirects</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-
-              // Set curl http headers
-              struct curl_slist *headers_list = nullptr;
-              GenericCleanup<struct curl_slist **> headers_cleanup(
-                  &headers_list, [](struct curl_slist ***list) {
-                    curl_slist_free_all(**list);
-                  });
-              headers_list = curl_slist_append(
-                  headers_list, "accept: text/html,application/xhtml+xml,*/*");
-              if (auto ip_iter = req.headers.find("x-real-ip");
-                  ip_iter != req.headers.end() && args.flags.test(0)) {
-                headers_list = curl_slist_append(
-                    headers_list,
-                    std::format("x-real-ip: {}", ip_iter->second).c_str());
-              }
-              if (auto type_iter = req.headers.find("content-type");
-                  type_iter != req.headers.end()) {
-                headers_list = curl_slist_append(
-                    headers_list,
-                    std::format("content-type: {}", type_iter->second).c_str());
-              }
-              // for (const auto &pair : req.headers) {
-              //   if (pair.first == "host" || pair.first ==
-              //   "override-dest-url") {
-              //     continue;
-              //   }
-              //   headers_list = curl_slist_append(
-              //       headers_list,
-              //       std::format("{}: {}", pair.first, pair.second).c_str());
-              // }
-              pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER,
-                                              headers_list);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to set curl headers (client {}, port {})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to set "
-                    "curl headers</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-
-              // Set callback for fetched data
-              body.clear();
-              pma_curl_ret = curl_easy_setopt(
-                  curl_handle, CURLOPT_WRITEFUNCTION, pma_curl_data_callback);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to set curl write callback (client {}, port "
-                    "{})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to set "
-                    "callback write function</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-              pma_curl_ret =
-                  curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &body);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to set curl write callback user-data "
-                    "(client {}, port {})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to set "
-                    "callback write function user-data</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-
-              // Set callback for fetched headers
-              std::unordered_map<std::string, std::string> resp_headers;
-              pma_curl_ret =
-                  curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION,
-                                   pma_curl_header_callback);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to set header callback (client {}, port "
-                    "{})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to set "
-                    "curl header callback</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-
-              pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA,
-                                              &resp_headers);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to set header callback user-data (client "
-                    "{}, port {})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to set "
-                    "curl header callback user-data</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-
-              // Set callback for sending data
-              void **ptrs =
-                  reinterpret_cast<void **>(std::malloc(sizeof(void *) * 2));
-              GenericCleanup<void ***> ptrs_cleanup(
-                  &ptrs, [](void ****ptrs) { std::free(**ptrs); });
-              size_t count = 0;
-              ptrs[0] = &req.body;
-              ptrs[1] = &count;
-              if (!req.body.empty()) {
-#ifndef NDEBUG
-                PMA_Println("NOTICE: Sending client {} request body...",
-                            iter->second.client_addr);
-#endif
-                pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl upload as POST (client {}, "
-                      "port {})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl upload as POST</ p> < / html > ";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-
-                pma_curl_ret =
-                    curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, nullptr);
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl upload as POST (fields; "
-                      "client {}, "
-                      "port {})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl upload as POST (fields)</ p> < / html > ";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-
-                pma_curl_ret =
-                    curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION,
-                                     pma_curl_body_send_callback);
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl upload callback (client {}, "
-                      "port {})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl upload callback</p></html>";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-
-                pma_curl_ret =
-                    curl_easy_setopt(curl_handle, CURLOPT_READDATA, ptrs);
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl upload callback user-data "
-                      "(client {}, port {})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl upload callback user-data</p></html>";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-
-                pma_curl_ret = curl_easy_setopt(
-                    curl_handle, CURLOPT_POSTFIELDSIZE_LARGE, req.body.size());
-                if (pma_curl_ret != CURLE_OK) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to set curl POST size (client {}, port "
-                      "{})!",
-                      iter->second.client_addr, iter->second.port);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to set "
-                      "curl POST size</p></html>";
-                  goto PMA_RESPONSE_SEND_LOCATION;
-                }
-              }
-
-              // Fetch
-              pma_curl_ret = curl_easy_perform(curl_handle);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to fetch with curl (client {}, port {})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to fetch "
-                    "with curl</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-
-              long resp_code = 200;
-
-              pma_curl_ret = curl_easy_getinfo(
-                  curl_handle, CURLINFO_RESPONSE_CODE, &resp_code);
-              if (pma_curl_ret != CURLE_OK) {
-                PMA_EPrintln(
-                    "ERROR: Failed to get curl fetch response code (client {}, "
-                    "port {})!",
-                    iter->second.client_addr, iter->second.port);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to get "
-                    "curl fetch response code</p></html>";
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-
-              switch (resp_code) {
-                case 200:
-                  status = "HTTP/1.0 200 OK";
-                  break;
-                case 400:
-                  status = "HTTP/1.0 400 Bad Request";
-                  break;
-                case 401:
-                  status = "HTTP/1.0 401 Unauthorized";
-                  break;
-                case 403:
-                  status = "HTTP/1.0 403 Forbidden";
-                  break;
-                case 404:
-                  status = "HTTP/1.0 404 Not Found";
-                  break;
-                case 502:
-                  status = "HTTP/1.0 502 Bad Gateway";
-                  break;
-                case 503:
-                  status = "HTTP/1.0 503 Service Unavailable";
-                  break;
-                case 504:
-                  status = "HTTP/1.0 504 Gateway Timeout";
-                  break;
-                default:
-                  PMA_EPrintln(
-                      "WARNING: Unhandled response code {} for client {}",
-                      resp_code, iter->second.client_addr);
-                  [[fallthrough]];
-                case 500:
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  break;
-              }
-
-              // DEBUG
-              // PMA_Println("Result headers:");
-              // for (auto header_iter = resp_headers.begin();
-              //      header_iter != resp_headers.end(); ++header_iter) {
-              //   PMA_Println("  {}: {}", header_iter->first,
-              //               header_iter->second);
-              // }
-              // PMA_Println("Result data: {}", body);
-
-              content_type.clear();
-              for (auto header_iter = resp_headers.begin();
-                   header_iter != resp_headers.end(); ++header_iter) {
-                if (header_iter->first == "content-length" ||
-                    header_iter->first == "transfer-encoding") {
-                  continue;
-                }
-                content_type.append(std::format(
-                    "{}: {}\r\n", header_iter->first, header_iter->second));
-              }
-              content_type.resize(content_type.size() - 2);
             }
           }
 
