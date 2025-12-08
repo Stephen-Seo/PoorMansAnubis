@@ -1094,8 +1094,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     }
 
     if is_allowed {
-        cached_allow.add_allowed(&req.remote_addr().to_string())?;
-
         let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
 
         let url = if args.enable_override_dest_url {
