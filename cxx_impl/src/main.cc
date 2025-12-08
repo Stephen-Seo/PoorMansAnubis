@@ -138,76 +138,85 @@ int main(int argc, char **argv) {
   }
 
   // TODO DEBUG
+  auto msql_conf_opt = PMA_MSQL::parse_conf_file(args.mysql_conf_path);
+  if (!msql_conf_opt.has_value()) {
+    PMA_EPrintln("ERROR: Failed to get MSQL opts for connection!");
+    return 5;
+  }
+  auto msql_conf = msql_conf_opt.value();
   auto msql_conn_opt = PMA_MSQL::Connection::connect_msql(
-      "127.0.0.1", 3306, "pmauser", "pmauserpass", "PMA");
-  if (msql_conn_opt.has_value()) {
-    PMA_EPrintln("Drop table if exists...");
-    msql_conn_opt->execute_stmt("DROP TABLE IF EXISTS TEST_TABLE", {});
-    PMA_EPrintln("Create table if not exists...");
-    msql_conn_opt->execute_stmt(
-        "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
-        "PRIMARY KEY, test INT, f FLOAT, s TEXT, c CHAR(3))",
-        {});
-    PMA_EPrintln("Inserting into table...");
-    msql_conn_opt->execute_stmt(
-        "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
-        {PMA_MSQL::Value::new_int(1),
-         PMA_MSQL::Value::new_int(1),
-         {"String at IDX 1."}});
-    msql_conn_opt->execute_stmt(
-        "INSERT INTO TEST_TABLE (id, test) VALUES (?, ?)",
-        {PMA_MSQL::Value::new_int(2), PMA_MSQL::Value::new_int(2)});
-    msql_conn_opt->execute_stmt("INSERT INTO TEST_TABLE (id, s) VALUES (?, ?)",
-                                {PMA_MSQL::Value::new_int(3),
-                                 {"String that says: test integer is NULL"}});
-    msql_conn_opt->execute_stmt("INSERT INTO TEST_TABLE (id) VALUES (?)",
-                                {PMA_MSQL::Value::new_int(4)});
-    msql_conn_opt->execute_stmt(
-        "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
-        {PMA_MSQL::Value::new_int(5),
-         PMA_MSQL::Value::new_int(-5),
-         {"Test negative integer row."}});
-    msql_conn_opt->execute_stmt(
-        "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
-        {PMA_MSQL::Value::new_int(6), {}, {"Test inserting NULL."}});
-    msql_conn_opt->execute_stmt(
-        "INSERT INTO TEST_TABLE (id, f, s) VALUES (?, ?, ?)",
-        {PMA_MSQL::Value::new_int(7), 7.5, {"Test inserting float."}});
-    msql_conn_opt->execute_stmt(
-        "INSERT INTO TEST_TABLE (id, c, s) VALUES (?, ?, ?)",
-        {PMA_MSQL::Value::new_int(8), {"PMA"}, {"Test inserting CHAR(3)."}});
-    PMA_EPrintln("Select...");
-    auto ret_vec_opt = msql_conn_opt->execute_stmt(
-        "SELECT id, test, f, s, c FROM TEST_TABLE", {});
-    if (ret_vec_opt.has_value()) {
-      PMA_EPrintln("Select results:");
-      for (const std::vector<PMA_MSQL::Value> &row : ret_vec_opt.value()) {
-        bool is_first = true;
-        for (const PMA_MSQL::Value &col : row) {
-          if (!is_first) {
-            PMA_EPrint(", ");
-          }
-          switch (col.get_type()) {
-            case PMA_MSQL::Value::INV_NULL:
-              PMA_EPrint("NULL");
-              break;
-            case PMA_MSQL::Value::STRING:
-              PMA_EPrint("{}", *col.get_str().value().get());
-              break;
-            case PMA_MSQL::Value::SIGNED_INT:
-              PMA_EPrint("{}", *col.get_signed_int().value().get());
-              break;
-            case PMA_MSQL::Value::UNSIGNED_INT:
-              PMA_EPrint("{}", *col.get_unsigned_int().value().get());
-              break;
-            case PMA_MSQL::Value::DOUBLE:
-              PMA_EPrint("{}", *col.get_double().value().get());
-              break;
-          }
-          is_first = false;
+      msql_conf.addr, msql_conf.port, msql_conf.user, msql_conf.pass,
+      msql_conf.db);
+  if (!msql_conn_opt.has_value()) {
+    PMA_EPrintln("ERROR: Failed to connect to MSQL!");
+    return 6;
+  }
+  PMA_EPrintln("Drop table if exists...");
+  msql_conn_opt->execute_stmt("DROP TABLE IF EXISTS TEST_TABLE", {});
+  PMA_EPrintln("Create table if not exists...");
+  msql_conn_opt->execute_stmt(
+      "CREATE TABLE IF NOT EXISTS TEST_TABLE (id INT UNSIGNED AUTO_INCREMENT "
+      "PRIMARY KEY, test INT, f FLOAT, s TEXT, c CHAR(3))",
+      {});
+  PMA_EPrintln("Inserting into table...");
+  msql_conn_opt->execute_stmt(
+      "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
+      {PMA_MSQL::Value::new_int(1),
+       PMA_MSQL::Value::new_int(1),
+       {"String at IDX 1."}});
+  msql_conn_opt->execute_stmt(
+      "INSERT INTO TEST_TABLE (id, test) VALUES (?, ?)",
+      {PMA_MSQL::Value::new_int(2), PMA_MSQL::Value::new_int(2)});
+  msql_conn_opt->execute_stmt("INSERT INTO TEST_TABLE (id, s) VALUES (?, ?)",
+                              {PMA_MSQL::Value::new_int(3),
+                               {"String that says: test integer is NULL"}});
+  msql_conn_opt->execute_stmt("INSERT INTO TEST_TABLE (id) VALUES (?)",
+                              {PMA_MSQL::Value::new_int(4)});
+  msql_conn_opt->execute_stmt(
+      "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
+      {PMA_MSQL::Value::new_int(5),
+       PMA_MSQL::Value::new_int(-5),
+       {"Test negative integer row."}});
+  msql_conn_opt->execute_stmt(
+      "INSERT INTO TEST_TABLE (id, test, s) VALUES (?, ?, ?)",
+      {PMA_MSQL::Value::new_int(6), {}, {"Test inserting NULL."}});
+  msql_conn_opt->execute_stmt(
+      "INSERT INTO TEST_TABLE (id, f, s) VALUES (?, ?, ?)",
+      {PMA_MSQL::Value::new_int(7), 7.5, {"Test inserting float."}});
+  msql_conn_opt->execute_stmt(
+      "INSERT INTO TEST_TABLE (id, c, s) VALUES (?, ?, ?)",
+      {PMA_MSQL::Value::new_int(8), {"PMA"}, {"Test inserting CHAR(3)."}});
+  PMA_EPrintln("Select...");
+  auto ret_vec_opt = msql_conn_opt->execute_stmt(
+      "SELECT id, test, f, s, c FROM TEST_TABLE", {});
+  if (ret_vec_opt.has_value()) {
+    PMA_EPrintln("Select results:");
+    for (const std::vector<PMA_MSQL::Value> &row : ret_vec_opt.value()) {
+      bool is_first = true;
+      for (const PMA_MSQL::Value &col : row) {
+        if (!is_first) {
+          PMA_EPrint(", ");
         }
-        PMA_EPrintln("");
+        switch (col.get_type()) {
+          case PMA_MSQL::Value::INV_NULL:
+            PMA_EPrint("NULL");
+            break;
+          case PMA_MSQL::Value::STRING:
+            PMA_EPrint("{}", *col.get_str().value().get());
+            break;
+          case PMA_MSQL::Value::SIGNED_INT:
+            PMA_EPrint("{}", *col.get_signed_int().value().get());
+            break;
+          case PMA_MSQL::Value::UNSIGNED_INT:
+            PMA_EPrint("{}", *col.get_unsigned_int().value().get());
+            break;
+          case PMA_MSQL::Value::DOUBLE:
+            PMA_EPrint("{}", *col.get_double().value().get());
+            break;
+        }
+        is_first = false;
       }
+      PMA_EPrintln("");
     }
   }
 

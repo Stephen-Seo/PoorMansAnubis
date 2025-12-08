@@ -219,6 +219,16 @@ std::optional<bool> client_is_allowed(Connection &c, std::string ip,
 std::optional<std::string> init_id_to_port(Connection &c, uint16_t port,
                                            uint64_t id_to_port_timeout);
 
+struct Conf {
+  std::string addr;
+  std::string user;
+  std::string pass;
+  std::string db;
+  uint16_t port;
+};
+
+std::optional<Conf> parse_conf_file(std::string msql_conf_path);
+
 }  // Namespace PMA_MSQL
 
 #endif

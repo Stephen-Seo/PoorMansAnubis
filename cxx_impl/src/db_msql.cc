@@ -26,6 +26,7 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -2877,4 +2878,126 @@ std::optional<std::string> PMA_MSQL::init_id_to_port(
   }
 
   return id_hashed;
+}
+
+std::optional<PMA_MSQL::Conf> PMA_MSQL::parse_conf_file(
+    std::string msql_conf_path) {
+  std::ifstream ifs(msql_conf_path);
+  if (!ifs.good()) {
+    return std::nullopt;
+  }
+
+  PMA_MSQL::Conf conf;
+
+  uint_fast8_t setbits = 0;
+  enum SetBit {
+    SET_USER = 1,
+    SET_PASS = 2,
+    SET_ADDR = 4,
+    SET_PORT = 8,
+    SET_DB = 16
+  };
+  std::string left;
+  std::string right;
+  char c;
+  enum State { GET_LEFT, GET_RIGHT } state = GET_LEFT;
+
+  // Returns true on error.
+  const auto check_set_opt = [&left, &right, &conf, &setbits,
+                              msql_conf_path]() -> bool {
+    if (!left.empty() && !right.empty()) {
+      if (left == "user") {
+        conf.user = right;
+        setbits |= SET_USER;
+      } else if (left == "password") {
+        conf.pass = right;
+        setbits |= SET_PASS;
+      } else if (left == "address") {
+        conf.addr = right;
+        setbits |= SET_ADDR;
+      } else if (left == "database") {
+        conf.db = right;
+        setbits |= SET_DB;
+      } else if (left == "port") {
+        try {
+          unsigned long p = std::stoul(right);
+          if (p < 0x10000) {
+            conf.port = static_cast<uint16_t>(p);
+            setbits |= SET_PORT;
+          } else {
+            PMA_EPrintln(
+                "ERROR: Failed to parse port from file {} (too large)!",
+                msql_conf_path);
+            return true;
+          }
+        } catch (const std::invalid_argument &e) {
+          PMA_EPrintln(
+              "ERROR: Failed to parse port from file {} (invalid argument)!",
+              msql_conf_path);
+          return true;
+        } catch (const std::out_of_range &e) {
+          PMA_EPrintln(
+              "ERROR: Failed to parse port from file {} (out of range)!",
+              msql_conf_path);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  while (ifs.good()) {
+    ifs.get(c);
+
+    switch (state) {
+      case GET_LEFT:
+        if (c == '=') {
+          state = GET_RIGHT;
+          continue;
+        } else if (c == ' ' || c == '\t') {
+          continue;
+        } else if (c == '\n' || c == '\r') {
+          left.clear();
+          right.clear();
+          continue;
+        } else {
+          left.push_back(c);
+        }
+        break;
+      case GET_RIGHT:
+        if (c == ' ' || c == '\t') {
+          continue;
+        } else if (c == '\n' || c == '\r') {
+          if (check_set_opt()) {
+            return std::nullopt;
+          }
+          left.clear();
+          right.clear();
+          state = GET_LEFT;
+          continue;
+        } else if (c == '=') {
+          PMA_EPrintln("ERROR: Invalid syntax in config {} (extra '=')",
+                       msql_conf_path);
+          return std::nullopt;
+        } else {
+          right.push_back(c);
+        }
+        break;
+    }
+  }
+
+  if (state == GET_RIGHT && !left.empty() && !right.empty()) {
+    if (check_set_opt()) {
+      return std::nullopt;
+    }
+  }
+
+  if ((setbits & SET_USER) && (setbits & SET_PASS) && (setbits & SET_ADDR) &&
+      (setbits & SET_PORT) && (setbits & SET_DB)) {
+    return conf;
+  }
+
+  PMA_EPrintln("ERROR: Config file {} missing opts!", msql_conf_path);
+  return std::nullopt;
 }
