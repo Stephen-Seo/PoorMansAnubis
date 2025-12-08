@@ -22,8 +22,13 @@ mod helpers;
 mod json_types;
 mod salvo_compat;
 
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
 #[cfg(feature = "mysql")]
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 #[cfg(feature = "mysql")]
 use mysql_async::{
@@ -39,6 +44,62 @@ use tokio::{fs::File, io::AsyncReadExt};
 use error::Error;
 
 const GETRANDOM_BUF_SIZE: usize = 64;
+const CACHED_TIMEOUT: Duration = Duration::from_secs(120);
+const CACHED_CLEANUP_TIMEOUT: Duration = Duration::from_secs(3600);
+
+#[derive(Clone, Debug)]
+struct CachedAllow {
+    allowed: Arc<Mutex<RefCell<HashMap<String, Instant>>>>,
+    inst: Arc<Mutex<Cell<Instant>>>,
+}
+
+impl CachedAllow {
+    pub fn new() -> Self {
+        Self {
+            allowed: Default::default(),
+            inst: Arc::new(Mutex::new(Cell::new(Instant::now()))),
+        }
+    }
+
+    pub fn get_allowed(&self, addr_port: &str, timeout: Duration) -> Result<bool, Error> {
+        let l = self.allowed.lock();
+        let l = l.map_err(|_| Error::Generic("Failed to lock CachedAllow".into()))?;
+        let mut b = l.borrow_mut();
+        {
+            let entry = b.get(addr_port);
+            if let Some(v) = entry {
+                if v.elapsed() < timeout {
+                    return Ok(true);
+                }
+            }
+        }
+        b.remove(addr_port);
+
+        Ok(false)
+    }
+
+    pub fn add_allowed(&self, addr_port: &str) -> Result<(), Error> {
+        let l = self.allowed.lock();
+        l.map_err(|_| Error::Generic("Failed to lock CachedAllow".into()))?
+            .borrow_mut()
+            .insert(addr_port.to_owned(), Instant::now());
+
+        Ok(())
+    }
+
+    pub fn check_cleanup(&self) -> Result<(), Error> {
+        let il = self.inst.lock();
+        let il = il.map_err(|_| Error::Generic("Failed to lock CachedAllow.inst".into()))?;
+        if il.get().elapsed() > CACHED_CLEANUP_TIMEOUT {
+            il.set(Instant::now());
+            let l = self.allowed.lock();
+            let l = l.map_err(|_| Error::Generic("Failed to lock CachedAllow".into()))?;
+            l.borrow_mut().clear();
+        }
+
+        Ok(())
+    }
+}
 
 #[cfg(feature = "mysql")]
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
@@ -984,6 +1045,8 @@ async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, 
 #[handler]
 async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
+    let cached_allow: &CachedAllow = depot.obtain::<CachedAllow>().unwrap();
+    cached_allow.check_cleanup()?;
 
     let addr_string = get_client_ip_addr(depot, req).await?;
 
@@ -999,23 +1062,40 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     ))?;
 
     #[allow(clippy::needless_late_init)]
-    let is_allowed: bool;
-    #[cfg(all(feature = "mysql", feature = "sqlite"))]
-    if args.mysql_has_priority {
-        is_allowed = check_is_allowed_mysql(args, &addr_string, port).await?;
-    } else {
-        is_allowed = check_is_allowed_sqlite(args, &addr_string, port).await?;
-    }
-    #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
-    {
-        is_allowed = check_is_allowed_mysql(args, &addr_string, port).await?;
-    }
-    #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-    {
-        is_allowed = check_is_allowed_sqlite(args, &addr_string, port).await?;
+    let mut is_allowed: bool =
+        cached_allow.get_allowed(&req.remote_addr().to_string(), CACHED_TIMEOUT)?;
+    if !is_allowed {
+        #[cfg(all(feature = "mysql", feature = "sqlite"))]
+        if args.mysql_has_priority {
+            is_allowed = check_is_allowed_mysql(args, &addr_string, port).await?;
+            if is_allowed {
+                cached_allow.add_allowed(&req.remote_addr().to_string())?;
+            }
+        } else {
+            is_allowed = check_is_allowed_sqlite(args, &addr_string, port).await?;
+            if is_allowed {
+                cached_allow.add_allowed(&req.remote_addr().to_string())?;
+            }
+        }
+        #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+        {
+            is_allowed = check_is_allowed_mysql(args, &addr_string, port).await?;
+            if is_allowed {
+                cached_allow.add_allowed(&req.remote_addr().to_string())?;
+            }
+        }
+        #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
+        {
+            is_allowed = check_is_allowed_sqlite(args, &addr_string, port).await?;
+            if is_allowed {
+                cached_allow.add_allowed(&req.remote_addr().to_string())?;
+            }
+        }
     }
 
     if is_allowed {
+        cached_allow.add_allowed(&req.remote_addr().to_string())?;
+
         let path_str = req.uri().path_and_query().unwrap().as_str().to_owned();
 
         let url = if args.enable_override_dest_url {
@@ -1119,6 +1199,7 @@ async fn main() {
 
     let router = Router::new()
         .hoop(affix_state::inject(parsed_args.clone()))
+        .hoop(affix_state::inject(CachedAllow::new()))
         .push(Router::new().path(&parsed_args.api_url).post(api_fn))
         .push(
             Router::new()
