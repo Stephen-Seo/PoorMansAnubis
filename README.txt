@@ -38,6 +38,11 @@ submodule update --init --recursive` to pull in the dependency on
 SimpleArchiver.
 
 The C++ impl uses sqlite, so a path given in the paramaters is only required.
+MySQL/MariaDB support was added later in the C++ impl, and is only enabled if
+"--mysql-conf=<filename>" is specified. The config file format is the same as
+the rust_impl/mysql.conf config. Note that it may be insecure to connect to
+MySQL/MariaDB outside of the local network, so it would be better to use a VPN
+if your DB is hosted non-locally.
 
 The Rust impl by default requires a MySQL server with a database and user with
 password with access to said database. If using MySQL, then it is recommended to
@@ -114,6 +119,7 @@ Args for the C++ implementation are as follows:
       --port-to-dest-url=<port>:<url> : Ensure requests from listening on <port> is forwarded to <url>
       example: "--port-to-dest-url=9001:https://example.com"
       NOTICE: Specify --port-to-dest-url=... multiple times to add more mappings
+      --mysql-conf=<config_file> : Set path to config file for mysql settings
       --sqlite-path=<path> : Set filename for sqlite db
       --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
       --api-url=<url> : Set endpoint for client to POST to this software;

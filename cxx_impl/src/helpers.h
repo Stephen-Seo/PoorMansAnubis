@@ -18,9 +18,11 @@
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_HELPERS_H_
 
 // Standard library includes
+#include <array>
 #include <cstdint>
 #include <format>
 #include <functional>
+#include <list>
 #include <optional>
 #include <string>
 
@@ -80,6 +82,46 @@ std::string ascii_str_to_lower(std::string);
 void str_replace_all(std::string &body, std::string target, std::string result);
 
 int set_signal_handler(int signal, void (*handler)(int));
+
+struct BinaryPart {
+  BinaryPart();
+  ~BinaryPart();
+
+  BinaryPart(size_t, uint8_t *);
+
+  // No copy.
+  BinaryPart(const BinaryPart &) = delete;
+  BinaryPart &operator=(const BinaryPart &) = delete;
+
+  // Allow move.
+  BinaryPart(BinaryPart &&);
+  BinaryPart &operator=(BinaryPart &&);
+
+  size_t size;
+  uint8_t *data;
+};
+
+struct BinaryParts {
+  BinaryParts();
+
+  // No copy.
+  BinaryParts(const BinaryParts &) = delete;
+  BinaryParts &operator=(const BinaryParts &) = delete;
+
+  // Allow move.
+  BinaryParts(BinaryParts &&);
+  BinaryParts &operator=(BinaryParts &&);
+
+  // Data must be allocated with "new uint8_t[N]".
+  void append(size_t size, uint8_t *data);
+  BinaryPart combine() const;
+
+  std::list<BinaryPart> parts;
+};
+
+std::array<uint8_t, 20> sha1_digest(uint8_t *data, size_t size);
+std::array<char, 40> digest_s20_to_hex(const std::array<uint8_t, 20> &);
+std::array<char, 40> sha1_digest_hex(uint8_t *data, size_t size);
 
 }  // namespace PMA_HELPER
 

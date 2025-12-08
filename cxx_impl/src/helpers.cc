@@ -18,9 +18,13 @@
 
 // Standard library includes
 #include <cstdio>
+#include <cstring>
 
 // Posix includes
 #include <signal.h>
+
+// Third party includes
+#include <openssl/evp.h>
 
 uint16_t PMA_HELPER::endian_swap_u16(uint16_t u16) {
   uint8_t *u16_ptr = reinterpret_cast<uint8_t *>(&u16);
@@ -129,4 +133,119 @@ int PMA_HELPER::set_signal_handler(int signal, void (*handler)(int)) {
   sa.sa_flags = 0;
 
   return sigaction(signal, &sa, nullptr);
+}
+
+PMA_HELPER::BinaryPart::BinaryPart() : size(0), data(nullptr) {}
+
+PMA_HELPER::BinaryPart::~BinaryPart() {
+  if (data && size != 0) {
+    delete[] data;
+  }
+}
+
+PMA_HELPER::BinaryPart::BinaryPart(size_t size, uint8_t *data)
+    : size(size), data(data) {}
+
+PMA_HELPER::BinaryPart::BinaryPart(BinaryPart &&other)
+    : size(other.size), data(other.data) {
+  other.data = nullptr;
+}
+
+PMA_HELPER::BinaryPart &PMA_HELPER::BinaryPart::operator=(BinaryPart &&other) {
+  if (data && size != 0) {
+    delete[] data;
+  }
+
+  this->size = other.size;
+  this->data = other.data;
+
+  other.data = nullptr;
+
+  return *this;
+}
+
+PMA_HELPER::BinaryParts::BinaryParts() : parts() {}
+
+PMA_HELPER::BinaryParts::BinaryParts(BinaryParts &&other)
+    : parts(std::move(other.parts)) {
+  other.parts = std::list<BinaryPart>();
+}
+
+PMA_HELPER::BinaryParts &PMA_HELPER::BinaryParts::operator=(
+    BinaryParts &&other) {
+  parts = std::move(other.parts);
+  other.parts = std::list<BinaryPart>();
+  return *this;
+}
+
+void PMA_HELPER::BinaryParts::append(size_t size, uint8_t *data) {
+  parts.emplace_back(size, data);
+}
+
+PMA_HELPER::BinaryPart PMA_HELPER::BinaryParts::combine() const {
+  size_t size = 0;
+  for (const auto &part : parts) {
+    size += part.size;
+  }
+
+  if (size == 0) {
+    return BinaryPart();
+  }
+
+  uint8_t *combined_data = new uint8_t[size];
+  size_t idx = 0;
+  for (const auto &part : parts) {
+    std::memcpy(combined_data + idx, part.data, part.size);
+    idx += part.size;
+  }
+
+  return BinaryPart(size, combined_data);
+}
+
+std::array<uint8_t, 20> PMA_HELPER::sha1_digest(uint8_t *data, size_t size) {
+  std::array<uint8_t, 20> ret;
+
+  EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+  GenericCleanup<EVP_MD_CTX *> ctx_cleanup(ctx, [](EVP_MD_CTX **ctx) {
+    if (ctx && *ctx) {
+      EVP_MD_CTX_destroy(*ctx);
+      *ctx = nullptr;
+    }
+  });
+
+  EVP_DigestInit_ex(ctx, EVP_sha1(), nullptr);
+  EVP_DigestUpdate(ctx, data, size);
+  EVP_DigestFinal_ex(ctx, ret.data(), nullptr);
+
+  return ret;
+}
+
+std::array<char, 40> PMA_HELPER::digest_s20_to_hex(
+    const std::array<uint8_t, 20> &digest) {
+  std::array<char, 40> ret;
+
+  int temp;
+  for (size_t idx = 0; idx < digest.size(); ++idx) {
+    temp = digest.at(idx) >> 4;
+    if (temp >= 0 && temp <= 9) {
+      ret.at(idx * 2) = '0' + static_cast<char>(temp);
+    } else if (temp >= 10 && temp <= 15) {
+      ret.at(idx * 2) = 'a' + static_cast<char>(temp - 10);
+    }
+
+    temp = digest.at(idx) & 0xF;
+    if (temp >= 0 && temp <= 9) {
+      ret.at(idx * 2 + 1) = '0' + static_cast<char>(temp);
+    } else if (temp >= 10 && temp <= 15) {
+      ret.at(idx * 2 + 1) = 'a' + static_cast<char>(temp - 10);
+    }
+  }
+
+  return ret;
+}
+
+std::array<char, 40> PMA_HELPER::sha1_digest_hex(uint8_t *data, size_t size) {
+  std::array<uint8_t, 20> digest = sha1_digest(data, size);
+
+  return digest_s20_to_hex(digest);
 }
