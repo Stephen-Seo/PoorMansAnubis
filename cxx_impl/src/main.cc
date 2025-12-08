@@ -1087,6 +1087,10 @@ int main(int argc, char **argv) {
                   body, "{JS_FACTORS_URL}",
                   std::format("{}?id={}", args.js_factors_url, id));
             } else {
+              cached_allowed.insert(
+                  std::make_pair(std::format("{}:{}", iter->second.client_addr,
+                                             iter->second.port),
+                                 time_now));
               do_curl_forwarding(iter->second.client_addr, iter->second.port,
                                  body, status, content_type, req, args);
               goto PMA_RESPONSE_SEND_LOCATION;
