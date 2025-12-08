@@ -52,6 +52,10 @@ constexpr size_t CACHED_TIMEOUT_SECONDS = 120;
 constexpr std::chrono::seconds CACHED_TIMEOUT_T =
     std::chrono::seconds(CACHED_TIMEOUT_SECONDS);
 
+constexpr size_t CACHED_CLEAR_SECONDS = 3600;
+constexpr std::chrono::seconds CACHED_CLEAR_T =
+    std::chrono::seconds(CACHED_CLEAR_SECONDS);
+
 volatile int interrupt_received = 0;
 
 void receive_signal(int sig) {
@@ -618,12 +622,17 @@ int main(int argc, char **argv) {
       cached_allowed;
   std::chrono::time_point<std::chrono::steady_clock> time_now =
       std::chrono::steady_clock::now();
+  std::chrono::time_point<std::chrono::steady_clock> time_prev = time_now;
 
   int ret;
   const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
   while (!interrupt_received) {
     std::this_thread::sleep_for(sleep_duration);
     time_now = std::chrono::steady_clock::now();
+    if (time_now - time_prev > CACHED_CLEAR_T) {
+      time_prev = time_now;
+      cached_allowed.clear();
+    }
 
     // Fetch new connections
     for (auto iter = sockets.begin(); iter != sockets.end(); ++iter) {
