@@ -67,10 +67,10 @@ impl CachedAllow {
         let mut b = l.borrow_mut();
         {
             let entry = b.get(addr_port);
-            if let Some(v) = entry {
-                if v.elapsed() < timeout {
-                    return Ok(true);
-                }
+            if let Some(v) = entry
+                && v.elapsed() < timeout
+            {
+                return Ok(true);
             }
         }
         b.remove(addr_port);
@@ -1061,7 +1061,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         "Should have port from request!".to_owned(),
     ))?;
 
-    #[allow(clippy::needless_late_init)]
     let mut is_allowed: bool =
         cached_allow.get_allowed(&req.remote_addr().to_string(), CACHED_TIMEOUT)?;
     if !is_allowed {
