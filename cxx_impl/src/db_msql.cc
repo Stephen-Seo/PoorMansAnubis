@@ -2954,6 +2954,7 @@ std::optional<std::string> PMA_MSQL::init_id_to_port(
     return std::nullopt;
   }
 
+  c.execute_stmt("UNLOCK TABLES", {});
   return id_hashed;
 }
 
