@@ -109,7 +109,7 @@ internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
   }
 
   if (optv.has_value()) {
-    if (optv.value() + 1 >= 0xFFFFFFFF) {
+    if (optv.value() + 1 >= 0x7FFFFFFFFFFFFFFF) {
       const auto [err_enum, err_msg, opt_vec] =
           PMA_SQL::SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t>(
               ctx, "UPDATE SEQ_ID SET ID = ?", std::nullopt, 1);
