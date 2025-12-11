@@ -961,6 +961,8 @@ int main(int argc, char **argv) {
                           "set up challenge</p></html>";
                     }
                   } else {
+                    PMA_EPrintln("  Responding: Bad request from client {}:{}",
+                                 iter->second.client_addr, iter->second.port);
                     status = "HTTP/1.0 400 Bad Request";
                     body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
                   }
