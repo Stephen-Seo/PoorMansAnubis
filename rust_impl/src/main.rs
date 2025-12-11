@@ -161,9 +161,13 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
 
     let mut conn = pool.get_conn().await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID (
+    r"DROP TABLE IF EXISTS RUST_SEQ_ID"
+        .ignore(&mut conn)
+        .await?;
+
+    r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID_1 (
         ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        SEQ_ID INT UNSIGNED NOT NULL
+        SEQ_ID INT8 UNSIGNED NOT NULL
     )"
     .ignore(&mut conn)
     .await?;
@@ -384,12 +388,12 @@ async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
     let pool = get_mysql_db_pool(args).await?;
     let mut conn = pool.get_conn().await?;
 
-    r"LOCK TABLE RUST_SEQ_ID WRITE"
+    r"LOCK TABLE RUST_SEQ_ID_1 WRITE"
         .ignore(&mut conn)
         .await
         .map_err(Error::from)?;
 
-    let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM RUST_SEQ_ID"
+    let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1"
         .with(())
         .first(&mut conn)
         .await
@@ -398,14 +402,14 @@ async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
     if let Some(seq_r) = seq_row {
         let id: u64 = seq_r.get(0).expect("Row should have ID");
         seq = seq_r.get(1).expect("Row should have SEQ_ID");
-        if seq + 1 >= 0x7FFFFFFF {
-            r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+        if seq + 1 >= 0xFFFFFFFFFFFFFFFF {
+            r"UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
                 .with(params! {"seq_id" => (1), "id_seq_id" => id})
                 .ignore(&mut conn)
                 .await
                 .map_err(Error::from)?;
         } else {
-            r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+            r"UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
                 .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
                 .ignore(&mut conn)
                 .await
@@ -413,7 +417,7 @@ async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
         }
     } else {
         seq = 1;
-        r"INSERT INTO RUST_SEQ_ID (SEQ_ID) VALUES (:seq_id)"
+        r"INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (:seq_id)"
             .with(params! {"seq_id" => (seq + 1)})
             .ignore(&mut conn)
             .await
@@ -437,7 +441,7 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
     match query_res {
         Ok(s) => {
             seq = s;
-            if seq + 1 >= 0xFFFFFFFF {
+            if seq + 1 >= 0x7FFFFFFFFFFFFFFF {
                 conn.execute(r#"UPDATE SEQ_ID SET ID = ?1"#, (1,))?;
             } else {
                 conn.execute(r#"UPDATE SEQ_ID SET ID = ?1"#, (s + 1,))?;
