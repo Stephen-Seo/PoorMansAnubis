@@ -398,11 +398,19 @@ async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
     if let Some(seq_r) = seq_row {
         let id: u64 = seq_r.get(0).expect("Row should have ID");
         seq = seq_r.get(1).expect("Row should have SEQ_ID");
-        r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
-            .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
-            .ignore(&mut conn)
-            .await
-            .map_err(Error::from)?;
+        if seq + 1 >= 0x7FFFFFFF {
+            r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+                .with(params! {"seq_id" => (1), "id_seq_id" => id})
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+        } else {
+            r"UPDATE RUST_SEQ_ID SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+                .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
+                .ignore(&mut conn)
+                .await
+                .map_err(Error::from)?;
+        }
     } else {
         seq = 1;
         r"INSERT INTO RUST_SEQ_ID (SEQ_ID) VALUES (:seq_id)"
@@ -429,7 +437,11 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
     match query_res {
         Ok(s) => {
             seq = s;
-            conn.execute(r#"UPDATE SEQ_ID SET ID = ?1"#, (s + 1,))?;
+            if seq + 1 >= 0xFFFFFFFF {
+                conn.execute(r#"UPDATE SEQ_ID SET ID = ?1"#, (1,))?;
+            } else {
+                conn.execute(r#"UPDATE SEQ_ID SET ID = ?1"#, (s + 1,))?;
+            }
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => {
             seq = 1;
