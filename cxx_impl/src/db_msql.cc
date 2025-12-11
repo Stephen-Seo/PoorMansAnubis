@@ -41,10 +41,13 @@
 #include "poor_mans_print.h"
 #include "work.h"
 
-static const char *DB_INIT_TABLE_SEQ_ID =
-    "CREATE TABLE IF NOT EXISTS CXX_SEQ_ID ("
+static const char *DB_REMOVE_OLD_TABLE_SEQ_ID =
+    "DROP TABLE IF EXISTS CXX_SEQ_ID";
+
+static const char *DB_INIT_TABLE_SEQ_ID_1 =
+    "CREATE TABLE IF NOT EXISTS CXX_SEQ_ID_1 ("
     "  ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,"
-    "  SEQ_ID INT UNSIGNED NOT NULL"
+    "  SEQ_ID INT8 UNSIGNED NOT NULL"
     ")";
 
 static const char *DB_INIT_TABLE_CHALLENGE_FACTORS =
@@ -75,10 +78,11 @@ static const char *DB_INIT_TABLE_ID_TO_PORT =
     "  INDEX ON_TIME_INDEX USING BTREE (ON_TIME)"
     ")";
 
-static const char *DB_GET_SEQ_ID = "SELECT ID, SEQ_ID FROM CXX_SEQ_ID";
-static const char *DB_REMOVE_SEQ_ID = "DELETE FROM CXX_SEQ_ID WHERE ID = ?";
-static const char *DB_ADD_SEQ_ID = "INSERT INTO CXX_SEQ_ID (SEQ_ID) VALUES (?)";
-static const char *DB_UPDATE_SEQ_ID = "UPDATE CXX_SEQ_ID SET SEQ_ID = ?";
+static const char *DB_GET_SEQ_ID = "SELECT ID, SEQ_ID FROM CXX_SEQ_ID_1";
+static const char *DB_REMOVE_SEQ_ID = "DELETE FROM CXX_SEQ_ID_1 WHERE ID = ?";
+static const char *DB_ADD_SEQ_ID =
+    "INSERT INTO CXX_SEQ_ID_1 (SEQ_ID) VALUES (?)";
+static const char *DB_UPDATE_SEQ_ID = "UPDATE CXX_SEQ_ID_1 SET SEQ_ID = ?";
 
 static const char *DB_SEL_CHAL_FACT_BY_ID =
     "SELECT ID FROM CXX_CHALLENGE_FACTORS WHERE ID = ?";
@@ -2595,7 +2599,8 @@ void PMA_MSQL::init_db(PMA_MSQL::Connection &c) {
     return;
   }
 
-  c.execute_stmt(DB_INIT_TABLE_SEQ_ID, {});
+  c.execute_stmt(DB_REMOVE_OLD_TABLE_SEQ_ID, {});
+  c.execute_stmt(DB_INIT_TABLE_SEQ_ID_1, {});
   c.execute_stmt(DB_INIT_TABLE_CHALLENGE_FACTORS, {});
   c.execute_stmt(DB_INIT_TABLE_ALLOWED_IPS, {});
   c.execute_stmt(DB_INIT_TABLE_ID_TO_PORT, {});
@@ -2634,7 +2639,7 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
     }
     if (last.at(1).get_type() == Value::UNSIGNED_INT) {
       uint64_t seq = *last.at(1).get_unsigned_int().value();
-      if (seq + 1 >= 0xFFFFFFFF) {
+      if (seq + 1 >= 0xFFFFFFFFFFFFFFFF) {
         if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {Value::new_uint(1)})
                  .has_value()) {
           c.execute_stmt("ROLLBACK", {});
@@ -2658,7 +2663,7 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
   } else {
     if (exec_ret->at(0).at(1).get_type() == Value::UNSIGNED_INT) {
       uint64_t seq = *exec_ret->at(0).at(1).get_unsigned_int().value();
-      if (seq + 1 >= 0xFFFFFFFF) {
+      if (seq + 1 >= 0xFFFFFFFFFFFFFFFF) {
         if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {Value::new_uint(1)})
                  .has_value()) {
           c.execute_stmt("ROLLBACK", {});
