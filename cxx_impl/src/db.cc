@@ -109,12 +109,22 @@ internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
   }
 
   if (optv.has_value()) {
-    const auto [err_enum, err_msg, opt_vec] =
-        PMA_SQL::SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t>(
-            ctx, "UPDATE SEQ_ID SET ID = ?", std::nullopt, optv.value() + 1);
+    if (optv.value() + 1 >= 0xFFFFFFFF) {
+      const auto [err_enum, err_msg, opt_vec] =
+          PMA_SQL::SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t>(
+              ctx, "UPDATE SEQ_ID SET ID = ?", std::nullopt, 1);
 
-    if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
-      return {optv, err_enum, err_msg};
+      if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
+        return {optv, err_enum, err_msg};
+      }
+    } else {
+      const auto [err_enum, err_msg, opt_vec] =
+          PMA_SQL::SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t>(
+              ctx, "UPDATE SEQ_ID SET ID = ?", std::nullopt, optv.value() + 1);
+
+      if (err_enum != PMA_SQL::ErrorT::SUCCESS) {
+        return {optv, err_enum, err_msg};
+      }
     }
   } else {
     const auto [err_enum, err_msg, opt_vec] =

@@ -2634,10 +2634,19 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
     }
     if (last.at(1).get_type() == Value::UNSIGNED_INT) {
       uint64_t seq = *last.at(1).get_unsigned_int().value();
-      if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
-        c.execute_stmt("ROLLBACK", {});
-        PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
-        return std::nullopt;
+      if (seq + 1 >= 0xFFFFFFFF) {
+        if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {Value::new_uint(1)})
+                 .has_value()) {
+          c.execute_stmt("ROLLBACK", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          return std::nullopt;
+        }
+      } else {
+        if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
+          c.execute_stmt("ROLLBACK", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          return std::nullopt;
+        }
       }
       c.execute_stmt("COMMIT", {});
       return seq;
@@ -2649,10 +2658,19 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
   } else {
     if (exec_ret->at(0).at(1).get_type() == Value::UNSIGNED_INT) {
       uint64_t seq = *exec_ret->at(0).at(1).get_unsigned_int().value();
-      if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
-        c.execute_stmt("ROLLBACK", {});
-        PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
-        return std::nullopt;
+      if (seq + 1 >= 0xFFFFFFFF) {
+        if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {Value::new_uint(1)})
+                 .has_value()) {
+          c.execute_stmt("ROLLBACK", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          return std::nullopt;
+        }
+      } else {
+        if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
+          c.execute_stmt("ROLLBACK", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          return std::nullopt;
+        }
       }
       c.execute_stmt("COMMIT", {});
       return seq;
