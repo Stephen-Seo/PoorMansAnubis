@@ -92,7 +92,7 @@ debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/
 debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
 	${CXX} -o debug_client ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o
+libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql_capi.cc.o
 	${AR} rcs libdb_msql_capi.a $^
 
 ${OBJDIR_ABS}/src/%.cc.o: ${CWD}/src/%.cc ${HEADERS} | clang-format
@@ -118,4 +118,4 @@ clean:
 	rm -f libdb_msql_capi.a
 
 clang-format:
-	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=file ${SOURCES} ${HEADERS} src/test.cc || true
+	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=file ${SOURCES} ${HEADERS} src/db_msql_capi.cc src/test.cc || true
