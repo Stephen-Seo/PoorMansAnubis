@@ -78,7 +78,7 @@ C_IMPL_OBJECTS := $(subst ../c_impl,${OBJDIR}/dotdot,$(subst .c,.c.o,${C_IMPL_SO
 
 OBJECTS := $(addprefix ${OBJDIR_ABS}/,$(subst .cc,.cc.o,${SOURCES}))
 
-all: cxx_backend_impl test debug_serve debug_client libdb_msql_capi.a
+all: cxx_backend_impl test debug_serve debug_client libdb_msql_capi.a debug_test_capi
 
 cxx_backend_impl: ${OBJECTS} ${C_IMPL_OBJECTS}
 	${CXX} -o cxx_backend_impl ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
@@ -92,8 +92,11 @@ debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/
 debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
 	${CXX} -o debug_client ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o
+libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o ${OBJDIR_ABS}/src/db.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${C_IMPL_OBJECTS}
 	${AR} rcs libdb_msql_capi.a $^
+
+debug_test_capi: ${OBJDIR}/src/db_msql_capi_test.c.o libdb_msql_capi.a
+	${CXX} -o debug_test_capi ${FINAL_COMMON_FLAGS} $< -L. -ldb_msql_capi ${LINKER_FLAGS}
 
 ${OBJDIR_ABS}/src/%.cc.o: ${CWD}/src/%.cc ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
@@ -107,6 +110,10 @@ ${OBJDIR}/dotdot/%.c.o: ../c_impl/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${CC} -o $@ -c ${FINAL_COMMON_CFLAGS} $<
 
+${OBJDIR}/src/%.c.o: ${CWD}/src/%.c ${HEADERS} | clang-format
+	@mkdir -p $(dir $@)
+	${CC} -o $@ -c ${FINAL_COMMON_CFLAGS} $<
+
 .PHONY: clean clang-format
 
 clean:
@@ -116,6 +123,7 @@ clean:
 	rm -f debug_serve
 	rm -f debug_client
 	rm -f libdb_msql_capi.a
+	rm -f debug_test_capi
 
 clang-format:
-	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=file ${SOURCES} ${HEADERS} src/test.cc || true
+	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=file ${SOURCES} ${HEADERS} src/db_msql_capi_test.c src/test.cc || true
