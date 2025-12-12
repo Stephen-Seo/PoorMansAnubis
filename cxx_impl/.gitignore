@@ -8,3 +8,4 @@ compile_commands.json
 /test
 /debug_serve
 /debug_client
+/libdb_msql_capi.a
