@@ -58,6 +58,8 @@ extern size_t MSQL_row_count(MSQL_Rows rows);
 /// MSQL_cleanup_value().
 extern MSQL_Value MSQL_fetch(MSQL_Rows rows, size_t row_idx, size_t col_idx);
 
+extern void MSQL_cleanup_rows(MSQL_Rows *rows);
+
 /// 0 for error, 1 for null, 2 for int64, 3 for uint64, 4 for string, 5 for
 /// double.
 extern int MSQL_get_type(MSQL_Value value);

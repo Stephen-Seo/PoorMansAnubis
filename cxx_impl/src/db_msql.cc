@@ -3272,6 +3272,19 @@ MSQL_Value MSQL_fetch(MSQL_Rows rows, size_t row_idx, size_t col_idx) {
   return val;
 }
 
+void MSQL_cleanup_rows(MSQL_Rows *rows) {
+  if (!rows || !(*rows)) {
+    return;
+  }
+
+  std::vector<std::vector<PMA_MSQL::Value> > *v =
+      reinterpret_cast<std::vector<std::vector<PMA_MSQL::Value> > *>(*rows);
+
+  v->~vector();
+  std::free(*rows);
+  *rows = nullptr;
+}
+
 int MSQL_get_type(MSQL_Value value) {
   if (!value) {
     return 0;
