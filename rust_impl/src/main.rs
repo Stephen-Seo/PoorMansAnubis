@@ -47,6 +47,57 @@ const GETRANDOM_BUF_SIZE: usize = 64;
 const CACHED_TIMEOUT: Duration = Duration::from_secs(120);
 const CACHED_CLEANUP_TIMEOUT: Duration = Duration::from_secs(3600);
 
+const MSQL_RUST_SEQ_ID_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID_1 (
+        ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        SEQ_ID INT8 UNSIGNED NOT NULL
+    )";
+
+const MSQL_RUST_CHALLENGE_FACTORS_4_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_4 (
+        ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
+        IP VARCHAR(45) NOT NULL,
+        FACTORS CHAR(64) CHARACTER SET ascii NOT NULL,
+        PORT INT UNSIGNED NOT NULL,
+        GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
+    )";
+
+const MSQL_RUST_ALLOWED_IPS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ALLOWED_IPS (
+        ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        IP VARCHAR(45) NOT NULL,
+        PORT INT UNSIGNED NOT NULL,
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX IP_PORT_INDEX USING HASH (IP, PORT),
+        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
+    )";
+
+const MSQL_RUST_ID_TO_PORT_3_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT_3 (
+        ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
+        PORT INT UNSIGNED NOT NULL,
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
+    )";
+
+const SQLITE_SEQ_ID_CREATE: &str = r"CREATE TABLE IF NOT EXISTS SEQ_ID
+        (ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)";
+
+const SQLITE_ID_TO_PORT_CREATE: &str = r"CREATE TABLE IF NOT EXISTS ID_TO_PORT
+        (ID TEXT NOT NULL PRIMARY KEY,
+         PORT INT UNSIGNED NOT NULL,
+         ON_TIME TEXT NOT NULL DEFAULT ( datetime() ) )";
+
+const SQLITE_CHALLENGE_FACTOR_CREATE: &str = r"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTOR
+        (ID TEXT NOT NULL PRIMARY KEY,
+         FACTORS TEXT NOT NULL,
+         IP TEXT NOT NULL,
+         PORT INT NOT NULL,
+         ON_TIME TEXT DEFAULT ( datetime() ) )";
+
+const SQLITE_ALLOWED_IP_CREATE: &str = r"CREATE TABLE IF NOT EXISTS ALLOWED_IP
+        (ID INTEGER PRIMARY KEY AUTOINCREMENT,
+         IP TEXT NOT NULL,
+         PORT INTEGER NOT NULL,
+         ON_TIME TEXT NOT NULL DEFAULT ( datetime() ) )";
+
 #[derive(Clone, Debug)]
 struct CachedAllow {
     allowed: Arc<Mutex<RefCell<HashMap<String, Instant>>>>,
@@ -165,12 +216,7 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
         .ignore(&mut conn)
         .await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID_1 (
-        ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        SEQ_ID INT8 UNSIGNED NOT NULL
-    )"
-    .ignore(&mut conn)
-    .await?;
+    MSQL_RUST_SEQ_ID_1_CREATE.ignore(&mut conn).await?;
 
     r"DROP TABLE IF EXISTS RUST_CHALLENGE_FACTORS"
         .ignore(&mut conn)
@@ -184,27 +230,11 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
         .ignore(&mut conn)
         .await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_4 (
-        ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
-        IP VARCHAR(45) NOT NULL,
-        FACTORS CHAR(64) CHARACTER SET ascii NOT NULL,
-        PORT INT UNSIGNED NOT NULL,
-        GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
-    )"
-    .ignore(&mut conn)
-    .await?;
+    MSQL_RUST_CHALLENGE_FACTORS_4_CREATE
+        .ignore(&mut conn)
+        .await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_ALLOWED_IPS (
-        ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        IP VARCHAR(45) NOT NULL,
-        PORT INT UNSIGNED NOT NULL,
-        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX IP_PORT_INDEX USING HASH (IP, PORT),
-        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
-    )"
-    .ignore(&mut conn)
-    .await?;
+    MSQL_RUST_ALLOWED_IPS_CREATE.ignore(&mut conn).await?;
 
     r"DROP TABLE IF EXISTS RUST_ID_TO_PORT"
         .ignore(&mut conn)
@@ -214,14 +244,7 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
         .ignore(&mut conn)
         .await?;
 
-    r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT_3 (
-        ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
-        PORT INT UNSIGNED NOT NULL,
-        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
-    )"
-    .ignore(&mut conn)
-    .await?;
+    MSQL_RUST_ID_TO_PORT_3_CREATE.ignore(&mut conn).await?;
 
     drop(conn);
 
@@ -236,34 +259,16 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
 
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(
-        r#"CREATE TABLE IF NOT EXISTS SEQ_ID
-        (ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)"#,
-        (),
-    )?;
+    conn.execute(SQLITE_SEQ_ID_CREATE, ())?;
 
-    conn.execute(
-        r#"CREATE TABLE IF NOT EXISTS ID_TO_PORT
-        (ID TEXT NOT NULL PRIMARY KEY,
-         PORT INT UNSIGNED NOT NULL,
-         ON_TIME TEXT NOT NULL DEFAULT ( datetime() ) )"#,
-        (),
-    )?;
+    conn.execute(SQLITE_ID_TO_PORT_CREATE, ())?;
 
     conn.execute(
         r#"CREATE INDEX IF NOT EXISTS ID_TO_PORT_TIME ON ID_TO_PORT (ON_TIME)"#,
         (),
     )?;
 
-    conn.execute(
-        r#"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTOR
-        (ID TEXT NOT NULL PRIMARY KEY,
-         FACTORS TEXT NOT NULL,
-         IP TEXT NOT NULL,
-         PORT INT NOT NULL,
-         ON_TIME TEXT DEFAULT ( datetime() ) )"#,
-        (),
-    )?;
+    conn.execute(SQLITE_CHALLENGE_FACTOR_CREATE, ())?;
 
     conn.execute(
         r#"CREATE INDEX IF NOT EXISTS CHALLENGE_FACTOR_TIME
@@ -271,14 +276,7 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
         (),
     )?;
 
-    conn.execute(
-        r#"CREATE TABLE IF NOT EXISTS ALLOWED_IP
-        (ID INTEGER PRIMARY KEY AUTOINCREMENT,
-         IP TEXT NOT NULL,
-         PORT INTEGER NOT NULL,
-         ON_TIME TEXT NOT NULL DEFAULT ( datetime() ) )"#,
-        (),
-    )?;
+    conn.execute(SQLITE_ALLOWED_IP_CREATE, ())?;
 
     conn.execute(
         r#"CREATE INDEX IF NOT EXISTS ALLOWED_IP_IP ON ALLOWED_IP (IP)"#,
@@ -355,12 +353,10 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
 
     let real_ip_header = req.headers().get("x-real-ip");
 
-    if args.enable_x_real_ip_header && real_ip_header.is_some() {
-        addr_string = real_ip_header
-            .unwrap()
-            .to_str()
-            .map_err(Error::from)?
-            .to_owned();
+    if args.enable_x_real_ip_header
+        && let Some(real_ip_h) = real_ip_header
+    {
+        addr_string = real_ip_h.to_str().map_err(Error::from)?.to_owned();
         if addr_string.is_empty() {
             return Err("Failed to get client addr (invalid header)".into());
         } else {
@@ -402,7 +398,7 @@ async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
     if let Some(seq_r) = seq_row {
         let id: u64 = seq_r.get(0).expect("Row should have ID");
         seq = seq_r.get(1).expect("Row should have SEQ_ID");
-        if seq + 1 >= 0xFFFFFFFFFFFFFFFF {
+        if seq + 1 == 0xFFFFFFFFFFFFFFFF {
             r"UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
                 .with(params! {"seq_id" => (1), "id_seq_id" => id})
                 .ignore(&mut conn)
