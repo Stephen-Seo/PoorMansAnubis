@@ -116,14 +116,12 @@ std::string PMA_HELPER::ascii_str_to_lower(std::string other) {
 
 void PMA_HELPER::str_replace_all(std::string &body, std::string target,
                                  std::string result) {
-  std::string::size_type idx = 0;
-  do {
+  std::string::size_type idx = body.find(target);
+  while (idx != std::string::npos) {
+    body.replace(idx, target.size(), result);
+    idx += result.size();
     idx = body.find(target, idx);
-    if (idx != std::string::npos) {
-      body.replace(idx, target.size(), result);
-      idx += result.size();
-    }
-  } while (idx != std::string::npos);
+  }
 }
 
 int PMA_HELPER::set_signal_handler(int signal, void (*handler)(int)) {
