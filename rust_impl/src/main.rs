@@ -387,9 +387,9 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
 }
 
 #[cfg(feature = "mysql")]
-async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
+async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
     let seq: u64;
-    let pool = get_mysql_db_pool(args).await?;
+    let pool: &Pool = depot.obtain().unwrap();
     let mut conn = pool.get_conn().await?;
 
     r"LOCK TABLE RUST_SEQ_ID_1 WRITE"
@@ -482,8 +482,8 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
 }
 
 #[cfg(feature = "mysql")]
-async fn has_challenge_factor_id_mysql(args: &args::Args, hash: &str) -> Result<bool, Error> {
-    let pool = get_mysql_db_pool(args).await?;
+async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool, Error> {
+    let pool: &Pool = depot.obtain().unwrap();
     let mut conn = pool.get_conn().await?;
 
     let with_id: Vec<String> = r"SELECT ID FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?"
@@ -508,13 +508,13 @@ async fn has_challenge_factor_id_sqlite(args: &args::Args, hash: &str) -> Result
 
 #[cfg(feature = "mysql")]
 async fn set_challenge_factor_mysql(
-    args: &args::Args,
+    depot: &Depot,
     ip: &str,
     hash: &str,
     port: u16,
     factors_hash: &str,
 ) -> Result<(), Error> {
-    let pool = get_mysql_db_pool(args).await?;
+    let pool: &Pool = depot.obtain().unwrap();
     let mut conn = pool.get_conn().await?;
 
     r"LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE"
@@ -574,14 +574,14 @@ async fn set_up_factors_challenge(
 
     #[cfg(all(feature = "mysql", feature = "sqlite"))]
     if args.mysql_has_priority {
-        seq = get_next_seq_mysql(args).await?;
+        seq = get_next_seq_mysql(depot).await?;
     } else {
         seq = get_next_seq_sqlite(args).await?;
     }
 
     #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
     {
-        seq = get_next_seq_mysql(args).await?;
+        seq = get_next_seq_mysql(depot).await?;
     }
 
     #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
@@ -602,14 +602,14 @@ async fn set_up_factors_challenge(
 
         #[cfg(all(feature = "mysql", feature = "sqlite"))]
         if args.mysql_has_priority {
-            if has_challenge_factor_id_mysql(args, &hash).await? {
+            if has_challenge_factor_id_mysql(depot, &hash).await? {
                 continue;
             }
         } else if has_challenge_factor_id_sqlite(args, &hash).await? {
             continue;
         }
         #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
-        if has_challenge_factor_id_mysql(args, &hash).await? {
+        if has_challenge_factor_id_mysql(depot, &hash).await? {
             continue;
         }
         #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
@@ -621,13 +621,13 @@ async fn set_up_factors_challenge(
 
         #[cfg(all(feature = "mysql", feature = "sqlite"))]
         if args.mysql_has_priority {
-            set_challenge_factor_mysql(args, ip, &hash, port, &factors_hash).await?;
+            set_challenge_factor_mysql(depot, ip, &hash, port, &factors_hash).await?;
         } else {
             set_challenge_factor_sqlite(args, ip, &hash, port, &factors_hash).await?;
         }
         #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
         {
-            set_challenge_factor_mysql(args, ip, &hash, port, &factors_hash).await?;
+            set_challenge_factor_mysql(depot, ip, &hash, port, &factors_hash).await?;
         }
         #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
         {
@@ -662,9 +662,9 @@ fn get_mapped_port_to_dest(args: &args::Args, req: &Request) -> Result<String, E
 }
 
 #[cfg(feature = "mysql")]
-async fn challenge_port_mysql(args: &args::Args, id: &str) -> Result<u16, Error> {
+async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
     let mut port: Option<u16> = None;
-    let pool = get_mysql_db_pool(args).await?;
+    let pool: &Pool = depot.obtain().unwrap();
     let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
     r"LOCK TABLE RUST_ID_TO_PORT_3 WRITE"
@@ -742,13 +742,13 @@ async fn factors_js_fn(
     let mut port: Result<u16, Error> = Err(Error::Generic("port uninitialized".into()));
     #[cfg(all(feature = "mysql", feature = "sqlite"))]
     if args.mysql_has_priority {
-        port = challenge_port_mysql(args, &id).await;
+        port = challenge_port_mysql(depot, &id).await;
     } else {
         port = challenge_port_sqlite(args, &id).await;
     }
     #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
     {
-        port = challenge_port_mysql(args, &id).await;
+        port = challenge_port_mysql(depot, &id).await;
     }
     #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
     {
@@ -773,12 +773,13 @@ async fn factors_js_fn(
 #[cfg(feature = "mysql")]
 async fn validate_client_mysql(
     args: &args::Args,
+    depot: &Depot,
     factors_response: &json_types::FactorsResponse,
     addr: &str,
 ) -> Result<u16, Error> {
     let correct;
     let mut port: u16 = 0;
-    let pool = get_mysql_db_pool(args).await?;
+    let pool: &Pool = depot.obtain().unwrap();
     let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
     r"LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE"
@@ -907,13 +908,13 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     let mut validate_result: Result<u16, Error> = Err(String::from("Invalid state").into());
     #[cfg(all(feature = "mysql", feature = "sqlite"))]
     if args.mysql_has_priority {
-        validate_result = validate_client_mysql(args, &factors_response, &addr_string).await;
+        validate_result = validate_client_mysql(args, depot, &factors_response, &addr_string).await;
     } else {
         validate_result = validate_client_sqlite(args, &factors_response, &addr_string).await;
     }
     #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
     {
-        validate_result = validate_client_mysql(args, &factors_response, &addr_string).await;
+        validate_result = validate_client_mysql(args, depot, &factors_response, &addr_string).await;
     }
     #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
     {
@@ -936,9 +937,14 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 }
 
 #[cfg(feature = "mysql")]
-async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Result<bool, Error> {
+async fn check_is_allowed_mysql(
+    args: &args::Args,
+    depot: &Depot,
+    addr: &str,
+    port: u16,
+) -> Result<bool, Error> {
     let is_allowed: bool;
-    let pool = get_mysql_db_pool(args).await?;
+    let pool: &Pool = depot.obtain().unwrap();
     let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
     r"LOCK TABLE RUST_ALLOWED_IPS WRITE"
@@ -993,8 +999,6 @@ async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Res
         is_allowed = false;
     }
 
-    drop(conn);
-    pool.disconnect().await.map_err(Error::from)?;
     Ok(is_allowed)
 }
 
@@ -1018,9 +1022,13 @@ async fn check_is_allowed_sqlite(args: &args::Args, addr: &str, port: u16) -> Re
 }
 
 #[cfg(feature = "mysql")]
-async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, Error> {
+async fn init_id_to_port_mysql(
+    args: &args::Args,
+    depot: &Depot,
+    port: u16,
+) -> Result<String, Error> {
     let mut hash: String;
-    let pool = get_mysql_db_pool(args).await?;
+    let pool: &Pool = depot.obtain().unwrap();
     let mut conn = pool.get_conn().await.map_err(Error::from)?;
 
     r"LOCK TABLE RUST_ID_TO_PORT_3 WRITE"
@@ -1148,7 +1156,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     if !is_allowed {
         #[cfg(all(feature = "mysql", feature = "sqlite"))]
         if args.mysql_has_priority {
-            is_allowed = check_is_allowed_mysql(args, &addr_string, port).await?;
+            is_allowed = check_is_allowed_mysql(args, depot, &addr_string, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
@@ -1160,7 +1168,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         }
         #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
         {
-            is_allowed = check_is_allowed_mysql(args, &addr_string, port).await?;
+            is_allowed = check_is_allowed_mysql(args, depot, &addr_string, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
@@ -1222,13 +1230,13 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
         #[cfg(all(feature = "mysql", feature = "sqlite"))]
         if args.mysql_has_priority {
-            hash = Some(init_id_to_port_mysql(args, port).await?);
+            hash = Some(init_id_to_port_mysql(args, depot, port).await?);
         } else {
             hash = Some(init_id_to_port_sqlite(args, port).await?);
         }
         #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
         {
-            hash = Some(init_id_to_port_mysql(args, port).await?);
+            hash = Some(init_id_to_port_mysql(args, depot, port).await?);
         }
         #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
         {
@@ -1276,16 +1284,61 @@ async fn main() {
         );
     }
 
-    let router = Router::new()
-        .hoop(affix_state::inject(parsed_args.clone()))
-        .hoop(affix_state::inject(CachedAllow::new()))
-        .push(Router::new().path(&parsed_args.api_url).post(api_fn))
-        .push(
-            Router::new()
-                .path(&parsed_args.js_factors_url)
-                .get(factors_js_fn),
-        )
-        .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
+    let router;
+    #[cfg(feature = "mysql")]
+    {
+        let config_map = parse_db_conf(&parsed_args.mysql_config_file)
+            .await
+            .expect("Parse config for mysql usage");
+        let pool: Pool = Pool::from_url(format!(
+            "mysql://{}:{}@{}:{}/{}",
+            config_map
+                .get("user")
+                .ok_or("User not in mysql config".to_owned())
+                .unwrap(),
+            config_map
+                .get("password")
+                .ok_or("Password not in mysql config".to_owned())
+                .unwrap(),
+            config_map
+                .get("address")
+                .ok_or("Address not in mysql config".to_owned())
+                .unwrap(),
+            config_map
+                .get("port")
+                .ok_or("Port not in mysql config".to_owned())
+                .unwrap(),
+            config_map
+                .get("database")
+                .ok_or("Database not in mysql config".to_owned())
+                .unwrap()
+        ))
+        .unwrap();
+        router = Router::new()
+            .hoop(affix_state::inject(parsed_args.clone()))
+            .hoop(affix_state::inject(CachedAllow::new()))
+            .hoop(affix_state::inject(pool))
+            .push(Router::new().path(&parsed_args.api_url).post(api_fn))
+            .push(
+                Router::new()
+                    .path(&parsed_args.js_factors_url)
+                    .get(factors_js_fn),
+            )
+            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
+    }
+    #[cfg(not(feature = "mysql"))]
+    {
+        router = Router::new()
+            .hoop(affix_state::inject(parsed_args.clone()))
+            .hoop(affix_state::inject(CachedAllow::new()))
+            .push(Router::new().path(&parsed_args.api_url).post(api_fn))
+            .push(
+                Router::new()
+                    .path(&parsed_args.js_factors_url)
+                    .get(factors_js_fn),
+            )
+            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
+    }
     if parsed_args.addr_port_strs.len() == 1 {
         let addr_port_str = parsed_args.addr_port_strs[0].clone();
         let acceptor = TcpListener::new(addr_port_str).bind().await;
