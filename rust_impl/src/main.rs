@@ -39,7 +39,10 @@ use mysql_async::{
 use rusqlite::Connection;
 use salvo::{http::ResBody, prelude::*};
 #[cfg(feature = "mysql")]
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{
+    fs::File,
+    io::{AsyncBufReadExt, BufReader},
+};
 
 use error::Error;
 
@@ -162,15 +165,10 @@ impl CachedAllow {
 
 #[cfg(feature = "mysql")]
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
-    let mut file_contents: String = String::new();
-    File::open(config)
-        .await?
-        .read_to_string(&mut file_contents)
-        .await?;
-
     let mut map: HashMap<String, String> = HashMap::new();
 
-    for line in file_contents.lines() {
+    let mut lines = BufReader::new(File::open(config).await?).lines();
+    while let Some(line) = lines.next_line().await? {
         let line_parts: Vec<&str> = line.split("=").collect();
         if line_parts.len() == 2 {
             map.insert(line_parts[0].to_owned(), line_parts[1].to_owned());
