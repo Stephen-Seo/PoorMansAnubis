@@ -47,11 +47,13 @@ const GETRANDOM_BUF_SIZE: usize = 64;
 const CACHED_TIMEOUT: Duration = Duration::from_secs(120);
 const CACHED_CLEANUP_TIMEOUT: Duration = Duration::from_secs(3600);
 
+#[allow(unused)]
 const MSQL_RUST_SEQ_ID_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID_1 (
         ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         SEQ_ID INT8 UNSIGNED NOT NULL
     )";
 
+#[allow(unused)]
 const MSQL_RUST_CHALLENGE_FACTORS_4_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_4 (
         ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
@@ -61,6 +63,7 @@ const MSQL_RUST_CHALLENGE_FACTORS_4_CREATE: &str = r"CREATE TABLE IF NOT EXISTS 
         INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
     )";
 
+#[allow(unused)]
 const MSQL_RUST_ALLOWED_IPS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ALLOWED_IPS (
         ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
@@ -70,6 +73,7 @@ const MSQL_RUST_ALLOWED_IPS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ALL
         INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
     )";
 
+#[allow(unused)]
 const MSQL_RUST_ID_TO_PORT_3_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT_3 (
         ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         PORT INT UNSIGNED NOT NULL,
@@ -77,14 +81,17 @@ const MSQL_RUST_ID_TO_PORT_3_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ID
         INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
     )";
 
+#[allow(unused)]
 const SQLITE_SEQ_ID_CREATE: &str = r"CREATE TABLE IF NOT EXISTS SEQ_ID
         (ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)";
 
+#[allow(unused)]
 const SQLITE_ID_TO_PORT_CREATE: &str = r"CREATE TABLE IF NOT EXISTS ID_TO_PORT
         (ID TEXT NOT NULL PRIMARY KEY,
          PORT INT UNSIGNED NOT NULL,
          ON_TIME TEXT NOT NULL DEFAULT ( datetime() ) )";
 
+#[allow(unused)]
 const SQLITE_CHALLENGE_FACTOR_CREATE: &str = r"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTOR
         (ID TEXT NOT NULL PRIMARY KEY,
          FACTORS TEXT NOT NULL,
@@ -92,6 +99,7 @@ const SQLITE_CHALLENGE_FACTOR_CREATE: &str = r"CREATE TABLE IF NOT EXISTS CHALLE
          PORT INT NOT NULL,
          ON_TIME TEXT DEFAULT ( datetime() ) )";
 
+#[allow(unused)]
 const SQLITE_ALLOWED_IP_CREATE: &str = r"CREATE TABLE IF NOT EXISTS ALLOWED_IP
         (ID INTEGER PRIMARY KEY AUTOINCREMENT,
          IP TEXT NOT NULL,
@@ -389,35 +397,55 @@ async fn get_next_seq_mysql(args: &args::Args) -> Result<u64, Error> {
         .await
         .map_err(Error::from)?;
 
-    let seq_row: Option<Row> = r"SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1"
+    let seq_row_ret: Result<Option<Row>, _> = r"SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1"
         .with(())
         .first(&mut conn)
         .await
-        .map_err(Error::from)?;
+        .map_err(Error::from);
+    if seq_row_ret.is_err() {
+        "UNLOCK TABLES".ignore(&mut conn).await?;
+        return seq_row_ret.map(|_| 0);
+    }
+
+    let seq_row: Option<Row> = seq_row_ret.unwrap();
 
     if let Some(seq_r) = seq_row {
         let id: u64 = seq_r.get(0).expect("Row should have ID");
         seq = seq_r.get(1).expect("Row should have SEQ_ID");
         if seq + 1 == 0xFFFFFFFFFFFFFFFF {
-            r"UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
-                .with(params! {"seq_id" => (1), "id_seq_id" => id})
-                .ignore(&mut conn)
-                .await
-                .map_err(Error::from)?;
+            let ret: Result<(), _> =
+                r"UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+                    .with(params! {"seq_id" => (1), "id_seq_id" => id})
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from);
+            if ret.is_err() {
+                "UNLOCK TABLES".ignore(&mut conn).await?;
+                return ret.map(|_| 0);
+            }
         } else {
-            r"UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
-                .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
-                .ignore(&mut conn)
-                .await
-                .map_err(Error::from)?;
+            let ret: Result<(), _> =
+                r"UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id_seq_id"
+                    .with(params! {"seq_id" => (seq + 1), "id_seq_id" => id})
+                    .ignore(&mut conn)
+                    .await
+                    .map_err(Error::from);
+            if ret.is_err() {
+                "UNLOCK TABLES".ignore(&mut conn).await?;
+                return ret.map(|_| 0);
+            }
         }
     } else {
         seq = 1;
-        r"INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (:seq_id)"
+        let ret: Result<(), _> = r"INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (:seq_id)"
             .with(params! {"seq_id" => (seq + 1)})
             .ignore(&mut conn)
             .await
-            .map_err(Error::from)?;
+            .map_err(Error::from);
+        if ret.is_err() {
+            "UNLOCK TABLES".ignore(&mut conn).await?;
+            return ret.map(|_| 0);
+        }
     }
 
     r"UNLOCK TABLES"
@@ -494,18 +522,18 @@ async fn set_challenge_factor_mysql(
         .await
         .map_err(Error::from)?;
 
-    r"INSERT INTO RUST_CHALLENGE_FACTORS_4 (ID, IP, PORT, FACTORS) VALUES (:id, :ip, :port, :factors)"
+    let ret: Result<(), _> = r"INSERT INTO RUST_CHALLENGE_FACTORS_4 (ID, IP, PORT, FACTORS) VALUES (:id, :ip, :port, :factors)"
         .with(params! {"id" => hash, "ip" => ip, "port" => port, "factors" => factors_hash})
         .ignore(&mut conn)
         .await
-        .map_err(Error::from)?;
+        .map_err(Error::from);
 
     r"UNLOCK TABLES"
         .ignore(&mut conn)
         .await
         .map_err(Error::from)?;
 
-    Ok(())
+    ret
 }
 
 #[cfg(feature = "sqlite")]
@@ -645,23 +673,32 @@ async fn challenge_port_mysql(args: &args::Args, id: &str) -> Result<u16, Error>
         .map_err(Error::from)?;
 
     {
-        let sel_row: Option<Row> = r"SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = :id"
-            .with(params! {"id" => id})
-            .first(&mut conn)
-            .await
-            .map_err(Error::from)?;
-
+        let sel_row_ret: Result<Option<Row>, _> =
+            r"SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = :id"
+                .with(params! {"id" => id})
+                .first(&mut conn)
+                .await
+                .map_err(Error::from);
+        if sel_row_ret.is_err() {
+            "UNLOCK TABLES".ignore(&mut conn).await?;
+            return sel_row_ret.map(|_| 0);
+        }
+        let sel_row: Option<Row> = sel_row_ret.unwrap();
         if let Some(sel_r) = sel_row {
             port = sel_r.get(0);
         }
     }
 
     if port.is_some() {
-        r"DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = :id"
+        let ret: Result<(), _> = r"DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = :id"
             .with(params! {"id" => id})
             .ignore(&mut conn)
             .await
-            .map_err(Error::from)?;
+            .map_err(Error::from);
+        if ret.is_err() {
+            "UNLOCK TABLES".ignore(&mut conn).await?;
+            return ret.map(|_| 0);
+        }
     }
 
     r"UNLOCK TABLES"
@@ -749,20 +786,30 @@ async fn validate_client_mysql(
         .await
         .map_err(Error::from)?;
 
+    let ret: Result<(), _> =
     r"DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes"
             .with(params! {"minutes" => args.challenge_timeout_mins})
             .ignore(&mut conn)
             .await
-            .map_err(Error::from)?;
+            .map_err(Error::from);
+    if ret.is_err() {
+        "UNLOCK TABLES".ignore(&mut conn).await?;
+        return ret.map(|_| 0);
+    }
 
     let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
-    let addr_port_row: Option<Row> =
+    let addr_port_ret: Result<Option<Row>, _> =
         r"SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = :id AND FACTORS = :factors"
             .with(params! {"id" => &factors_response.id, "factors" => hashed_factors})
             .first(&mut conn)
             .await
-            .map_err(Error::from)?;
+            .map_err(Error::from);
+    if addr_port_ret.is_err() {
+        "UNLOCK TABLES".ignore(&mut conn).await?;
+        return addr_port_ret.map(|_| 0);
+    }
+    let addr_port_row: Option<Row> = addr_port_ret.unwrap();
 
     if let Some(addr_port_r) = addr_port_row {
         let r_addr: String = addr_port_r.get(0).ok_or(Into::<Error>::into(String::from(
@@ -773,11 +820,15 @@ async fn validate_client_mysql(
                 "No Port from ChallengeFactors",
             )))?;
             correct = true;
-            r"DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = :id"
+            let ret: Result<(), _> = r"DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = :id"
                 .with(params! {"id" => &factors_response.id})
                 .ignore(&mut conn)
                 .await
-                .map_err(Error::from)?;
+                .map_err(Error::from);
+            if ret.is_err() {
+                "UNLOCK TABLES".ignore(&mut conn).await?;
+                return ret.map(|_| 0);
+            }
         } else {
             correct = false;
         }
@@ -895,11 +946,16 @@ async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Res
         .await
         .map_err(Error::from)?;
 
-    r"DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
-        .with(params! {"minutes" => args.allowed_timeout_mins})
-        .ignore(&mut conn)
-        .await
-        .map_err(Error::from)?;
+    let ret: Result<(), _> =
+        r"DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
+            .with(params! {"minutes" => args.allowed_timeout_mins})
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from);
+    if ret.is_err() {
+        "UNLOCK TABLES".ignore(&mut conn).await?;
+        return ret.map(|_| false);
+    }
 
     r"UNLOCK TABLES"
         .ignore(&mut conn)
@@ -911,12 +967,17 @@ async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Res
         .await
         .map_err(Error::from)?;
 
-    let ip_entry_row: Option<Row> =
+    let ip_entry_ret: Result<Option<Row>, _> =
         r"SELECT IP, ON_TIME FROM RUST_ALLOWED_IPS WHERE IP = :ipaddr AND PORT = :port"
             .with(params! {"ipaddr" => &addr, "port" => port})
             .first(&mut conn)
             .await
-            .map_err(Error::from)?;
+            .map_err(Error::from);
+    if ip_entry_ret.is_err() {
+        "UNLOCK TABLES".ignore(&mut conn).await?;
+        return ip_entry_ret.map(|_| false);
+    }
+    let ip_entry_row: Option<Row> = ip_entry_ret.unwrap();
 
     r"UNLOCK TABLES"
         .ignore(&mut conn)
@@ -967,11 +1028,16 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
         .await
         .map_err(Error::from)?;
 
-    r"DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
-        .with(params! {"minutes" => args.challenge_timeout_mins})
-        .ignore(&mut conn)
-        .await
-        .map_err(Error::from)?;
+    let ret: Result<(), _> =
+        r"DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes"
+            .with(params! {"minutes" => args.challenge_timeout_mins})
+            .ignore(&mut conn)
+            .await
+            .map_err(Error::from);
+    if ret.is_err() {
+        "UNLOCK TABLES".ignore(&mut conn).await?;
+        return ret.map(|_| String::new());
+    }
 
     let mut hasher = blake3::Hasher::new();
     let mut buf = [0u8; GETRANDOM_BUF_SIZE];
@@ -998,11 +1064,15 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
         break;
     }
 
-    r"INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (:id, :port)"
+    let ret: Result<(), _> = r"INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (:id, :port)"
         .with(params! {"id" => &hash, "port" => port})
         .ignore(&mut conn)
         .await
-        .map_err(Error::from)?;
+        .map_err(Error::from);
+    if ret.is_err() {
+        "UNLOCK TABLES".ignore(&mut conn).await?;
+        return ret.map(|_| String::new());
+    }
 
     r"UNLOCK TABLES"
         .ignore(&mut conn)
