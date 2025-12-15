@@ -1200,6 +1200,13 @@ int main() {
     PMA_MSQL::Value double_v = PMA_MSQL::Value(1.23);
   }
 
+  // Test PMA_HELPER::str_replace_all
+  {
+    std::string s("One Two Three Four Five");
+    PMA_HELPER::str_replace_all(s, "T", "TT");
+    CHECK_TRUE(s == "One TTwo TThree Four Five");
+  }
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;
