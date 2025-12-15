@@ -1285,7 +1285,7 @@ async fn main() {
 
     let router;
     #[cfg(feature = "mysql")]
-    {
+    if parsed_args.mysql_has_priority {
         let config_map = parse_db_conf(&parsed_args.mysql_config_file)
             .await
             .expect("Parse config for mysql usage");
@@ -1317,6 +1317,17 @@ async fn main() {
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
             .hoop(affix_state::inject(pool))
+            .push(Router::new().path(&parsed_args.api_url).post(api_fn))
+            .push(
+                Router::new()
+                    .path(&parsed_args.js_factors_url)
+                    .get(factors_js_fn),
+            )
+            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
+    } else {
+        router = Router::new()
+            .hoop(affix_state::inject(parsed_args.clone()))
+            .hoop(affix_state::inject(CachedAllow::new()))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
                 Router::new()
