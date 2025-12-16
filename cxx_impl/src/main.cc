@@ -656,7 +656,7 @@ int main(int argc, char **argv) {
 
           if (sain_len != sizeof(struct sockaddr_in6)) {
             PMA_EPrintln("WARNING: sockaddr return length {}, but should be {}",
-                         sain_len, sizeof(struct sockaddr_in));
+                         sain_len, sizeof(struct sockaddr_in6));
           }
         }
 
