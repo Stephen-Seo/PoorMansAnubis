@@ -154,18 +154,18 @@ download_cache/openssl-3.6.0.tar.gz:
 	cd download_cache && curl -OL https://github.com/openssl/openssl/releases/download/openssl-3.6.0/openssl-3.6.0.tar.gz
 	sha256sum -c SHA256SUM_openssl-3.6.0.tar.gz.txt || (rm -f download_cache/openssl-3.6.0.tar.gz && false)
 
-out/lib/liblzma.a: download_cache/xz_v5.8.1.tar.gz
+out/lib/liblzma.a: download_cache/xz_v5.8.2.tar.gz
 	@mkdir -p xz_utils_build
-	tar -xf download_cache/xz_v5.8.1.tar.gz -C xz_utils_build
-	cd xz_utils_build/xz-5.8.1 && ./autogen.sh --no-po4a && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --build="${BUILD_TRIPLE}" --host="${TARGET_TRIPLE}" --disable-shared --enable-static && ${MAKE} -C src/liblzma
-	install -D -m444 xz_utils_build/xz-5.8.1/src/liblzma/.libs/liblzma.a out/lib/liblzma.a
-	cd xz_utils_build/xz-5.8.1/src/liblzma/api && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
+	tar -xf download_cache/xz_v5.8.2.tar.gz -C xz_utils_build
+	cd xz_utils_build/xz-5.8.2 && ./autogen.sh --no-po4a && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --build="${BUILD_TRIPLE}" --host="${TARGET_TRIPLE}" --disable-shared --enable-static && ${MAKE} -C src/liblzma
+	install -D -m444 xz_utils_build/xz-5.8.2/src/liblzma/.libs/liblzma.a out/lib/liblzma.a
+	cd xz_utils_build/xz-5.8.2/src/liblzma/api && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf xz_utils_build
 
-download_cache/xz_v5.8.1.tar.gz:
+download_cache/xz_v5.8.2.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -o xz_v5.8.1.tar.gz -L https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.1.tar.gz
-	sha256sum -c SHA256SUM_xz_v5.8.1.tar.gz.txt || (rm -f download_cache/xz_v5.8.1.tar.gz && false)
+	cd download_cache && curl -o xz_v5.8.2.tar.gz -L https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.2.tar.gz
+	sha256sum -c SHA256SUM_xz_v5.8.2.tar.gz.txt || (rm -f download_cache/xz_v5.8.2.tar.gz && false)
 
 out/lib/liblz4.a: download_cache/lz4_v1.10.0.tar.gz
 	@mkdir -p lz4_build
