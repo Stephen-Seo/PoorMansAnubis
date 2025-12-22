@@ -35,6 +35,7 @@
 #include <blake3.h>
 
 // Local includes.
+#include "constants.h"
 #include "db.h"
 #include "db_msql_capi.h"
 #include "helpers.h"
@@ -118,9 +119,6 @@ static const char *DB_CLEANUP_ALLOWED_IPS =
 static const char *DB_CLEANUP_ID_TO_PORT =
     "DELETE FROM CXX_ID_TO_PORT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= "
     "?";
-
-static std::chrono::milliseconds CONN_TRY_LOCK_DURATION =
-    std::chrono::milliseconds(500);
 
 PMA_MSQL::Packet::Packet() : packet_length(0), seq(0), body(nullptr) {}
 

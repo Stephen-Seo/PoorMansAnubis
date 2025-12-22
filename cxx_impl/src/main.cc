@@ -44,18 +44,6 @@
 #include "http.h"
 #include "poor_mans_print.h"
 
-constexpr unsigned int SLEEP_MILLISECONDS = 2;
-// 7 seconds
-constexpr unsigned int TIMEOUT_ITER_TICKS = 7000 / SLEEP_MILLISECONDS;
-
-constexpr size_t CACHED_TIMEOUT_SECONDS = 120;
-constexpr std::chrono::seconds CACHED_TIMEOUT_T =
-    std::chrono::seconds(CACHED_TIMEOUT_SECONDS);
-
-constexpr size_t CACHED_CLEAR_SECONDS = 3600;
-constexpr std::chrono::seconds CACHED_CLEAR_T =
-    std::chrono::seconds(CACHED_CLEAR_SECONDS);
-
 volatile int interrupt_received = 0;
 
 void receive_signal(int sig) {

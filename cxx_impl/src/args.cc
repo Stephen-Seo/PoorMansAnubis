@@ -22,6 +22,7 @@
 #include <cstring>
 
 // local includes
+#include "constants.h"
 #include "poor_mans_print.h"
 
 void pma_print_usage() {

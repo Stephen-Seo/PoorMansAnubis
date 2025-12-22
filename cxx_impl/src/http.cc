@@ -31,6 +31,7 @@
 #include <stdexcept>
 
 // Local includes
+#include "constants.h"
 #include "helpers.h"
 #include "poor_mans_print.h"
 
