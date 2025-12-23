@@ -38,7 +38,7 @@ constexpr size_t CACHED_CLEAR_SECONDS = 3600;
 constexpr std::chrono::seconds CACHED_CLEAR_T =
     std::chrono::seconds(CACHED_CLEAR_SECONDS);
 
-static std::chrono::milliseconds CONN_TRY_LOCK_DURATION =
+constexpr std::chrono::milliseconds CONN_TRY_LOCK_DURATION =
     std::chrono::milliseconds(500);
 
 constexpr uint32_t DEFAULT_FACTORS_DIGITS = 5000;
