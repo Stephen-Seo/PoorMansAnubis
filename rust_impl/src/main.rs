@@ -464,7 +464,7 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
     match query_res {
         Ok(s) => {
             seq = s;
-            if seq + 1 >= 0x7FFFFFFFFFFFFFFF {
+            if seq == 0x7FFFFFFFFFFFFFFF {
                 conn.execute(r#"UPDATE SEQ_ID SET ID = ?1"#, (1,))?;
             } else {
                 conn.execute(r#"UPDATE SEQ_ID SET ID = ?1"#, (s + 1,))?;
