@@ -457,10 +457,10 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
 
 #[cfg(feature = "sqlite")]
 async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
-    let seq: u64;
+    let seq: i64;
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    let query_res = conn.query_one(r#"SELECT ID FROM SEQ_ID"#, (), |r| r.get::<usize, u64>(0));
+    let query_res = conn.query_one(r#"SELECT ID FROM SEQ_ID"#, (), |r| r.get::<usize, i64>(0));
     match query_res {
         Ok(s) => {
             seq = s;
@@ -477,7 +477,7 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
         Err(e) => return Err(e.into()),
     }
 
-    Ok(seq)
+    Ok(seq as u64)
 }
 
 #[cfg(feature = "mysql")]
