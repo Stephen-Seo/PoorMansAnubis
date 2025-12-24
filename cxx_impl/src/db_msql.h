@@ -25,12 +25,33 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 // Local includes.
 #include "helpers.h"
 
 namespace PMA_MSQL {
+
+enum class Error {
+  SUCCESS = 0,
+  INVALID_MSQL_CONNECTION,
+  FAILED_TO_LOCK_TABLE,
+  BAD_QUERY_RESULT,
+  EMPTY_QUERY_RESULT,
+  INVALID_QUERY_RET_TYPE,
+  FAILED_DB_EXEC,
+  FAILED_DB_CLEANUP_CHALLENGES,
+  DB_IP_MISMATCH,
+  FAILED_DB_ADD_ALLOWED,
+  FAILED_GET_NEXT_SEQ,
+  FAILED_DB_ADD_CHALL_FACT,
+  FAILED_DB_CLEANUP_ALLOWED,
+  FAILED_DB_ADD_ID_TO_PORT,
+};
+
+const char *error_to_str(Error);
+bool error_is_client_err(Error);
 
 struct Packet {
   Packet();
@@ -203,22 +224,23 @@ std::optional<uint64_t> get_next_seq_id(Connection &c);
 std::optional<bool> has_challenge_factor_id(Connection &c, std::string hash);
 
 // First str is challenge, second is hashed-id.
-std::optional<std::tuple<std::string, std::string> > set_challenge_factor(
+std::tuple<Error, std::string, std::string> set_challenge_factor(
     Connection &c, std::string ip, uint16_t port, uint64_t f_digits,
     uint64_t chall_factors_timeout);
 
-std::optional<uint16_t> get_id_to_port_port(Connection &c, std::string id);
+/// First value is SUCCESS on not error. Second value is port.
+std::tuple<Error, uint16_t> get_id_to_port_port(Connection &c, std::string id);
 
-std::optional<std::tuple<bool, uint16_t> > validate_client(
-    Connection &c, uint64_t chall_factors_timeout, std::string id,
-    std::string factors, std::string client_ip);
+std::tuple<Error, uint16_t> validate_client(Connection &c,
+                                            uint64_t chall_factors_timeout,
+                                            std::string id, std::string factors,
+                                            std::string client_ip);
 
-std::optional<bool> client_is_allowed(Connection &c, std::string ip,
-                                      uint16_t port,
-                                      uint64_t allowed_ips_timeout);
+Error client_is_allowed(Connection &c, std::string ip, uint16_t port,
+                        uint64_t allowed_ips_timeout);
 
-std::optional<std::string> init_id_to_port(Connection &c, uint16_t port,
-                                           uint64_t id_to_port_timeout);
+std::tuple<Error, std::string> init_id_to_port(Connection &c, uint16_t port,
+                                               uint64_t id_to_port_timeout);
 
 struct Conf {
   std::string addr;

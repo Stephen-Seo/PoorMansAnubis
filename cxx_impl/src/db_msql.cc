@@ -120,6 +120,76 @@ static const char *DB_CLEANUP_ID_TO_PORT =
     "DELETE FROM CXX_ID_TO_PORT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= "
     "?";
 
+const char *PMA_MSQL::error_to_str(PMA_MSQL::Error e) {
+  switch (e) {
+    case Error::SUCCESS:
+      return "SUCCESS";
+    case Error::INVALID_MSQL_CONNECTION:
+      return "Invalid MSQL Connection";
+    case Error::FAILED_TO_LOCK_TABLE:
+      return "Failed to lock MSQL table";
+    case Error::BAD_QUERY_RESULT:
+      return "Failed to query MSQL";
+    case Error::EMPTY_QUERY_RESULT:
+      return "MSQL Query result is empty";
+    case Error::INVALID_QUERY_RET_TYPE:
+      return "MSQL Query is invalid type";
+    case Error::FAILED_DB_EXEC:
+      return "MSQL failed to exec";
+    case Error::FAILED_DB_CLEANUP_CHALLENGES:
+      return "MSQL failed to cleanup challenges";
+    case Error::DB_IP_MISMATCH:
+      return "MSQL ret ip mismatch (client ip does not match)";
+    case Error::FAILED_DB_ADD_ALLOWED:
+      return "MSQL failed to add \"allowed\" entry";
+    case Error::FAILED_GET_NEXT_SEQ:
+      return "MSQL failed to get next seq";
+    case Error::FAILED_DB_ADD_CHALL_FACT:
+      return "MSQL failed to add challenge";
+    case Error::FAILED_DB_CLEANUP_ALLOWED:
+      return "MSQL failed to cleanup allowed";
+    case Error::FAILED_DB_ADD_ID_TO_PORT:
+      return "MSQL failed to add id-to-port";
+    default:
+      return "Unknown Error";
+  }
+}
+
+bool PMA_MSQL::error_is_client_err(Error e) {
+  switch (e) {
+    case Error::SUCCESS:
+      return false;
+    case Error::INVALID_MSQL_CONNECTION:
+      return false;
+    case Error::FAILED_TO_LOCK_TABLE:
+      return false;
+    case Error::BAD_QUERY_RESULT:
+      return false;
+    case Error::EMPTY_QUERY_RESULT:
+      return true;
+    case Error::INVALID_QUERY_RET_TYPE:
+      return false;
+    case Error::FAILED_DB_EXEC:
+      return false;
+    case Error::FAILED_DB_CLEANUP_CHALLENGES:
+      return false;
+    case Error::DB_IP_MISMATCH:
+      return true;
+    case Error::FAILED_DB_ADD_ALLOWED:
+      return false;
+    case Error::FAILED_GET_NEXT_SEQ:
+      return false;
+    case Error::FAILED_DB_ADD_CHALL_FACT:
+      return false;
+    case Error::FAILED_DB_CLEANUP_ALLOWED:
+      return false;
+    case Error::FAILED_DB_ADD_ID_TO_PORT:
+      return false;
+    default:
+      return false;
+  }
+}
+
 PMA_MSQL::Packet::Packet() : packet_length(0), seq(0), body(nullptr) {}
 
 PMA_MSQL::Packet::~Packet() {
@@ -2704,12 +2774,12 @@ std::optional<bool> PMA_MSQL::has_challenge_factor_id(Connection &c,
   }
 }
 
-std::optional<std::tuple<std::string, std::string> >
+std::tuple<PMA_MSQL::Error, std::string, std::string>
 PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
                                uint64_t f_digits,
                                uint64_t chall_factors_timeout) {
   if (!c.is_valid()) {
-    return std::nullopt;
+    return {Error::INVALID_MSQL_CONNECTION, {}, {}};
   }
 
   std::string factors_hash;
@@ -2743,14 +2813,12 @@ PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
   do {
     std::optional<uint64_t> seq_id_opt = get_next_seq_id(c);
     if (!seq_id_opt.has_value()) {
-      PMA_EPrintln("ERROR: Failed to get next seq id (set challenge)!");
-      return std::nullopt;
+      return {Error::FAILED_GET_NEXT_SEQ, {}, {}};
     }
     id_hashed = PMA_SQL::next_hash(seq_id_opt.value());
     auto vec_opt = c.execute_stmt(DB_SEL_CHAL_FACT_BY_ID, {id_hashed});
     if (!vec_opt.has_value()) {
-      PMA_EPrintln("ERROR: Failed to check next seq id (set challenge)!");
-      return std::nullopt;
+      return {Error::EMPTY_QUERY_RESULT, {}, {}};
     } else if (vec_opt->empty()) {
       break;
     }
@@ -2758,52 +2826,42 @@ PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
 
   if (!c.execute_stmt("LOCK TABLE CXX_CHALLENGE_FACTORS WRITE", {})
            .has_value()) {
-    PMA_EPrintln(
-        "ERROR: Failed to lock db table challenge factors for writing!");
-    return std::nullopt;
+    return {Error::FAILED_TO_LOCK_TABLE, {}, {}};
   } else if (!c.execute_stmt(DB_CLEANUP_CHAL_FACT, {chall_factors_timeout})) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln(
-        "ERROR: Failed to cleanup challenge factors while generating "
-        "challenge!");
-    return std::nullopt;
+    return {Error::FAILED_DB_CLEANUP_CHALLENGES, {}, {}};
   } else if (!c.execute_stmt(
                    DB_ADD_CHAL_FACT,
                    {id_hashed, ip, Value::new_uint(port), factors_hash})
                   .has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Failed to add to challenge factors!");
-    return std::nullopt;
+    return {Error::FAILED_DB_ADD_CHALL_FACT, {}, {}};
   }
 
   c.execute_stmt("UNLOCK TABLES", {});
-  return std::make_tuple(challenge_str, id_hashed);
+  return {Error::SUCCESS, challenge_str, id_hashed};
 }
 
-std::optional<uint16_t> PMA_MSQL::get_id_to_port_port(Connection &c,
-                                                      std::string id) {
+std::tuple<PMA_MSQL::Error, uint16_t> PMA_MSQL::get_id_to_port_port(
+    Connection &c, std::string id) {
   if (!c.is_valid()) {
-    return std::nullopt;
+    return {Error::INVALID_MSQL_CONNECTION, 0};
   }
 
   if (!c.execute_stmt("LOCK TABLE CXX_ID_TO_PORT WRITE", {}).has_value()) {
-    PMA_EPrintln("ERROR: Failed to lock db table ID_TO_PORT for writing!");
-    return std::nullopt;
+    return {Error::FAILED_TO_LOCK_TABLE, 0};
   }
 
   auto vec_opt = c.execute_stmt(DB_GET_PORT_ID_TO_PORT, {id});
   if (!vec_opt.has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Failed to select port from ID_TO_PORT!");
-    return std::nullopt;
+    return {Error::BAD_QUERY_RESULT, 0};
   } else if (vec_opt->empty()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Port from ID_TO_PORT not found with given id!");
-    return std::nullopt;
+    return {Error::EMPTY_QUERY_RESULT, 0};
   } else if (vec_opt->at(0).at(0).get_type() != Value::UNSIGNED_INT) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Port from ID_TO_PORT is not unsigned int!");
-    return std::nullopt;
+    return {Error::INVALID_QUERY_RET_TYPE, 0};
   }
 
   uint16_t port =
@@ -2811,19 +2869,18 @@ std::optional<uint16_t> PMA_MSQL::get_id_to_port_port(Connection &c,
   vec_opt = c.execute_stmt(DB_DEL_ID_TO_PORT_ENTRY, {id});
   if (!vec_opt.has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Failed to delete entry from ID_TO_PORT!");
-    return std::nullopt;
+    return {Error::FAILED_DB_EXEC, 0};
   }
 
   c.execute_stmt("UNLOCK TABLES", {});
-  return port;
+  return {Error::SUCCESS, port};
 }
 
-std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
+std::tuple<PMA_MSQL::Error, uint16_t> PMA_MSQL::validate_client(
     Connection &c, uint64_t chall_factors_timeout, std::string id,
     std::string factors, std::string client_ip) {
   if (!c.is_valid()) {
-    return std::nullopt;
+    return {Error::INVALID_MSQL_CONNECTION, 0};
   }
 
   std::string factors_hash;
@@ -2842,46 +2899,32 @@ std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
 
   if (!c.execute_stmt("LOCK TABLE CXX_CHALLENGE_FACTORS WRITE", {})
            .has_value()) {
-    PMA_EPrintln(
-        "ERROR: Failed to lock table challenge factors while validating "
-        "client!");
-    return std::nullopt;
+    return {Error::FAILED_TO_LOCK_TABLE, 0};
   }
 
   // cleanup first.
   if (!c.execute_stmt(DB_CLEANUP_CHAL_FACT, {chall_factors_timeout})) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln(
-        "ERROR: Failed to cleanup challenge factors while validating client!");
-    return std::nullopt;
+    return {Error::FAILED_DB_CLEANUP_CHALLENGES, 0};
   }
 
   // validate.
   auto vec_opt = c.execute_stmt(DB_IP_PORT_FROM_CHAL_FACT, {id, factors_hash});
   if (!vec_opt.has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Failed to validate client; failed to fetch from db!");
-    return std::nullopt;
+    return {Error::BAD_QUERY_RESULT, 0};
   } else if (vec_opt->empty()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    return std::make_tuple(false, 0);
+    return {Error::EMPTY_QUERY_RESULT, 0};
   } else if (vec_opt->at(0).at(0).get_type() != Value::STRING) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln(
-        "ERROR: Failed to validate client; First col is not a String!");
-    return std::nullopt;
+    return {Error::INVALID_QUERY_RET_TYPE, 0};
   } else if (vec_opt->at(0).at(1).get_type() != Value::UNSIGNED_INT) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln(
-        "ERROR: Failed to validate client; Second col is not an Unsigned Int!");
-    return std::nullopt;
+    return {Error::INVALID_QUERY_RET_TYPE, 0};
   } else if (*vec_opt->at(0).at(0).get_str().value() != client_ip) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln(
-        "ERROR: Matching factors hash, but ip address does not match req ip "
-        "{}!",
-        client_ip);
-    return std::make_tuple(false, 0);
+    return {Error::DB_IP_MISMATCH, 0};
   }
   uint16_t port =
       static_cast<uint16_t>(*vec_opt->at(0).at(1).get_unsigned_int().value());
@@ -2893,64 +2936,58 @@ std::optional<std::tuple<bool, uint16_t> > PMA_MSQL::validate_client(
   if (!vec_opt.has_value()) {
     PMA_EPrintln("ERROR: Failed to add entry to Allowed IPs table for ip {}!",
                  client_ip);
-    return std::nullopt;
+    return {Error::FAILED_DB_ADD_ALLOWED, 0};
   }
 
-  return std::make_tuple(true, port);
+  return {Error::SUCCESS, port};
 }
 
-std::optional<bool> PMA_MSQL::client_is_allowed(Connection &c, std::string ip,
-                                                uint16_t port,
-                                                uint64_t allowed_ips_timeout) {
+PMA_MSQL::Error PMA_MSQL::client_is_allowed(Connection &c, std::string ip,
+                                            uint16_t port,
+                                            uint64_t allowed_ips_timeout) {
   if (!c.is_valid()) {
-    return std::nullopt;
+    return Error::INVALID_MSQL_CONNECTION;
   }
 
   if (!c.execute_stmt("LOCK TABLE CXX_ALLOWED_IPS WRITE", {}).has_value()) {
-    PMA_EPrintln("ERROR: Failed to lock Allowed IPs table (write)!");
-    return std::nullopt;
+    return Error::FAILED_TO_LOCK_TABLE;
   } else if (!c.execute_stmt(DB_CLEANUP_ALLOWED_IPS, {allowed_ips_timeout})
                   .has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Failed to cleanup Allowed IPs table!");
-    return std::nullopt;
+    return Error::FAILED_DB_CLEANUP_ALLOWED;
   }
 
   c.execute_stmt("UNLOCK TABLES", {});
   if (!c.execute_stmt("LOCK TABLE CXX_ALLOWED_IPS READ", {}).has_value()) {
-    PMA_EPrintln("ERROR: Failed to lock Allowed IPs table (read)!");
-    return std::nullopt;
+    return Error::FAILED_TO_LOCK_TABLE;
   }
 
   auto vec_opt = c.execute_stmt(DB_IS_ALLOWED_IPS, {ip, Value::new_uint(port)});
   if (!vec_opt.has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Failed to get from Allowed IPs table!");
-    return std::nullopt;
+    return Error::BAD_QUERY_RESULT;
   } else if (vec_opt->empty()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    return false;
+    return Error::EMPTY_QUERY_RESULT;
   } else {
     c.execute_stmt("UNLOCK TABLES", {});
-    return true;
+    return Error::SUCCESS;
   }
 }
 
-std::optional<std::string> PMA_MSQL::init_id_to_port(
+std::tuple<PMA_MSQL::Error, std::string> PMA_MSQL::init_id_to_port(
     Connection &c, uint16_t port, uint64_t id_to_port_timeout) {
   if (!c.is_valid()) {
-    return std::nullopt;
+    return {Error::INVALID_MSQL_CONNECTION, {}};
   }
 
   std::optional<std::uint64_t> seq_next_opt = get_next_seq_id(c);
   if (!seq_next_opt.has_value()) {
-    PMA_EPrintln("ERROR: Failed to get next seq id (init id to port)!");
-    return std::nullopt;
+    return {Error::FAILED_GET_NEXT_SEQ, {}};
   }
 
   if (!c.execute_stmt("LOCK TABLE CXX_ID_TO_PORT WRITE", {}).has_value()) {
-    PMA_EPrintln("ERROR: Failed to lock ID to Port table (write)!");
-    return std::nullopt;
+    return {Error::FAILED_TO_LOCK_TABLE, {}};
   }
 
   c.execute_stmt(DB_CLEANUP_ID_TO_PORT, {id_to_port_timeout});
@@ -2962,8 +2999,7 @@ std::optional<std::string> PMA_MSQL::init_id_to_port(
     auto vec_opt = c.execute_stmt(DB_GET_PORT_ID_TO_PORT, {id_hashed});
     if (!vec_opt.has_value()) {
       c.execute_stmt("UNLOCK TABLES", {});
-      PMA_EPrintln("ERROR: Failed to check next seq id (init id to port)!");
-      return std::nullopt;
+      return {Error::BAD_QUERY_RESULT, {}};
     } else if (vec_opt->empty()) {
       same_id_exists = false;
     }
@@ -2972,12 +3008,11 @@ std::optional<std::string> PMA_MSQL::init_id_to_port(
   if (!c.execute_stmt(DB_ADD_ID_TO_PORT, {id_hashed, Value::new_uint(port)})
            .has_value()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    PMA_EPrintln("ERROR: Failed to add new id-to-port entry!");
-    return std::nullopt;
+    return {Error::FAILED_DB_ADD_ID_TO_PORT, {}};
   }
 
   c.execute_stmt("UNLOCK TABLES", {});
-  return id_hashed;
+  return {Error::SUCCESS, id_hashed};
 }
 
 std::optional<PMA_MSQL::Conf> PMA_MSQL::parse_conf_file(

@@ -851,32 +851,35 @@ int main(int argc, char **argv) {
                 ping_ok = true;
               }
               if (ping_ok) {
-                const auto ret_opt = PMA_MSQL::validate_client(
+                const auto [err, port] = PMA_MSQL::validate_client(
                     msql_conn_opt.value(), args.challenge_timeout,
                     json_keyvals.find("id")->second,
                     json_keyvals.find("factors")->second,
                     iter->second.client_addr);
-                if (ret_opt.has_value()) {
-                  const auto [ret_bool, ret_port] = ret_opt.value();
-                  if (ret_bool) {
-                    PMA_Println("Challenge success from {}",
-                                iter->second.client_addr);
-                    content_type = "Content-type: text/plain";
-                    body = "Correct";
-                    cached_allowed.insert(std::make_pair(
-                        std::format("{}:{}", iter->second.client_addr,
-                                    iter->second.port),
-                        time_now));
-                  } else {
+                if (err == PMA_MSQL::Error::SUCCESS) {
+                  PMA_Println("Challenge success from {}",
+                              iter->second.client_addr);
+                  content_type = "Content-type: text/plain";
+                  body = "Correct";
+                  cached_allowed.insert(std::make_pair(
+                      std::format("{}:{}", iter->second.client_addr,
+                                  iter->second.port),
+                      time_now));
+                } else {
+                  PMA_EPrintln(
+                      "Warning: Failed to validate client {}:{} due to {}",
+                      iter->second.client_addr, iter->second.port,
+                      PMA_MSQL::error_to_str(err));
+                  if (PMA_MSQL::error_is_client_err(err)) {
                     status = "HTTP/1.0 400 Bad Request";
                     content_type = "Content-type: text/plain";
                     body = "Incorrect";
+                  } else {
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Failed to "
+                        "validate req</p></html>";
                   }
-                } else {
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to "
-                      "validate req</p></html>";
                 }
               }
             } else {
@@ -927,14 +930,14 @@ int main(int argc, char **argv) {
                   ping_ok = true;
                 }
                 if (ping_ok) {
-                  auto port_opt = PMA_MSQL::get_id_to_port_port(
+                  const auto [itp_err, port] = PMA_MSQL::get_id_to_port_port(
                       msql_conn_opt.value(), id_iter->second);
-                  if (port_opt.has_value()) {
-                    auto chall_opt = PMA_MSQL::set_challenge_factor(
-                        msql_conn_opt.value(), iter->second.client_addr,
-                        port_opt.value(), args.factors, args.challenge_timeout);
-                    if (chall_opt.has_value()) {
-                      const auto [chall, hashed_id] = chall_opt.value();
+                  if (itp_err == PMA_MSQL::Error::SUCCESS) {
+                    const auto [cf_err, chall, hashed_id] =
+                        PMA_MSQL::set_challenge_factor(
+                            msql_conn_opt.value(), iter->second.client_addr,
+                            port, args.factors, args.challenge_timeout);
+                    if (cf_err == PMA_MSQL::Error::SUCCESS) {
                       body = JS_FACTORS_WORKER;
                       PMA_HELPER::str_replace_all(body, "{API_URL}",
                                                   args.api_url);
@@ -943,16 +946,36 @@ int main(int argc, char **argv) {
                       PMA_HELPER::str_replace_all(body, "{UUID}", hashed_id);
                       content_type = "Content-type: text/javascript";
                     } else {
+                      if (PMA_MSQL::error_is_client_err(cf_err)) {
+                        status = "HTTP/1.0 400 Bad Request";
+                        body =
+                            "<html><p>400 Bad Request</p><p>(Failed setup "
+                            "challenge)</p></html>";
+                      } else {
+                        status = "HTTP/1.0 500 Internal Server Error";
+                        body =
+                            "<html><p>500 Internal Server Error</p><p>Failed "
+                            "to set up challenge</p></html>";
+                      }
+                    }
+                  } else {
+                    if (PMA_MSQL::error_is_client_err(itp_err)) {
+                      PMA_EPrintln(
+                          "Error: Bad request from client {}:{} due to {}",
+                          iter->second.client_addr, iter->second.port,
+                          PMA_MSQL::error_to_str(itp_err));
+                      status = "HTTP/1.0 400 Bad Request";
+                      body =
+                          "<html><p>400 Bad Request</p><p>(No id)</p></html>";
+                    } else {
+                      PMA_EPrintln("Error: handling client {}:{} due to {}",
+                                   iter->second.client_addr, iter->second.port,
+                                   PMA_MSQL::error_to_str(itp_err));
                       status = "HTTP/1.0 500 Internal Server Error";
                       body =
                           "<html><p>500 Internal Server Error</p><p>Failed to "
                           "set up challenge</p></html>";
                     }
-                  } else {
-                    PMA_EPrintln("  Responding: Bad request from client {}:{}",
-                                 iter->second.client_addr, iter->second.port);
-                    status = "HTTP/1.0 400 Bad Request";
-                    body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
                   }
                 }
               } else {
@@ -1017,33 +1040,34 @@ int main(int argc, char **argv) {
             }
 
             if (ping_ok) {
-              auto bool_opt = PMA_MSQL::client_is_allowed(
+              PMA_MSQL::Error is_allowed_e = PMA_MSQL::client_is_allowed(
                   msql_conn_opt.value(), iter->second.client_addr,
                   iter->second.port, args.allowed_timeout);
-              if (bool_opt.has_value()) {
-                if (bool_opt.value()) {
-                  cached_allowed.insert(std::make_pair(
-                      std::format("{}:{}", iter->second.client_addr,
-                                  iter->second.port),
-                      time_now));
-                  do_curl_forwarding(iter->second.client_addr,
-                                     iter->second.port, body, status,
-                                     content_type, req, args);
-                  goto PMA_RESPONSE_SEND_LOCATION;
+              if (is_allowed_e == PMA_MSQL::Error::SUCCESS) {
+                cached_allowed.insert(std::make_pair(
+                    std::format("{}:{}", iter->second.client_addr,
+                                iter->second.port),
+                    time_now));
+                do_curl_forwarding(iter->second.client_addr, iter->second.port,
+                                   body, status, content_type, req, args);
+                goto PMA_RESPONSE_SEND_LOCATION;
+              } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
+                const auto [err, id] = PMA_MSQL::init_id_to_port(
+                    msql_conn_opt.value(), iter->second.port,
+                    args.challenge_timeout);
+                if (err == PMA_MSQL::Error::SUCCESS) {
+                  body = HTML_BODY_FACTORS;
+                  PMA_HELPER::str_replace_all(
+                      body, "{JS_FACTORS_URL}",
+                      std::format("{}?id={}", args.js_factors_url, id));
                 } else {
-                  auto id_opt = PMA_MSQL::init_id_to_port(
-                      msql_conn_opt.value(), iter->second.port,
-                      args.challenge_timeout);
-                  if (id_opt.has_value()) {
-                    body = HTML_BODY_FACTORS;
-                    PMA_HELPER::str_replace_all(
-                        body, "{JS_FACTORS_URL}",
-                        std::format("{}?id={}", args.js_factors_url,
-                                    id_opt.value()));
+                  PMA_EPrintln(
+                      "ERROR: Failed to init id-to-port for client {}! {}",
+                      iter->second.client_addr, PMA_MSQL::error_to_str(err));
+                  if (PMA_MSQL::error_is_client_err(err)) {
+                    status = "HTTP/1.0 400 Bad Request";
+                    body = "<html><p>400 Bad Request</p></html>";
                   } else {
-                    PMA_EPrintln(
-                        "ERROR: Failed to init id-to-port for client {}!",
-                        iter->second.client_addr);
                     status = "HTTP/1.0 500 Internal Server Error";
                     body =
                         "<html><p>500 Internal Server Error</p><p>Failed "
@@ -1051,12 +1075,19 @@ int main(int argc, char **argv) {
                   }
                 }
               } else {
-                PMA_EPrintln("ERROR: Failed to check if client {} is allowed!",
-                             iter->second.client_addr);
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Failed to check "
-                    "client</p></html>";
+                PMA_EPrintln(
+                    "ERROR: Failed to check if client {} is allowed: {}",
+                    iter->second.client_addr,
+                    PMA_MSQL::error_to_str(is_allowed_e));
+                if (PMA_MSQL::error_is_client_err(is_allowed_e)) {
+                  status = "HTTP/1.0 400 Bad Request";
+                  body = "<html><p>400 Bad Request</p></html>";
+                } else {
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to "
+                      "check client</p></html>";
+                }
               }
             }
           } else {
