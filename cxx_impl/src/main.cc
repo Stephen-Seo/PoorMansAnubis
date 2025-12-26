@@ -857,8 +857,8 @@ int main(int argc, char **argv) {
                     json_keyvals.find("factors")->second,
                     iter->second.client_addr);
                 if (err == PMA_MSQL::Error::SUCCESS) {
-                  PMA_Println("Challenge success from {}",
-                              iter->second.client_addr);
+                  PMA_Println("Challenge success from {} port {}",
+                              iter->second.client_addr, iter->second.port);
                   content_type = "Content-type: text/plain";
                   body = "Correct";
                   cached_allowed.insert(std::make_pair(
@@ -894,8 +894,8 @@ int main(int argc, char **argv) {
                 content_type = "Content-type: text/plain";
                 body = "Incorrect";
               } else {
-                PMA_Println("Challenge success from {}",
-                            iter->second.client_addr);
+                PMA_Println("Challenge success from {} port {}",
+                            iter->second.client_addr, iter->second.port);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
                 cached_allowed.insert(std::make_pair(
