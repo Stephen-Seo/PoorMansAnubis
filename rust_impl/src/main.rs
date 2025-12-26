@@ -500,16 +500,8 @@ async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
 
-    let locked_locked_bool: Arc<tMutex<Arc<AtomicBool>>> = Arc::new(tMutex::new(locked_bool));
-
-    let _scoped_cleanup = helpers::GenericCleanup::new(locked_locked_bool, |b| {
-        let handle = tokio::runtime::Handle::current();
-        let llb: Arc<tMutex<Arc<AtomicBool>>> = b.clone();
-        handle.spawn(async move {
-            llb.lock()
-                .await
-                .store(false, std::sync::atomic::Ordering::SeqCst);
-        });
+    let _scoped_cleanup = helpers::GenericCleanup::new(locked_bool, |b| {
+        b.store(false, std::sync::atomic::Ordering::SeqCst);
     });
 
     let with_id: Vec<String> = r"SELECT ID FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?"
@@ -927,16 +919,8 @@ async fn validate_client_mysql(
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
 
-        let locked_locked_bool: Arc<tMutex<Arc<AtomicBool>>> = Arc::new(tMutex::new(locked_bool));
-
-        let _scoped_cleanup = helpers::GenericCleanup::new(locked_locked_bool, |b| {
-            let handle = tokio::runtime::Handle::current();
-            let llb: Arc<tMutex<Arc<AtomicBool>>> = b.clone();
-            handle.spawn(async move {
-                llb.lock()
-                    .await
-                    .store(false, std::sync::atomic::Ordering::SeqCst);
-            });
+        let _scoped_cleanup = helpers::GenericCleanup::new(locked_bool, |b| {
+            b.store(false, std::sync::atomic::Ordering::SeqCst);
         });
 
         conn.lock()

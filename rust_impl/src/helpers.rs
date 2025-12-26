@@ -14,9 +14,6 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
 use crate::error::Error;
 
 pub fn validate_client_response(resp: &str) -> Result<(), Error> {
@@ -92,24 +89,27 @@ pub fn validate_client_response(resp: &str) -> Result<(), Error> {
 
 pub struct GenericCleanup<T, F>
 where
-    F: FnMut(Arc<Mutex<T>>),
+    T: Clone,
+    F: FnMut(T),
 {
-    data: Arc<Mutex<T>>,
+    data: T,
     function: F,
 }
 
 impl<T, F> GenericCleanup<T, F>
 where
-    F: FnMut(Arc<Mutex<T>>),
+    T: Clone,
+    F: FnMut(T),
 {
-    pub fn new(data: Arc<Mutex<T>>, function: F) -> Self {
+    pub fn new(data: T, function: F) -> Self {
         Self { data, function }
     }
 }
 
 impl<T, F> Drop for GenericCleanup<T, F>
 where
-    F: FnMut(Arc<Mutex<T>>),
+    T: Clone,
+    F: FnMut(T),
 {
     fn drop(&mut self) {
         (self.function)(self.data.clone());
