@@ -355,9 +355,14 @@ async fn req_to_url(
     Ok((ResBody::Once(req.bytes().await?), status, headers))
 }
 
-async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, Error> {
+async fn get_client_ip_addr(
+    depot: &Depot,
+    req: &mut Request,
+) -> Result<(String, Option<u16>, Option<u16>), Error> {
     let args = depot.obtain::<args::Args>().unwrap();
     let addr_string: String;
+    let local_port: Option<u16>;
+    let remote_port: Option<u16>;
 
     let real_ip_header = req.headers().get("x-real-ip");
 
@@ -367,23 +372,47 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<String, 
         addr_string = real_ip_h.to_str().map_err(Error::from)?.to_owned();
         if addr_string.is_empty() {
             return Err("Failed to get client addr (invalid header)".into());
+        }
+
+        if let Some(ipv4) = req.local_addr().as_ipv4() {
+            local_port = Some(ipv4.port());
+        } else if let Some(ipv6) = req.local_addr().as_ipv6() {
+            local_port = Some(ipv6.port());
         } else {
-            //eprintln!("GET from ip {}", &addr_string);
+            local_port = None;
+        }
+
+        if let Some(ipv4) = req.remote_addr().as_ipv4() {
+            remote_port = Some(ipv4.port());
+        } else if let Some(ipv6) = req.remote_addr().as_ipv6() {
+            remote_port = Some(ipv6.port());
+        } else {
+            remote_port = None;
         }
     } else {
         //eprintln!("GET from ip {}", req.remote_addr());
+        if let Some(ipv4) = req.local_addr().as_ipv4() {
+            local_port = Some(ipv4.port());
+        } else if let Some(ipv6) = req.local_addr().as_ipv6() {
+            local_port = Some(ipv6.port());
+        } else {
+            local_port = None;
+        }
+
         if let Some(ipv4) = req.remote_addr().as_ipv4() {
             //eprintln!(" ipv4: {}", ipv4.ip());
             addr_string = format!("{}", ipv4.ip());
+            remote_port = Some(ipv4.port());
         } else if let Some(ipv6) = req.remote_addr().as_ipv6() {
             //eprintln!(" ipv6: {}", ipv6.ip());
             addr_string = format!("{}", ipv6.ip());
+            remote_port = Some(ipv6.port());
         } else {
             return Err("Failed to get client addr".into());
         }
     }
 
-    Ok(addr_string)
+    Ok((addr_string, local_port, remote_port))
 }
 
 #[cfg(feature = "mysql")]
@@ -786,7 +815,7 @@ async fn factors_js_fn(
     res: &mut Response,
 ) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
-    let addr_string = get_client_ip_addr(depot, req).await?;
+    let (addr_string, local_port_opt, remote_port_opt) = get_client_ip_addr(depot, req).await?;
     let id: String = req.query("id").ok_or(crate::Error::Generic(
         "No id passed to factors_js url!".to_owned(),
     ))?;
@@ -806,6 +835,12 @@ async fn factors_js_fn(
     #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
     {
         port = challenge_port_sqlite(args, &id).await;
+    }
+    if port.is_err() {
+        eprintln!(
+            "WARNING: Failed to query id-to-port for client {}:{:?} to {:?}!",
+            &addr_string, remote_port_opt, local_port_opt
+        );
     }
     let port: u16 = port?;
 
@@ -977,7 +1012,7 @@ async fn validate_client_sqlite(
 #[handler]
 async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
-    let addr_string = get_client_ip_addr(depot, req).await?;
+    let (addr_string, _, _) = get_client_ip_addr(depot, req).await?;
     //eprintln!("API: {}", &addr_string);
     let factors_response: json_types::FactorsResponse = req
         .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
@@ -1275,16 +1310,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     let cached_allow: &CachedAllow = depot.obtain::<CachedAllow>().unwrap();
     cached_allow.check_cleanup()?;
 
-    let addr_string = get_client_ip_addr(depot, req).await?;
+    let (addr_string, local_port_opt, _) = get_client_ip_addr(depot, req).await?;
 
-    let port: Option<u16> = match req.local_addr() {
-        salvo::conn::SocketAddr::Unknown => None,
-        salvo::conn::SocketAddr::IPv4(socket_addr_v4) => Some(socket_addr_v4.port()),
-        salvo::conn::SocketAddr::IPv6(socket_addr_v6) => Some(socket_addr_v6.port()),
-        salvo::conn::SocketAddr::Unix(_socket_addr) => None,
-        _ => None,
-    };
-    let port: u16 = port.ok_or(crate::Error::Generic(
+    let port: u16 = local_port_opt.ok_or(crate::Error::Generic(
         "Should have port from request!".to_owned(),
     ))?;
 
