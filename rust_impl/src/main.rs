@@ -845,15 +845,19 @@ async fn factors_js_fn(
     }
     if port.is_err() {
         eprintln!(
-            "WARNING: Failed to query id-to-port for client {}:{:?} to {:?}!",
-            &client_info_ret.addr, client_info_ret.remote_port, client_info_ret.local_port
+            "WARNING: Failed to query id-to-port for client {}:{} to {}!",
+            &client_info_ret.addr,
+            client_info_ret.remote_port.unwrap_or(0),
+            client_info_ret.local_port.unwrap_or(0)
         );
     }
     let port: u16 = port?;
 
     eprintln!(
-        "Requested challenge from {}:{:?} -> {}",
-        &client_info_ret.addr, client_info_ret.remote_port, port
+        "Requested challenge from {}:{} -> {}",
+        &client_info_ret.addr,
+        client_info_ret.remote_port.unwrap_or(0),
+        port
     );
 
     let (value, uuid) = set_up_factors_challenge(depot, &client_info_ret.addr, port).await?;
@@ -1054,16 +1058,20 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 
     if let Ok(port) = validate_result {
         eprintln!(
-            "Challenge response accepted from {}:{:?} -> {}",
-            &client_info_ret.addr, client_info_ret.remote_port, port
+            "Challenge response accepted from {}:{} -> {}",
+            &client_info_ret.addr,
+            client_info_ret.remote_port.unwrap_or(0),
+            port
         );
         res.body("Correct")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::OK);
     } else {
         eprintln!(
-            "Challenge response DENIED from {}:{:?} -> {:?}",
-            &client_info_ret.addr, client_info_ret.remote_port, client_info_ret.local_port
+            "Challenge response DENIED from {}:{} -> {}",
+            &client_info_ret.addr,
+            client_info_ret.remote_port.unwrap_or(0),
+            client_info_ret.local_port.unwrap_or(0)
         );
         res.body("Incorrect")
             .add_header("content-type", "text/plain", true)?
