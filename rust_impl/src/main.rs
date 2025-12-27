@@ -355,10 +355,13 @@ async fn req_to_url(
     Ok((ResBody::Once(req.bytes().await?), status, headers))
 }
 
-async fn get_client_ip_addr(
-    depot: &Depot,
-    req: &mut Request,
-) -> Result<(String, Option<u16>, Option<u16>), Error> {
+pub struct ClientIPAddrRet {
+    pub addr: String,
+    pub remote_port: Option<u16>,
+    pub local_port: Option<u16>,
+}
+
+async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIPAddrRet, Error> {
     let args = depot.obtain::<args::Args>().unwrap();
     let addr_string: String;
     let local_port: Option<u16>;
@@ -412,7 +415,11 @@ async fn get_client_ip_addr(
         }
     }
 
-    Ok((addr_string, local_port, remote_port))
+    Ok(ClientIPAddrRet {
+        addr: addr_string,
+        remote_port,
+        local_port,
+    })
 }
 
 #[cfg(feature = "mysql")]
@@ -815,7 +822,7 @@ async fn factors_js_fn(
     res: &mut Response,
 ) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
-    let (addr_string, local_port_opt, remote_port_opt) = get_client_ip_addr(depot, req).await?;
+    let client_info_ret = get_client_ip_addr(depot, req).await?;
     let id: String = req.query("id").ok_or(crate::Error::Generic(
         "No id passed to factors_js url!".to_owned(),
     ))?;
@@ -839,14 +846,17 @@ async fn factors_js_fn(
     if port.is_err() {
         eprintln!(
             "WARNING: Failed to query id-to-port for client {}:{:?} to {:?}!",
-            &addr_string, remote_port_opt, local_port_opt
+            &client_info_ret.addr, client_info_ret.remote_port, client_info_ret.local_port
         );
     }
     let port: u16 = port?;
 
-    eprintln!("Requested challenge from {}:{}", &addr_string, port);
+    eprintln!(
+        "Requested challenge from {}:{}",
+        &client_info_ret.addr, port
+    );
 
-    let (value, uuid) = set_up_factors_challenge(depot, &addr_string, port).await?;
+    let (value, uuid) = set_up_factors_challenge(depot, &client_info_ret.addr, port).await?;
     let js = constants::JAVASCRIPT_FACTORS_WORKER;
     let js = js
         .replacen("{API_URL}", &args.api_url, 1)
@@ -1012,7 +1022,7 @@ async fn validate_client_sqlite(
 #[handler]
 async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
     let args = depot.obtain::<args::Args>().unwrap();
-    let (addr_string, _, _) = get_client_ip_addr(depot, req).await?;
+    let client_info_ret = get_client_ip_addr(depot, req).await?;
     //eprintln!("API: {}", &addr_string);
     let factors_response: json_types::FactorsResponse = req
         .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
@@ -1025,26 +1035,36 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     let mut validate_result: Result<u16, Error> = Err(String::from("Invalid state").into());
     #[cfg(all(feature = "mysql", feature = "sqlite"))]
     if args.mysql_has_priority {
-        validate_result = validate_client_mysql(args, depot, &factors_response, &addr_string).await;
+        validate_result =
+            validate_client_mysql(args, depot, &factors_response, &client_info_ret.addr).await;
     } else {
-        validate_result = validate_client_sqlite(args, &factors_response, &addr_string).await;
+        validate_result =
+            validate_client_sqlite(args, &factors_response, &client_info_ret.addr).await;
     }
     #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
     {
-        validate_result = validate_client_mysql(args, depot, &factors_response, &addr_string).await;
+        validate_result =
+            validate_client_mysql(args, depot, &factors_response, &client_info_ret.addr).await;
     }
     #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
     {
-        validate_result = validate_client_sqlite(args, &factors_response, &addr_string).await;
+        validate_result =
+            validate_client_sqlite(args, &factors_response, &client_info_ret.addr).await;
     }
 
     if let Ok(port) = validate_result {
-        eprintln!("Challenge response accepted from {}:{}", &addr_string, port);
+        eprintln!(
+            "Challenge response accepted from {}:{:?} to {}",
+            &client_info_ret.addr, client_info_ret.remote_port, port
+        );
         res.body("Correct")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::OK);
     } else {
-        eprintln!("Challenge response DENIED from {}", &addr_string);
+        eprintln!(
+            "Challenge response DENIED from {}:{:?} to {:?}",
+            &client_info_ret.addr, client_info_ret.remote_port, client_info_ret.local_port
+        );
         res.body("Incorrect")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::BAD_REQUEST);
@@ -1310,9 +1330,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     let cached_allow: &CachedAllow = depot.obtain::<CachedAllow>().unwrap();
     cached_allow.check_cleanup()?;
 
-    let (addr_string, local_port_opt, _) = get_client_ip_addr(depot, req).await?;
+    let client_info_ret = get_client_ip_addr(depot, req).await?;
 
-    let port: u16 = local_port_opt.ok_or(crate::Error::Generic(
+    let port: u16 = client_info_ret.local_port.ok_or(crate::Error::Generic(
         "Should have port from request!".to_owned(),
     ))?;
 
@@ -1321,26 +1341,26 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     if !is_allowed {
         #[cfg(all(feature = "mysql", feature = "sqlite"))]
         if args.mysql_has_priority {
-            is_allowed = check_is_allowed_mysql(args, depot, &addr_string, port).await?;
+            is_allowed = check_is_allowed_mysql(args, depot, &client_info_ret.addr, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
         } else {
-            is_allowed = check_is_allowed_sqlite(args, &addr_string, port).await?;
+            is_allowed = check_is_allowed_sqlite(args, &client_info_ret.addr, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
         }
         #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
         {
-            is_allowed = check_is_allowed_mysql(args, depot, &addr_string, port).await?;
+            is_allowed = check_is_allowed_mysql(args, depot, &client_info_ret.addr, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
         }
         #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
         {
-            is_allowed = check_is_allowed_sqlite(args, &addr_string, port).await?;
+            is_allowed = check_is_allowed_sqlite(args, &client_info_ret.addr, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
@@ -1367,11 +1387,16 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
         let payload: Vec<u8> = req.payload().await?.to_vec();
         let res_body_res = if payload.is_empty() {
-            req_to_url(format!("{}{}", url, &path_str), Some(&addr_string), None).await
+            req_to_url(
+                format!("{}{}", url, &path_str),
+                Some(&client_info_ret.addr),
+                None,
+            )
+            .await
         } else {
             req_to_url(
                 format!("{}{}", url, &path_str),
-                Some(&addr_string),
+                Some(&client_info_ret.addr),
                 Some(payload),
             )
             .await
