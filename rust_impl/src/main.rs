@@ -852,8 +852,8 @@ async fn factors_js_fn(
     let port: u16 = port?;
 
     eprintln!(
-        "Requested challenge from {}:{}",
-        &client_info_ret.addr, port
+        "Requested challenge from {}:{:?} -> {}",
+        &client_info_ret.addr, client_info_ret.remote_port, port
     );
 
     let (value, uuid) = set_up_factors_challenge(depot, &client_info_ret.addr, port).await?;
@@ -1054,7 +1054,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 
     if let Ok(port) = validate_result {
         eprintln!(
-            "Challenge response accepted from {}:{:?} to {}",
+            "Challenge response accepted from {}:{:?} -> {}",
             &client_info_ret.addr, client_info_ret.remote_port, port
         );
         res.body("Correct")
@@ -1062,7 +1062,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             .status_code(StatusCode::OK);
     } else {
         eprintln!(
-            "Challenge response DENIED from {}:{:?} to {:?}",
+            "Challenge response DENIED from {}:{:?} -> {:?}",
             &client_info_ret.addr, client_info_ret.remote_port, client_info_ret.local_port
         );
         res.body("Incorrect")
