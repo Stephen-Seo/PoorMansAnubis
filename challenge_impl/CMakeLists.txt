@@ -1,10 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
-project(PoorMansAnubis C)
+project(PoorMansAnubis C CXX)
 
 set(PoorMansAnubis_VERSION 1.0)
 
 set(PoorMansAnubis_SOURCES
-    src/main.c
     src/work.c
     src/base64.c
     third_party/SimpleArchiver/src/data_structures/linked_list.c
@@ -24,7 +23,9 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
 endif()
 
-add_executable(PoorMansAnubis ${PoorMansAnubis_SOURCES})
+add_executable(PoorMansAnubis src/main.c src/work2.cc ${PoorMansAnubis_SOURCES})
+
+add_executable(UnitTest src/test.cc ${PoorMansAnubis_SOURCES})
 
 target_compile_options(PoorMansAnubis PUBLIC
     -Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough
@@ -79,5 +80,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 target_include_directories(PoorMansAnubis PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/SimpleArchiver/src"
+)
+target_include_directories(UnitTest PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/SimpleArchiver/src"
 )
