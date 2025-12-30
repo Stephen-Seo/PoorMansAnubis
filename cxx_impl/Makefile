@@ -1,7 +1,7 @@
 CWD != pwd
 
 LINKER_FLAGS := ${PMA_PRE_LINKER_FLAGS} -lsqlite3 -lblake3 -lcurl -lcrypto ${PMA_POST_LINKER_FLAGS}
-COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
+COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
@@ -14,7 +14,7 @@ COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../c_impl/src -I../c_impl/t
 	-Wtrampolines -fzero-init-padding-bits=all \
 	-Wbidi-chars=any \
 	-fPIE -pie
-COMMON_CFLAGS := ${PMA_PRE_COMMON_CFLAGS} -I../c_impl/src -I../c_impl/third_party/SimpleArchiver/src \
+COMMON_CFLAGS := ${PMA_PRE_COMMON_CFLAGS} -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
@@ -69,12 +69,12 @@ HEADERS := \
 	src/db_msql_capi.h
 
 C_IMPL_SOURCES := \
-	../c_impl/src/work.c \
-	../c_impl/src/base64.c \
-	../c_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c \
-	../c_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c \
-	../c_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c
-C_IMPL_OBJECTS := $(subst ../c_impl,${OBJDIR}/dotdot,$(subst .c,.c.o,${C_IMPL_SOURCES}))
+	../challenge_impl/src/work.c \
+	../challenge_impl/src/base64.c \
+	../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c \
+	../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c \
+	../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c
+C_IMPL_OBJECTS := $(subst ../challenge_impl,${OBJDIR}/dotdot,$(subst .c,.c.o,${C_IMPL_SOURCES}))
 
 OBJECTS := $(addprefix ${OBJDIR_ABS}/,$(subst .cc,.cc.o,${SOURCES}))
 
@@ -106,7 +106,7 @@ ${OBJDIR_ABS}/debug/%.cc.o: ${CWD}/debug/%.cc ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
 	${CXX} -o $@ -c ${FINAL_COMMON_FLAGS} $<
 
-${OBJDIR}/dotdot/%.c.o: ../c_impl/%.c ${HEADERS}
+${OBJDIR}/dotdot/%.c.o: ../challenge_impl/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${CC} -o $@ -c ${FINAL_COMMON_CFLAGS} $<
 

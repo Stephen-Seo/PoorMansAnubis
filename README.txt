@@ -11,7 +11,7 @@ There is currently one method of challenge verification: factors of a large
 number. It is generated per request, and the challenge response should be the
 factors of the number in sorted increasing order.
 
-The "c_impl" contains the challenge generation code.
+The "challenge_impl" contains the challenge generation code.
 
 The "rust_impl" contains the frontend code and is the "meat" of the software.
 
