@@ -21,6 +21,7 @@ mod ffi;
 mod helpers;
 mod json_types;
 mod salvo_compat;
+mod signal;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -1458,6 +1459,8 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
 #[tokio::main]
 async fn main() {
+    signal::register_signal_handlers();
+
     let mut parsed_args = args::parse_args().unwrap();
     if parsed_args.factors.is_none() {
         parsed_args.factors = Some(constants::DEFAULT_FACTORS_QUADS);
@@ -1551,7 +1554,18 @@ async fn main() {
     if parsed_args.addr_port_strs.len() == 1 {
         let addr_port_str = parsed_args.addr_port_strs[0].clone();
         let acceptor = TcpListener::new(addr_port_str).bind().await;
-        Server::new(acceptor).serve(router).await;
+        let server = Server::new(acceptor);
+        let handle = server.handle();
+        std::thread::spawn(move || {
+            loop {
+                if signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
+                    handle.stop_graceful(Some(Duration::from_secs(5)));
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(333));
+            }
+        });
+        server.serve(router).await;
     } else if parsed_args.addr_port_strs.len() == 2 {
         let first = parsed_args.addr_port_strs[0].clone();
         let second = parsed_args.addr_port_strs[1].clone();
@@ -1559,15 +1573,35 @@ async fn main() {
             .join(TcpListener::new(second))
             .bind()
             .await;
-        Server::new(acceptor).serve(router).await;
+        let server = Server::new(acceptor);
+        let handle = server.handle();
+        std::thread::spawn(move || {
+            loop {
+                if signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
+                    handle.stop_graceful(Some(Duration::from_secs(5)));
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(333));
+            }
+        });
+        server.serve(router).await;
     } else {
         let mut tcp_vector_listener = salvo_compat::TcpVectorListener::new();
         for addr_port_str in parsed_args.addr_port_strs.clone().into_iter() {
             tcp_vector_listener.push(TcpListener::new(addr_port_str));
         }
 
-        Server::new(tcp_vector_listener.bind().await)
-            .serve(router)
-            .await;
+        let server = Server::new(tcp_vector_listener.bind().await);
+        let handle = server.handle();
+        std::thread::spawn(move || {
+            loop {
+                if signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
+                    handle.stop_graceful(Some(Duration::from_secs(5)));
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(333));
+            }
+        });
+        server.serve(router).await;
     }
 }
