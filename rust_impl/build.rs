@@ -11,6 +11,13 @@ fn main() {
         .include("../challenge_impl/third_party/SimpleArchiver/src")
         .compile("c_work");
 
+    cc::Build::new()
+        .cpp(true)
+        .cpp_link_stdlib_static(true)
+        .file("../challenge_impl/src/work2.cc")
+        .include("../challenge_impl/third_party/SimpleArchiver/src")
+        .compile("cpp_work");
+
     let bindings = bindgen::Builder::default()
         .clang_arg("-I../challenge_impl/third_party/SimpleArchiver/src")
         .header("../challenge_impl/src/work.h")

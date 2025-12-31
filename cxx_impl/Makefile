@@ -68,31 +68,34 @@ HEADERS := \
 	src/db_msql.h \
 	src/db_msql_capi.h
 
-C_IMPL_SOURCES := \
+CHALL_IMPL_SOURCES := \
 	../challenge_impl/src/work.c \
 	../challenge_impl/src/base64.c \
 	../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c \
 	../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c \
-	../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c
-C_IMPL_OBJECTS := $(subst ../challenge_impl,${OBJDIR}/dotdot,$(subst .c,.c.o,${C_IMPL_SOURCES}))
+	../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c \
+	../challenge_impl/src/work2.cc
+CHALL_IMPL_OBJECTS := \
+	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .c,.c.o,$(filter %.c,${CHALL_IMPL_SOURCES}))) \
+	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .cc,.cc.o,$(filter %.cc,${CHALL_IMPL_SOURCES}))) \
 
 OBJECTS := $(addprefix ${OBJDIR_ABS}/,$(subst .cc,.cc.o,${SOURCES}))
 
 all: cxx_backend_impl test debug_serve debug_client libdb_msql_capi.a debug_test_capi
 
-cxx_backend_impl: ${OBJECTS} ${C_IMPL_OBJECTS}
+cxx_backend_impl: ${OBJECTS} ${CHALL_IMPL_OBJECTS}
 	${CXX} -o cxx_backend_impl ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-test: ${OBJDIR_ABS}/src/test.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
+test: ${OBJDIR_ABS}/src/test.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
 	${CXX} -o test ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
+debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
 	${CXX} -o debug_serve ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${C_IMPL_OBJECTS}
+debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
 	${CXX} -o debug_client ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o ${OBJDIR_ABS}/src/db.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${C_IMPL_OBJECTS}
+libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o ${OBJDIR_ABS}/src/db.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${CHALL_IMPL_OBJECTS}
 	${AR} rcs libdb_msql_capi.a $^
 
 debug_test_capi: ${OBJDIR}/src/db_msql_capi_test.c.o libdb_msql_capi.a
@@ -106,9 +109,13 @@ ${OBJDIR_ABS}/debug/%.cc.o: ${CWD}/debug/%.cc ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
 	${CXX} -o $@ -c ${FINAL_COMMON_FLAGS} $<
 
-${OBJDIR}/dotdot/%.c.o: ../challenge_impl/%.c ${HEADERS}
+${OBJDIR_ABS}/dotdot/%.c.o: ../challenge_impl/%.c ${HEADERS}
 	@mkdir -p $(dir $@)
 	${CC} -o $@ -c ${FINAL_COMMON_CFLAGS} $<
+
+${OBJDIR_ABS}/dotdot/%.cc.o: ../challenge_impl/%.cc ${HEADERS}
+	@mkdir -p $(dir $@)
+	${CXX} -o $@ -c ${FINAL_COMMON_FLAGS} $<
 
 ${OBJDIR}/src/%.c.o: ${CWD}/src/%.c ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
