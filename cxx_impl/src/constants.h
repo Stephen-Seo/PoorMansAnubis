@@ -41,7 +41,7 @@ constexpr std::chrono::seconds CACHED_CLEAR_T =
 constexpr std::chrono::milliseconds CONN_TRY_LOCK_DURATION =
     std::chrono::milliseconds(500);
 
-constexpr uint32_t DEFAULT_FACTORS_DIGITS = 5000;
+constexpr uint32_t DEFAULT_FACTORS_QUADS = 2200;
 constexpr uint32_t DEFAULT_JSON_MAX_SIZE = 10000;
 constexpr uint32_t ALLOWED_IP_TIMEOUT_MINUTES = 60;
 constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 1;

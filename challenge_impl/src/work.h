@@ -30,6 +30,7 @@ extern "C" {
 typedef struct Work_Factors {
   SDArchiverChunkedArr *value;
   SDArchiverPHeap *factors;
+  void *value2;
 } Work_Factors;
 
 void work_cleanup_factors(Work_Factors *factors);
@@ -58,6 +59,20 @@ char *work_factors_factors_to_str(Work_Factors work_factors, uint64_t *len_out);
 // Same as previous fn, but format is "2x5 3x9 5x4..." instead of "2 2 2 2...".
 char *work_factors_factors_to_str2(Work_Factors work_factors,
                                    uint64_t *len_out);
+
+// Value is in base64 characters, first char is least significant.
+// 1 "quad" is 24 bits of value.
+// Must be cleaned up with work_cleanup_factors2().
+Work_Factors work_generate_target_factors2(uint64_t quads);
+void work_cleanup_factors2(Work_Factors *wf2);
+
+// Returns value as contiguous base64 string where first byte is least significant.
+// Must be free'd after use.
+char *work_factors2_value_to_str(Work_Factors wf2, uint64_t *len_out);
+// Returns factors like work_factors_factors_to_str2.
+// Must be free'd after use.
+char *work_factors2_factors_to_str(Work_Factors wf2, uint64_t *len_out);
+
 #ifdef __cplusplus
 }
 #endif

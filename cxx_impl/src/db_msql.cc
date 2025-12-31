@@ -2776,7 +2776,7 @@ std::optional<bool> PMA_MSQL::has_challenge_factor_id(Connection &c,
 
 std::tuple<PMA_MSQL::Error, std::string, std::string>
 PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
-                               uint64_t f_digits,
+                               uint64_t f_quads,
                                uint64_t chall_factors_timeout) {
   if (!c.is_valid()) {
     return {Error::INVALID_MSQL_CONNECTION, {}, {}};
@@ -2786,15 +2786,15 @@ PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
   std::string challenge_str;
   // get hash
   {
-    Work_Factors factors = work_generate_target_factors(f_digits);
+    Work_Factors factors = work_generate_target_factors2(f_quads);
     GenericCleanup<Work_Factors> factors_cleanup(
-        factors, [](Work_Factors *ptr) { work_cleanup_factors(ptr); });
+        factors, [](Work_Factors *ptr) { work_cleanup_factors2(ptr); });
 
-    char *challenge = work_factors_value_to_str2(factors, nullptr);
+    char *challenge = work_factors2_value_to_str(factors, nullptr);
     challenge_str = challenge;
     std::free(challenge);
 
-    char *answer = work_factors_factors_to_str2(factors, nullptr);
+    char *answer = work_factors2_factors_to_str(factors, nullptr);
     std::string answer_str = answer;
     std::free(answer);
 

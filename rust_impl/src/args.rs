@@ -36,7 +36,7 @@ pub struct Args {
 
 pub fn print_args() {
     println!("Args:");
-    println!("  --factors=<digits> : Generate factors challenge with <digits> digits");
+    println!("  --factors=<quads> : Generate factors challenge with <quads> 24-bit-segments");
     println!(
         "  --dest-url=<url> : Destination URL for verified clients;\n    example: \"--dest-url=http://127.0.0.1:9999\""
     );

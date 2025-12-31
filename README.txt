@@ -11,7 +11,7 @@ There is currently one method of challenge verification: factors of a large
 number. It is generated per request, and the challenge response should be the
 factors of the number in sorted increasing order.
 
-The "c_impl" contains the challenge generation code.
+The "challenge_impl" contains the challenge generation code.
 
 The "rust_impl" contains the frontend code and is the "meat" of the software.
 
@@ -73,7 +73,7 @@ ip address. (The "--enable-x-real-ip-header" flag enables this.)
 Args for the Rust-frontend are as follows:
 
 Args:
-  --factors=<digits> : Generate factors challenge with <digits> digits
+  --factors=<quads> : Generate factors challenge with <quads> 24-bit-segments
   --dest-url=<url> : Destination URL for verified clients;
     example: "--dest-url=http://127.0.0.1:9999"
   --addr-port=<addr>:<port> : Listening addr/port;
@@ -101,15 +101,10 @@ Args:
     If you are going to use this anyway, you must ensure that a proper firewall is configured!
   --important-warning-has-been-read : Use this option to enable potentially dangerous options
 
-thread 'main' panicked at src/main.rs:1082:46:
-called `Result::unwrap()` on an `Err` value: Generic("Printed help text")
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-
-
 Args for the C++ implementation are as follows:
 
     Args:
-      --factors=<digits> : Generate factors challenge with <digits> digits
+      --factors=<quads> : Generate factors challenge with <quads> 24-bit segments
       --dest-url=<url> : Destination URL for verified clients;
         example: "--dest-url=http://127.0.0.1:9999"
       --addr-port=<addr>:<port> : Listening addr/port;

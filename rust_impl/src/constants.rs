@@ -14,7 +14,7 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-pub const DEFAULT_FACTORS_DIGITS: u64 = 5000;
+pub const DEFAULT_FACTORS_QUADS: u64 = 2200;
 pub const DEFAULT_JSON_MAX_SIZE: usize = 50000;
 pub const ALLOWED_IP_TIMEOUT_MINUTES: u64 = 60;
 pub const CHALLENGE_FACTORS_TIMEOUT_MINUTES: u64 = 2;
@@ -117,22 +117,6 @@ pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
 
 pub const JAVASCRIPT_FACTORS_WORKER: &str = r#""use strict";
 
-function str_to_value(s) {
-    let value = 0;
-    let digit = 0;
-
-    for (let idx = s.length; idx-- > 0;) {
-        let sub_value = parseInt(s[idx]);
-        for (let didx = 0; didx < digit; ++didx) {
-            sub_value *= 10;
-        }
-        value += sub_value;
-        ++digit;
-    }
-
-    return value;
-}
-
 function b64_to_val(c) {
     c = c.charCodeAt(0);
     if (c >= 'A'.charCodeAt(0) && c <= 'Z'.charCodeAt(0)) {
@@ -150,90 +134,75 @@ function b64_to_val(c) {
     }
 }
 
-function b64_to_str(b64) {
-    let out = "";
-
-    let current = 0;
-    let current_len = 0;
-    let temp = 0;
-
-    for (let idx = 0; idx < b64.length; ++idx) {
-        temp = b64_to_val(b64[idx]);
-        if (temp === 0xFF) {
-            return undefined;
-        }
-        current = (current << 6) + temp;
-        current_len += 6;
-        while (current_len >= 4) {
-            temp = current_len - 4;
-            temp = current >> temp;
-            if (temp < 10) {
-                out += new String(temp);
-            }
-            current_len -= 4;
-            temp = 0;
-            for (let temp2 = 0; temp2 < current_len; ++temp2) {
-                temp = (temp << 1) | 1;
-            }
-            current = current & temp;
-        }
-    }
-    if (current_len == 2 && current != 3) {
-        return undefined;
+function val_to_b64(val) {
+    if (val >= 0 && val <= 25) {
+        return String.fromCharCode(val + 0x41);
+    } else if (val >= 26 && val <= 51) {
+        return String.fromCharCode(val + 0x61 - 26);
+    } else if (val >= 52 && val <= 61) {
+        return String.fromCharCode(val + 0x30 - 52);
+    } else if (val === 62) {
+        return "+";
+    } else if (val === 63) {
+        return "/";
     }
 
-    return out;
+    return "A";
+}
+
+function revb64_long_div_mod(b64_str, val) {
+    let result = "";
+    let rem = 0;
+    for (let idx = 0; idx < b64_str.length; ++idx) {
+        let b64_val = b64_to_val(b64_str[b64_str.length - 1 - idx])
+                    + rem * 64;
+        let inner_result = val_to_b64(Math.floor(b64_val / val));
+        if (result.length !== 0 || inner_result !== "A") {
+            result = inner_result + result;
+        }
+        rem = b64_val % val;
+    }
+    return [result, rem];
 }
 
 function getFactors() {
-    let value = "{LARGE_NUMBER}";
-    value = b64_to_str(value);
-    if (value === undefined) {
-        postMessage({status: "error_decoding"});
-        return;
-    }
-    let factor = 2;
-    let factor_count = 0;
-    let f_str = "";
-    let iter = 0;
+    let ret = [ "{LARGE_NUMBER}", 0 ];
 
-    while (1) {
-        let div_str = "";
-        let modulus_str = "";
-        let mod = 0;
-        for (let idx = 0; idx < value.length; ++idx) {
-            let v_value = str_to_value(value[idx]);
-
-            let div = parseInt((mod * 10 + v_value) / factor);
-            mod = (mod * 10 + v_value) % factor;
-            if (div_str.length !== 0 || div !== 0) {
-                div_str += div;
-            }
-        }
-
-        if (mod === 0) {
-            ++factor_count;
-
-            if (div_str === "1") {
-                if (f_str.length !== 0) {
-                    f_str += " ";
-                }
-                f_str += new String(factor) + "x" + new String(factor_count);
-                break;
-            } else {
-                value = div_str;
-            }
+    let current = 2;
+    let current_count = 0;
+    let result = [];
+    let ticks = 1000000;
+    while (ret[0].length > 1 || ret[0][0] != "B") {
+        let inner_ret = revb64_long_div_mod(ret[0], current);
+        if (inner_ret[1] === 0) {
+            current_count += 1;
+            ret = inner_ret;
         } else {
-            if (factor_count !== 0) {
-                if (f_str.length !== 0) {
-                    f_str += " ";
-                }
-                f_str += new String(factor) + "x" + new String(factor_count);
+            if (current_count !== 0) {
+                result.push(String(current) + "x" + String(current_count));
             }
-            factor += 1;
-            factor_count = 0;
+            if (current === 2) {
+                current += 1;
+            } else {
+                current += 2;
+            }
+            current_count = 0;
+        }
+        //console.log(current + ": " + ret[0] + ", " + ret[1]);
+        if (--ticks === 0) {
+            break;
         }
     }
+
+    if (current_count !== 0) {
+        result.push(String(current) + "x" + String(current_count));
+    }
+
+    let result_str = "";
+    for (let idx = 0; idx < result.length; ++idx) {
+        result_str += result[idx] + " ";
+    }
+    result_str = result_str.trim();
 
     let xhr = new XMLHttpRequest();
     let url = "{API_URL}";
@@ -250,7 +219,7 @@ function getFactors() {
     };
     let data = JSON.stringify({"type": "factors",
                                "id": "{UUID}",
-                               "factors": f_str});
+                               "factors": result_str});
     xhr.send(data);
 }
 

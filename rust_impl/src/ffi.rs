@@ -28,40 +28,16 @@ struct WorkFactorsWrapper {
 }
 
 impl WorkFactorsWrapper {
-    pub fn new(digits: u64) -> Self {
+    pub fn new(quads: u64) -> Self {
         Self {
-            w_factors: unsafe { work_generate_target_factors(digits) },
+            w_factors: unsafe { work_generate_target_factors2(quads) },
         }
-    }
-
-    pub fn get_value(&self) -> String {
-        let value;
-        unsafe {
-            let value_ffi_cstr = work_factors_value_to_str(self.w_factors, std::ptr::null_mut());
-            value = CStr::from_ptr(value_ffi_cstr).to_str().unwrap().to_owned();
-            libc::free(value_ffi_cstr as *mut c_void);
-        }
-        value
-    }
-
-    pub fn get_factors(&self) -> String {
-        let factors;
-        unsafe {
-            let factors_ffi_cstr =
-                work_factors_factors_to_str(self.w_factors, std::ptr::null_mut());
-            factors = CStr::from_ptr(factors_ffi_cstr)
-                .to_str()
-                .unwrap()
-                .to_owned();
-            libc::free(factors_ffi_cstr as *mut c_void);
-        }
-        factors
     }
 
     pub fn get_value2(&self) -> String {
         let value;
         unsafe {
-            let value_ffi_cstr = work_factors_value_to_str2(self.w_factors, std::ptr::null_mut());
+            let value_ffi_cstr = work_factors2_value_to_str(self.w_factors, std::ptr::null_mut());
             value = CStr::from_ptr(value_ffi_cstr).to_str().unwrap().to_owned();
             libc::free(value_ffi_cstr as *mut c_void);
         }
@@ -72,7 +48,7 @@ impl WorkFactorsWrapper {
         let factors;
         unsafe {
             let factors_ffi_cstr =
-                work_factors_factors_to_str2(self.w_factors, std::ptr::null_mut());
+                work_factors2_factors_to_str(self.w_factors, std::ptr::null_mut());
             factors = CStr::from_ptr(factors_ffi_cstr)
                 .to_str()
                 .unwrap()
@@ -86,14 +62,9 @@ impl WorkFactorsWrapper {
 impl Drop for WorkFactorsWrapper {
     fn drop(&mut self) {
         unsafe {
-            work_cleanup_factors(&mut self.w_factors as *mut Work_Factors);
+            work_cleanup_factors2(&mut self.w_factors as *mut Work_Factors);
         }
     }
-}
-
-pub fn generate_value_and_factors_strings(digits: u64) -> (String, String) {
-    let wf = WorkFactorsWrapper::new(digits);
-    (wf.get_value(), wf.get_factors())
 }
 
 pub fn generate_value_and_factors_strings2(digits: u64) -> (String, String) {

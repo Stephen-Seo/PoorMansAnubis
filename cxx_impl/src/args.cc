@@ -28,7 +28,8 @@
 void pma_print_usage() {
   PMA_Println("Args:");
   PMA_Println(
-      "  --factors=<digits> : Generate factors challenge with <digits> digits");
+      "  --factors=<quads> : Generate factors challenge with <quads> 24-bit "
+      "segments");
   PMA_Println("  --dest-url=<url> : Destination URL for verified clients;");
   PMA_Println("    example: \"--dest-url=http://127.0.0.1:9999\"");
   PMA_Println("  --addr-port=<addr>:<port> : Listening addr/port;");
@@ -89,7 +90,7 @@ void pma_print_usage() {
 }
 
 PMA_ARGS::Args::Args(int argc, char **argv)
-    : factors(DEFAULT_FACTORS_DIGITS),
+    : factors(DEFAULT_FACTORS_QUADS),
       default_dest_url("https://seodisparate.com"),
       addr_ports(),
       port_to_dest_urls(),
