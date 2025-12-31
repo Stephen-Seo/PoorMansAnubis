@@ -146,7 +146,7 @@ std::tuple<ErrorT, std::string, std::string> init_id_to_port(SQLITECtx &ctx,
 // in base64 and second string is hashed answer.
 // Last string is id.
 std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
-    SQLITECtx &ctx, uint64_t digits, std::string client_ip, std::string id);
+    SQLITECtx &ctx, uint64_t quads, std::string client_ip, std::string id);
 
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.

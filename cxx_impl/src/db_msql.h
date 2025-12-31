@@ -225,7 +225,7 @@ std::optional<bool> has_challenge_factor_id(Connection &c, std::string hash);
 
 // First str is challenge, second is hashed-id.
 std::tuple<Error, std::string, std::string> set_challenge_factor(
-    Connection &c, std::string ip, uint16_t port, uint64_t f_digits,
+    Connection &c, std::string ip, uint16_t port, uint64_t f_quads,
     uint64_t chall_factors_timeout);
 
 /// First value is SUCCESS on not error. Second value is port.

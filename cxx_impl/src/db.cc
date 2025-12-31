@@ -422,7 +422,7 @@ std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string, std::string>
-PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
+PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
                             std::string client_ip, std::string hashed_id) {
   uint16_t port = 0;
   {
@@ -447,15 +447,15 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t digits,
                              std::nullopt, hashed_id);
   }
 
-  Work_Factors factors = work_generate_target_factors(digits);
+  Work_Factors factors = work_generate_target_factors2(quads);
   GenericCleanup<Work_Factors> factors_cleanup(
-      factors, [](Work_Factors *ptr) { work_cleanup_factors(ptr); });
+      factors, [](Work_Factors *ptr) { work_cleanup_factors2(ptr); });
 
-  char *challenge = work_factors_value_to_str2(factors, nullptr);
+  char *challenge = work_factors2_value_to_str(factors, nullptr);
   std::string challenge_str = challenge;
   std::free(challenge);
 
-  char *answer = work_factors_factors_to_str2(factors, nullptr);
+  char *answer = work_factors2_factors_to_str(factors, nullptr);
   std::string answer_str = answer;
   std::free(answer);
 
