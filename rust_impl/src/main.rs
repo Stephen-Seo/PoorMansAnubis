@@ -1556,13 +1556,13 @@ async fn main() {
         let acceptor = TcpListener::new(addr_port_str).bind().await;
         let server = Server::new(acceptor);
         let handle = server.handle();
-        std::thread::spawn(move || {
+        tokio::spawn(async move {
             loop {
                 if signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
                     handle.stop_graceful(Some(Duration::from_secs(5)));
                     break;
                 }
-                std::thread::sleep(Duration::from_millis(333));
+                tokio::time::sleep(Duration::from_millis(333)).await;
             }
         });
         server.serve(router).await;
@@ -1575,13 +1575,13 @@ async fn main() {
             .await;
         let server = Server::new(acceptor);
         let handle = server.handle();
-        std::thread::spawn(move || {
+        tokio::spawn(async move {
             loop {
                 if signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
                     handle.stop_graceful(Some(Duration::from_secs(5)));
                     break;
                 }
-                std::thread::sleep(Duration::from_millis(333));
+                tokio::time::sleep(Duration::from_millis(333)).await;
             }
         });
         server.serve(router).await;
@@ -1593,13 +1593,13 @@ async fn main() {
 
         let server = Server::new(tcp_vector_listener.bind().await);
         let handle = server.handle();
-        std::thread::spawn(move || {
+        tokio::spawn(async move {
             loop {
                 if signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
                     handle.stop_graceful(Some(Duration::from_secs(5)));
                     break;
                 }
-                std::thread::sleep(Duration::from_millis(333));
+                tokio::time::sleep(Duration::from_millis(333)).await;
             }
         });
         server.serve(router).await;
