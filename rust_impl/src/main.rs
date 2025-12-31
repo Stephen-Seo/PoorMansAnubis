@@ -635,11 +635,9 @@ async fn set_up_factors_challenge(
 ) -> Result<(String, String), Error> {
     let args = depot.obtain::<args::Args>().unwrap();
 
-    let (value, factors) = ffi::generate_value_and_factors_strings2(if args.factors.is_some() {
-        args.factors.unwrap()
-    } else {
-        constants::DEFAULT_FACTORS_DIGITS
-    });
+    let (value, factors) = ffi::generate_value_and_factors_strings2(
+        args.factors.unwrap_or(constants::DEFAULT_FACTORS_QUADS),
+    );
 
     let mut hash: String;
 
@@ -1462,10 +1460,10 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 async fn main() {
     let mut parsed_args = args::parse_args().unwrap();
     if parsed_args.factors.is_none() {
-        parsed_args.factors = Some(constants::DEFAULT_FACTORS_DIGITS);
+        parsed_args.factors = Some(constants::DEFAULT_FACTORS_QUADS);
         println!(
             "\"--factors=<digits>\" not specified, defaulting to \"{}\"",
-            constants::DEFAULT_FACTORS_DIGITS
+            constants::DEFAULT_FACTORS_QUADS
         );
     }
 
