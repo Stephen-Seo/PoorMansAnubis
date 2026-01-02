@@ -329,7 +329,6 @@ async fn req_to_url(
         "DELETE" => client.delete(url),
         "HEAD" => client.request(reqwest::Method::HEAD, url),
         "OPTIONS" => client.request(reqwest::Method::OPTIONS, url),
-        "CONNECT" => client.request(reqwest::Method::CONNECT, url),
         "PATCH" => client.request(reqwest::Method::PATCH, url),
         "TRACE" => client.request(reqwest::Method::TRACE, url),
         _ => return Err(Error::Generic(format!("Invalid HTML method {}!", method))),
