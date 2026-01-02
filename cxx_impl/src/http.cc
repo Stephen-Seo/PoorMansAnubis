@@ -1106,13 +1106,15 @@ PMA_HTTP::connect_ipv4_socket_client(std::string server_addr,
 }
 
 PMA_HTTP::Request PMA_HTTP::Request::from_error(ErrorT err, std::string msg) {
-  return {{}, {}, msg, {}, {}, err};
+  return {{}, {}, msg, {}, {}, {}, err};
 }
 
 PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
-  if (!req.starts_with("GET") && !req.starts_with("POST")) {
-    Request::from_error(ErrorT::NOT_GET_NOR_POST_REQ,
-                        "Not a GET nor POST request");
+  std::string method;
+  for (size_t idx = 0; idx < req.size() && req[idx] != ' ' &&
+                       req[idx] != '\n' && req[idx] != '\t' && req[idx] != '\r';
+       ++idx) {
+    method.push_back(req[idx]);
   }
 
   bool start = true;
@@ -1273,7 +1275,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     // Intentionally left blank.
   }
 
-  return {query_params, headers, url, full_url, body, ErrorT::SUCCESS};
+  return {query_params, headers, url, full_url, body, method, ErrorT::SUCCESS};
 }
 
 std::tuple<PMA_HTTP::ErrorT, std::unordered_map<std::string, std::string> >

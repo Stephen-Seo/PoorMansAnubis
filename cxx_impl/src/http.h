@@ -67,6 +67,7 @@ struct Request {
   std::string url_or_err_msg;
   std::string full_url;
   std::string body;
+  std::string method;
   ErrorT error_enum;
 
   static Request from_error(ErrorT, std::string);
