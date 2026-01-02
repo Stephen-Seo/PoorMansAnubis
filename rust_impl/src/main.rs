@@ -319,34 +319,43 @@ async fn req_to_url(
     url: String,
     real_ip: Option<&str>,
     body: Option<Vec<u8>>,
+    method: &str,
 ) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
+    let client = reqwest::Client::new();
+    let req_builder = match method {
+        "GET" => client.get(url),
+        "POST" => client.post(url),
+        "PUT" => client.put(url),
+        "DELETE" => client.delete(url),
+        "HEAD" => client.request(reqwest::Method::HEAD, url),
+        "OPTIONS" => client.request(reqwest::Method::OPTIONS, url),
+        "PATCH" => client.request(reqwest::Method::PATCH, url),
+        "TRACE" => client.request(reqwest::Method::TRACE, url),
+        _ => return Err(Error::Generic(format!("Invalid HTML method {}!", method))),
+    };
     let req: reqwest::Response = if let Some(ip) = real_ip {
         if let Some(body) = body {
-            reqwest::Client::new()
-                .post(url)
+            req_builder
                 .body(body)
                 .header("x-real-ip", ip)
                 .header("accept", "text/html,application/xhtml+xml,*/*")
                 .send()
                 .await?
         } else {
-            reqwest::Client::new()
-                .get(url)
+            req_builder
                 .header("x-real-ip", ip)
                 .header("accept", "text/html,application/xhtml+xml,*/*")
                 .send()
                 .await?
         }
     } else if let Some(body) = body {
-        reqwest::Client::new()
-            .post(url)
+        req_builder
             .body(body)
             .header("accept", "text/html,application/xhtml+xml,*/*")
             .send()
             .await?
     } else {
-        reqwest::Client::new()
-            .get(url)
+        req_builder
             .header("accept", "text/html,application/xhtml+xml,*/*")
             .send()
             .await?
@@ -1393,11 +1402,13 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         };
 
         let payload: Vec<u8> = req.payload().await?.to_vec();
+        let method = req.method();
         let res_body_res = if payload.is_empty() {
             req_to_url(
                 format!("{}{}", url, &path_str),
                 Some(&client_info_ret.addr),
                 None,
+                method.as_str(),
             )
             .await
         } else {
@@ -1405,6 +1416,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 format!("{}{}", url, &path_str),
                 Some(&client_info_ret.addr),
                 Some(payload),
+                method.as_str(),
             )
             .await
         };

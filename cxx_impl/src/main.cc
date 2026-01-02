@@ -342,21 +342,23 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
   size_t count = 0;
   ptrs[0] = const_cast<std::string *>(&req.body);
   ptrs[1] = &count;
-  if (!req.body.empty()) {
+  if (req.method == "GET") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} request body...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} GET request...", cli_addr);
+#endif
+  } else if (req.method == "POST") {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} POST request body...", cli_addr);
 #endif
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
     if (pma_curl_ret != CURLE_OK) {
-      PMA_EPrintln(
-          "ERROR: Failed to set curl upload as POST (client {}, "
-          "port {})!",
-          cli_addr, cli_port);
+      PMA_EPrintln("ERROR: Failed to set curl POST (client {}, port {})!",
+                   cli_addr, cli_port);
       status = "HTTP/1.0 500 Internal Server Error";
       body =
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
-          "curl upload as POST</ p> < / html > ";
+          "curl upload as POST</p> </html> ";
       return;
     }
 
@@ -371,7 +373,7 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
       body =
           "<html><p>500 Internal Server Error</p><p>Failed to "
           "set "
-          "curl upload as POST (fields)</ p> < / html > ";
+          "curl upload as POST (fields)</p> </html> ";
       return;
     }
 
@@ -379,7 +381,7 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
                                     pma_curl_body_send_callback);
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln(
-          "ERROR: Failed to set curl upload callback (client {}, "
+          "ERROR: Failed to set curl POST READFUNCTION (client {}, "
           "port {})!",
           cli_addr, cli_port);
       status = "HTTP/1.0 500 Internal Server Error";
@@ -393,8 +395,7 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READDATA, ptrs);
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln(
-          "ERROR: Failed to set curl upload callback user-data "
-          "(client {}, port {})!",
+          "ERROR: Failed to set curl POST READDATA (client {}, port {})!",
           cli_addr, cli_port);
       status = "HTTP/1.0 500 Internal Server Error";
       body =
@@ -418,6 +419,186 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
           "curl POST size</p></html>";
       return;
     }
+  } else if (req.method == "PUT") {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} PUT request...", cli_addr);
+#endif
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln("ERROR: Failed to set curl PUT (client {}, port {})!",
+                   cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set curl request "
+          "as PUT</p> </html> ";
+      return;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION,
+                                    pma_curl_body_send_callback);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl PUT READFUNCTION (client {}, port {})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set up curl</p> "
+          "</html> ";
+      return;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READDATA, ptrs);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl PUT READDATA (client {}, port {})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set up curl</p> "
+          "</html> ";
+      return;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE_LARGE,
+                                    req.body.size());
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl PUT INFILESIZE_LARGE (client {}, port "
+          "{})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set up curl</p> "
+          "</html> ";
+      return;
+    }
+  } else if (req.method == "HEAD") {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} HEAD request...", cli_addr);
+#endif
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "HEAD");
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln("ERROR: Failed to set curl HEAD (client {}, port {})!",
+                   cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set curl request "
+          "as HEAD</p> </html> ";
+      return;
+    }
+  } else if (req.method == "DELETE") {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} DELETE request...", cli_addr);
+#endif
+    pma_curl_ret =
+        curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln("ERROR: Failed to set curl DELETE (client {}, port {})!",
+                   cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
+          "request "
+          "as DELETE</p> </html> ";
+      return;
+    }
+  } else if (req.method == "OPTIONS") {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} OPTIONS request...", cli_addr);
+#endif
+    pma_curl_ret =
+        curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "OPTIONS");
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln("ERROR: Failed to set curl OPTIONS (client {}, port {})!",
+                   cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
+          "request "
+          "as OPTIONS</p> </html> ";
+      return;
+    }
+  } else if (req.method == "TRACE") {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} TRACE request...", cli_addr);
+#endif
+    pma_curl_ret =
+        curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "TRACE");
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln("ERROR: Failed to set curl TRACE (client {}, port {})!",
+                   cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
+          "request "
+          "as TRACE</p> </html> ";
+      return;
+    }
+  } else if (req.method == "PATCH") {
+#ifndef NDEBUG
+    PMA_Println("NOTICE: Sending client {} PATCH request...", cli_addr);
+#endif
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln("ERROR: Failed to set curl PATCH (client {}, port {})!",
+                   cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
+          "request "
+          "as PATCH</p> </html> ";
+      return;
+    }
+
+    pma_curl_ret =
+        curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION,
+                                    pma_curl_body_send_callback);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl PATCH READFUNCTION (client {}, port "
+          "{})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set up "
+          "curl</p> </html> ";
+      return;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_READDATA, ptrs);
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl PATCH READDATA (client {}, port {})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set up "
+          "curl</p> </html> ";
+      return;
+    }
+
+    pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE_LARGE,
+                                    req.body.size());
+    if (pma_curl_ret != CURLE_OK) {
+      PMA_EPrintln(
+          "ERROR: Failed to set curl PATCH INFILESIZE_LARGE (client {}, port "
+          "{})!",
+          cli_addr, cli_port);
+      status = "HTTP/1.0 500 Internal Server Error";
+      body =
+          "<html><p>500 Internal Server Error</p><p>Failed to set up "
+          "curl</p> </html> ";
+      return;
+    }
+  } else {
+    PMA_EPrintln("ERROR: Invalid request method {}!", req.method);
+    status = "HTTP/1.0 400 Bad Request";
+    body = std::format(
+        "<html><p>400 Bad Request</p><p>{} is not supported</p> </html> ",
+        req.method);
+    return;
   }
 
   // Fetch
@@ -427,9 +608,8 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
                  cli_addr, cli_port);
     status = "HTTP/1.0 500 Internal Server Error";
     body =
-        "<html><p>500 Internal Server Error</p><p>Failed to "
-        "fetch "
-        "with curl</p></html>";
+        "<html><p>500 Internal Server Error</p><p>Failed to fetch with "
+        "curl</p></html>";
     return;
   }
 
