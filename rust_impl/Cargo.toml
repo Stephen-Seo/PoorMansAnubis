@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 libc = "0.2"
-salvo = { version = "0.86", features = ["affix-state"] }
+salvo = { version = "0.88", features = ["affix-state"] }
 tokio = { version = "1", features = ["fs", "io-util", "sync", "rt-multi-thread"] }
 futures = "0.3"
 reqwest = { version = "0.12", features = ["native-tls-vendored"] }
