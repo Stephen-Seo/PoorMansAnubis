@@ -36,20 +36,20 @@ download_cache/sqlite-autoconf-3510100.tar.gz:
 	cd download_cache && curl -OL https://sqlite.org/2025/sqlite-autoconf-3510100.tar.gz
 	sha256sum -c SHA256SUM_sqlite-3.51.1.txt || (rm -f download_cache/sqlite-autoconf-3510100.tar.gz && false)
 
-out/lib/libblake3.a out/include/blake3.h: download_cache/blake3_1.8.2.tar.gz
+out/lib/libblake3.a out/include/blake3.h: download_cache/blake3_1.8.3.tar.gz
 	@mkdir -p blake3_build
-	tar -xf download_cache/blake3_1.8.2.tar.gz -C blake3_build
-	sed -i -e '/^target_compile_features/d' blake3_build/BLAKE3-1.8.2/c/CMakeLists.txt
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S blake3_build/BLAKE3-1.8.2/c -B blake3_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_PROCESSOR=${TARGET_ARCH} -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} ${BLAKE3_DISABLE_ASM_FLAG}
+	tar -xf download_cache/blake3_1.8.3.tar.gz -C blake3_build
+	sed -i -e '/^target_compile_features/d' blake3_build/BLAKE3-1.8.3/c/CMakeLists.txt
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S blake3_build/BLAKE3-1.8.3/c -B blake3_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_PROCESSOR=${TARGET_ARCH} -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} ${BLAKE3_DISABLE_ASM_FLAG}
 	${MAKE} -C blake3_build/build
 	install -D -m444 blake3_build/build/libblake3.a out/lib/libblake3.a
-	install -D -m444 blake3_build/BLAKE3-1.8.2/c/blake3.h out/include/blake3.h
+	install -D -m444 blake3_build/BLAKE3-1.8.3/c/blake3.h out/include/blake3.h
 	rm -rf blake3_build
 
-download_cache/blake3_1.8.2.tar.gz:
+download_cache/blake3_1.8.3.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -L -o blake3_1.8.2.tar.gz https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.2.tar.gz
-	sha256sum -c SHA256SUM_blake3_1.8.2.tar.gz.txt || (rm -f download_cache/blake3_1.8.2.tar.gz && false)
+	cd download_cache && curl -L -o blake3_1.8.3.tar.gz https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.3.tar.gz
+	sha256sum -c SHA256SUM_blake3_1.8.3.tar.gz.txt || (rm -f download_cache/blake3_1.8.3.tar.gz && false)
 
 out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.17.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a out/ssl/usr/lib/libssl.a
 	@mkdir -p curl_build
