@@ -51,18 +51,18 @@ download_cache/blake3_1.8.3.tar.gz:
 	cd download_cache && curl -L -o blake3_1.8.3.tar.gz https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.3.tar.gz
 	sha256sum -c SHA256SUM_blake3_1.8.3.tar.gz.txt || (rm -f download_cache/blake3_1.8.3.tar.gz && false)
 
-out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.17.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a out/ssl/usr/lib/libssl.a
+out/lib/libcurl.a out/include/curl/curl.h: download_cache/curl-8.18.0.tar.xz out/lib/libnghttp2.a out/lib/libidn2.a out/lib/libzstd.a out/lib/libbrotlicommon.a out/lib/libz.a out/ssl/usr/lib/libssl.a
 	@mkdir -p curl_build
-	tar -xf download_cache/curl-8.17.0.tar.xz -C curl_build
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S curl_build/curl-8.17.0 -B curl_build/BUILD -DBUILD_SHARED_LIBS=Off -DBUILD_LIBCURL_DOCS=Off -DBUILD_MISC_DOCS=Off -DBUILD_STATIC_LIBS=On -DBUILD_TESTING=Off -DENABLE_CURL_MANUAL=Off -DCURL_DEFAULT_SSL_BACKEND=openssl -DCURL_USE_OPENSSL=On -DOPENSSL_ROOT_DIR="${PWD}/out/ssl" -DOPENSSL_INCLUDE_DIR="${PWD}/out/ssl/usr/include" -DOPENSSL_SSL_LIBRARY="${PWD}/out/ssl/usr/lib/libssl.a" -DOPENSSL_CRYPTO_LIBRARY="${PWD}/out/ssl/usr/lib/libcrypto.a" -DOPENSSL_USE_STATIC_LIBS=On -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DZLIB_USE_STATIC_LIBS=On -DBROTLI_INCLUDE_DIR="${PWD}/out/include" -DBROTLICOMMON_LIBRARY="${PWD}/out/lib/libbrotlicommon.a" -DBROTLIDEC_LIBRARY="${PWD}/out/lib/libbrotlidec.a" -DZSTD_INCLUDE_DIR="${PWD}/out/include" -DZSTD_LIBRARY="${PWD}/out/lib/libzstd.a" -DNGHTTP2_INCLUDE_DIR="${PWD}/out/include" -DNGHTTP2_LIBRARY="${PWD}/out/lib/libnghttp2.a" -DCURL_DISABLE_LDAP=On -DLIBIDN2_INCLUDE_DIR="${PWD}/out/include" -DLIBIDN2_LIBRARY="${PWD}/out/lib/libidn2.a" -DCURL_USE_LIBPSL=Off -DCURL_USE_LIBSSH2=Off && ${MAKE} -C curl_build/BUILD libcurl_static
+	tar -xf download_cache/curl-8.18.0.tar.xz -C curl_build
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S curl_build/curl-8.18.0 -B curl_build/BUILD -DBUILD_SHARED_LIBS=Off -DBUILD_LIBCURL_DOCS=Off -DBUILD_MISC_DOCS=Off -DBUILD_STATIC_LIBS=On -DBUILD_TESTING=Off -DENABLE_CURL_MANUAL=Off -DCURL_DEFAULT_SSL_BACKEND=openssl -DCURL_USE_OPENSSL=On -DOPENSSL_ROOT_DIR="${PWD}/out/ssl" -DOPENSSL_INCLUDE_DIR="${PWD}/out/ssl/usr/include" -DOPENSSL_SSL_LIBRARY="${PWD}/out/ssl/usr/lib/libssl.a" -DOPENSSL_CRYPTO_LIBRARY="${PWD}/out/ssl/usr/lib/libcrypto.a" -DOPENSSL_USE_STATIC_LIBS=On -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DZLIB_USE_STATIC_LIBS=On -DBROTLI_INCLUDE_DIR="${PWD}/out/include" -DBROTLICOMMON_LIBRARY="${PWD}/out/lib/libbrotlicommon.a" -DBROTLIDEC_LIBRARY="${PWD}/out/lib/libbrotlidec.a" -DZSTD_INCLUDE_DIR="${PWD}/out/include" -DZSTD_LIBRARY="${PWD}/out/lib/libzstd.a" -DNGHTTP2_INCLUDE_DIR="${PWD}/out/include" -DNGHTTP2_LIBRARY="${PWD}/out/lib/libnghttp2.a" -DCURL_DISABLE_LDAP=On -DLIBIDN2_INCLUDE_DIR="${PWD}/out/include" -DLIBIDN2_LIBRARY="${PWD}/out/lib/libidn2.a" -DCURL_USE_LIBPSL=Off -DCURL_USE_LIBSSH2=Off && ${MAKE} -C curl_build/BUILD libcurl_static
 	install -D -m444 curl_build/BUILD/lib/libcurl.a out/lib/libcurl.a
-	find curl_build/curl-8.17.0/include/curl -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/curl/{}" ';'
+	find curl_build/curl-8.18.0/include/curl -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/curl/{}" ';'
 	rm -rf curl_build
 
-download_cache/curl-8.17.0.tar.xz:
+download_cache/curl-8.18.0.tar.xz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://github.com/curl/curl/releases/download/curl-8_17_0/curl-8.17.0.tar.xz
-	sha256sum -c SHA256SUM_curl-8.17.0.txt || (rm -f download_cache/curl-8.17.0.tar.xz && false)
+	cd download_cache && curl -OL https://github.com/curl/curl/releases/download/curl-8_18_0/curl-8.18.0.tar.xz
+	sha256sum -c SHA256SUM_curl-8.18.0.txt || (rm -f download_cache/curl-8.18.0.tar.xz && false)
 
 out/lib/libnghttp2.a: download_cache/nghttp2-1.68.0.tar.xz
 	@mkdir -p nghttp2_build
