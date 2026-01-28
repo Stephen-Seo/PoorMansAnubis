@@ -142,17 +142,17 @@ download_cache/zlib-1.3.1.tar.xz:
 	cd download_cache && curl -OL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.xz
 	sha256sum -c SHA256SUM_zlib-1.3.1.tar.xz.txt || (rm -f download_cache/zlib-1.3.1.tar.xz && false)
 
-out/ssl/usr/lib/libssl.a: download_cache/openssl-3.6.0.tar.gz
+out/ssl/usr/lib/libssl.a: download_cache/openssl-3.6.1.tar.gz
 	@mkdir -p openssl_build
-	tar -xf download_cache/openssl-3.6.0.tar.gz -C openssl_build
-	cd openssl_build/openssl-3.6.0 && sed -i -e 's|./demoCA|/etc/ssl|' apps/CA.pl.in apps/openssl.cnf
-	cd openssl_build/openssl-3.6.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 disable-tests linux-${TARGET_ARCH} && ${MAKE} && ${MAKE} DESTDIR="${PWD}/out/ssl" install
+	tar -xf download_cache/openssl-3.6.1.tar.gz -C openssl_build
+	cd openssl_build/openssl-3.6.1 && sed -i -e 's|./demoCA|/etc/ssl|' apps/CA.pl.in apps/openssl.cnf
+	cd openssl_build/openssl-3.6.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 disable-tests linux-${TARGET_ARCH} && ${MAKE} && ${MAKE} DESTDIR="${PWD}/out/ssl" install
 	rm -rf openssl_build
 
-download_cache/openssl-3.6.0.tar.gz:
+download_cache/openssl-3.6.1.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://github.com/openssl/openssl/releases/download/openssl-3.6.0/openssl-3.6.0.tar.gz
-	sha256sum -c SHA256SUM_openssl-3.6.0.tar.gz.txt || (rm -f download_cache/openssl-3.6.0.tar.gz && false)
+	cd download_cache && curl -OL https://github.com/openssl/openssl/releases/download/openssl-3.6.1/openssl-3.6.1.tar.gz
+	sha256sum -c SHA256SUM_openssl-3.6.1.tar.gz.txt || (rm -f download_cache/openssl-3.6.1.tar.gz && false)
 
 out/lib/liblzma.a: download_cache/xz_v5.8.2.tar.gz
 	@mkdir -p xz_utils_build
