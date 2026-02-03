@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 libc = "0.2"
-salvo = { version = "0.88", features = ["affix-state"] }
+salvo = { version = "0.89", features = ["affix-state"] }
 tokio = { version = "1", features = ["fs", "io-util", "sync", "rt-multi-thread"] }
 futures = "0.3"
 reqwest = { version = "0.13", features = ["native-tls-vendored"] }
@@ -15,7 +15,7 @@ serde = "1"
 serde_json = "1"
 blake3 = "1.8"
 rusqlite = { version = "0.38", features = ["bundled"], optional = true }
-getrandom = "0.3"
+getrandom = "0.4"
 
 [build-dependencies]
 bindgen = "0.72"
