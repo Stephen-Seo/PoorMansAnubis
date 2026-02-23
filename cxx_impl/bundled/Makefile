@@ -129,18 +129,18 @@ download_cache/brotli-1.2.0.tar.gz:
 	cd download_cache && curl -o brotli-1.2.0.tar.gz -L https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz
 	sha256sum -c SHA256SUM_brotli-1.2.0.tar.gz.txt || (rm -f download_cache/brotli-1.2.0.tar.gz && false)
 
-out/lib/libz.a: download_cache/zlib-1.3.1.tar.xz
+out/lib/libz.a: download_cache/zlib-1.3.2.tar.xz
 	@mkdir -p zlib_build
-	tar -xf download_cache/zlib-1.3.1.tar.xz -C zlib_build
-	cd zlib_build/zlib-1.3.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --static && ${MAKE} && ${MAKE} DESTDIR="${PWD}/zlib_build/out/" install
+	tar -xf download_cache/zlib-1.3.2.tar.xz -C zlib_build
+	cd zlib_build/zlib-1.3.2 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --prefix=/usr --static && ${MAKE} && ${MAKE} DESTDIR="${PWD}/zlib_build/out/" install
 	install -D -m444 zlib_build/out/usr/lib/libz.a out/lib/libz.a
 	cd zlib_build/out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf zlib_build
 
-download_cache/zlib-1.3.1.tar.xz:
+download_cache/zlib-1.3.2.tar.xz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.xz
-	sha256sum -c SHA256SUM_zlib-1.3.1.tar.xz.txt || (rm -f download_cache/zlib-1.3.1.tar.xz && false)
+	cd download_cache && curl -OL https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz
+	sha256sum -c SHA256SUM_zlib-1.3.2.tar.xz.txt || (rm -f download_cache/zlib-1.3.2.tar.xz && false)
 
 out/ssl/usr/lib/libssl.a: download_cache/openssl-3.6.1.tar.gz
 	@mkdir -p openssl_build
