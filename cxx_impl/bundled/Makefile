@@ -93,7 +93,9 @@ download_cache/libidn2-2.3.8.tar.gz:
 out/lib/libunistring.a: download_cache/libunistring-1.4.1.tar.xz
 	@mkdir -p libunistring_build
 	tar -xf download_cache/libunistring-1.4.1.tar.xz -C libunistring_build
-	cd libunistring_build/libunistring-1.4.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr && ${MAKE} && ${MAKE} DESTDIR="${PWD}/libunistring_build/libunistring-1.4.1/HERE_OUT" install
+	cd libunistring_build/libunistring-1.4.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
+	patch -p1 < patches/libunistring-1.4.1-fix-build.patch
+	${MAKE} -C libunistring_build/libunistring-1.4.1 && ${MAKE} -C libunistring_build/libunistring-1.4.1 DESTDIR="${PWD}/libunistring_build/libunistring-1.4.1/HERE_OUT" install
 	install -D -m444 libunistring_build/libunistring-1.4.1/lib/.libs/libunistring.a out/lib/libunistring.a
 	cd libunistring_build/libunistring-1.4.1/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf libunistring_build
