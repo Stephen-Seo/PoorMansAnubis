@@ -90,20 +90,20 @@ download_cache/libidn2-2.3.8.tar.gz:
 	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libidn/libidn2-2.3.8.tar.gz
 	sha256sum -c SHA256SUM_idn2-2.3.8.tar.gz.txt || (rm -f download_cache/libidn2-2.3.8.tar.gz && false)
 
-out/lib/libunistring.a: download_cache/libunistring-1.4.1.tar.xz
+out/lib/libunistring.a: download_cache/libunistring-1.4.2.tar.xz
 	@mkdir -p libunistring_build
-	tar -xf download_cache/libunistring-1.4.1.tar.xz -C libunistring_build
-	cd libunistring_build/libunistring-1.4.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
-	patch -p1 < patches/libunistring-1.4.1-fix-build.patch
-	${MAKE} -C libunistring_build/libunistring-1.4.1 && ${MAKE} -C libunistring_build/libunistring-1.4.1 DESTDIR="${PWD}/libunistring_build/libunistring-1.4.1/HERE_OUT" install
-	install -D -m444 libunistring_build/libunistring-1.4.1/lib/.libs/libunistring.a out/lib/libunistring.a
-	cd libunistring_build/libunistring-1.4.1/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
+	tar -xf download_cache/libunistring-1.4.2.tar.xz -C libunistring_build
+	cd libunistring_build/libunistring-1.4.2 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
+	#patch -p1 < patches/libunistring-1.4.2-fix-build.patch
+	${MAKE} -C libunistring_build/libunistring-1.4.2 && ${MAKE} -C libunistring_build/libunistring-1.4.2 DESTDIR="${PWD}/libunistring_build/libunistring-1.4.2/HERE_OUT" install
+	install -D -m444 libunistring_build/libunistring-1.4.2/lib/.libs/libunistring.a out/lib/libunistring.a
+	cd libunistring_build/libunistring-1.4.2/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf libunistring_build
 
-download_cache/libunistring-1.4.1.tar.xz:
+download_cache/libunistring-1.4.2.tar.xz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.4.1.tar.xz
-	sha256sum -c SHA256SUM_libunistring-1.4.1.tar.xz.txt || (rm -f download_cache/libunistring-1.4.1.tar.xz && false)
+	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.4.2.tar.xz
+	sha256sum -c SHA256SUM_libunistring-1.4.2.tar.xz.txt || (rm -f download_cache/libunistring-1.4.2.tar.xz && false)
 
 out/lib/libzstd.a: download_cache/zstd-1.5.7.tar.zst out/lib/libz.a out/lib/liblzma.a out/lib/liblz4.a
 	@mkdir -p zstd_build
