@@ -57,7 +57,8 @@ SOURCES := \
 	src/helpers.cc \
 	src/poor_mans_print.cc \
 	src/args.cc \
-	src/db_msql.cc
+	src/db_msql.cc \
+	src/thread_pool.cc
 HEADERS := \
 	src/db.h \
 	src/constants.h \
@@ -66,7 +67,8 @@ HEADERS := \
 	src/poor_mans_print.h \
 	src/args.h \
 	src/db_msql.h \
-	src/db_msql_capi.h
+	src/db_msql_capi.h \
+	src/thread_pool.h
 
 CHALL_IMPL_SOURCES := \
 	../challenge_impl/src/work.c \
