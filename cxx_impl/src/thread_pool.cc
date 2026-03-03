@@ -117,4 +117,9 @@ void ThreadPool::add_func(std::function<void(void *)> fn, void *user_data,
         std::make_tuple(std::move(fn), user_data, std::move(cleanup_fn)));
   }
   std::get<std::condition_variable>(*cond_var).notify_one();
+
+  if (thread_handles.empty()) {
+    // Handle the case of "set_thread_count(...)" not being called before this.
+    set_thread_count(1);
+  }
 }
