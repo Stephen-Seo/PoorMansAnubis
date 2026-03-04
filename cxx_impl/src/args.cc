@@ -343,7 +343,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
     } else if (std::strncmp(argv[0], "--threads=", 10) == 0) {
       try {
-        unsigned long parsed = std::stoul(std::string(argv[0] + 18));
+        unsigned long parsed = std::stoul(std::string(argv[0] + 10));
         if (parsed > 0xFFFFFFFF) {
           PMA_EPrintln("ERROR: Failed to parse --threads=... (too large!)");
           flags.set(2);

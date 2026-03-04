@@ -43,6 +43,7 @@
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
+#include "thread_pool.h"
 
 volatile int interrupt_received = 0;
 
@@ -686,6 +687,547 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
   content_type.resize(content_type.size() - 2);
 }
 
+struct ThreadData {
+  AddrPortInfo addr_port_info;
+  const PMA_ARGS::Args *args;
+  std::optional<PMA_MSQL::Connection> *msql_conn_opt;
+  const std::optional<PMA_MSQL::Conf> *msql_conf_opt;
+  std::mutex *cached_allowed_mutex;
+  std::unordered_map<std::string,
+                     std::chrono::time_point<std::chrono::steady_clock> >
+      *cached_allowed;
+  int conn_fd;
+};
+
+void thread_handle_connection_fn(void *ud) {
+  ThreadData *data = reinterpret_cast<ThreadData *>(ud);
+  std::array<char, REQ_READ_BUF_SIZE> buf;
+  const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
+
+  while (data->addr_port_info.ticks < TIMEOUT_ITER_TICKS) {
+    std::this_thread::sleep_for(sleep_duration);
+    data->addr_port_info.ticks += 1;
+
+    auto time_now = std::chrono::steady_clock::now();
+
+    if (data->addr_port_info.remaining_buffer.has_value()) {
+      ssize_t write_ret = write(
+          data->conn_fd, data->addr_port_info.remaining_buffer.value().data(),
+          data->addr_port_info.remaining_buffer.value().size());
+      if (write_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // Nonblocking-IO indicating to write later, intentionally left
+          // blank.
+        } else {
+          PMA_EPrintln(
+              "ERROR: Failed to send partial response to client {} "
+              "(write_ret {}, errno {})!",
+              data->addr_port_info.client_addr, write_ret, errno);
+          break;
+        }
+      } else if (write_ret !=
+                 static_cast<ssize_t>(
+                     data->addr_port_info.remaining_buffer.value().size())) {
+        if (write_ret > 0) {
+          data->addr_port_info.remaining_buffer =
+              data->addr_port_info.remaining_buffer.value().substr(
+                  static_cast<size_t>(write_ret));
+        } else {
+          PMA_EPrintln(
+              "ERROR: Failed to send partial response to client {} "
+              "(write_ret {}, errno {})!",
+              data->addr_port_info.client_addr, write_ret, errno);
+          break;
+        }
+      } else {
+        data->addr_port_info.remaining_buffer = std::nullopt;
+        data->addr_port_info.ticks = 0;
+      }
+      continue;
+    }
+
+    ssize_t read_ret = read(data->conn_fd, buf.data(), buf.size() - 1);
+    if (read_ret == -1) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        // Nonblocking-IO indicating no bytes to read
+        continue;
+      } else {
+        PMA_Println("Failed to read from client {} (errno {})",
+                    data->addr_port_info.client_addr, errno);
+        break;
+        continue;
+      }
+    }
+    if (read_ret > 0) {
+      data->addr_port_info.ticks = 0;
+      buf.at(static_cast<size_t>(read_ret)) = 0;
+      PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(
+          std::string(buf.data(), static_cast<size_t>(read_ret)));
+      if (req.error_enum == PMA_HTTP::ErrorT::SUCCESS) {
+#ifndef NDEBUG
+        PMA_Println("URL: {}, FULL URL: {}, Params:", req.url_or_err_msg,
+                    req.full_url);
+        for (auto qiter = req.queries.begin(); qiter != req.queries.end();
+             ++qiter) {
+          PMA_Println("  {}={}", qiter->first, qiter->second);
+        }
+        PMA_Println("Headers:");
+        for (auto hiter = req.headers.begin(); hiter != req.headers.end();
+             ++hiter) {
+          PMA_Println("  {}: {}", hiter->first, hiter->second);
+        }
+#endif
+        if (data->args->flags.test(0)) {
+          if (auto fiter = req.headers.find("x-real-ip");
+              fiter != req.headers.end()) {
+#ifndef NDEBUG
+            PMA_Println("x-real-ip header found, changing client addr: {}",
+                        fiter->second);
+#endif
+            data->addr_port_info.client_addr = fiter->second;
+          }
+        }
+
+        std::string status = "HTTP/1.0 200 OK";
+        std::string content_type = "Content-type: text/html; charset=utf-8";
+        std::string body;
+        PMA_SQL::SQLITECtx sqliteCtx;
+        PMA_SQL::ErrorT err = PMA_SQL::ErrorT::SUCCESS;
+        std::string msg;
+        if (!data->args->flags.test(4)) {
+          std::tie(sqliteCtx, err, msg) =
+              PMA_SQL::init_sqlite(data->args->sqlite_path);
+        }
+        if (err != PMA_SQL::ErrorT::SUCCESS) {
+          PMA_EPrintln("ERROR: Failed to initialize sqlite: {}, {}",
+                       PMA_SQL::error_t_to_string(err), msg);
+          status = "HTTP/1.0 500 Internal Server Error";
+          body =
+              "<html><p>500 Internal Server Error</p><p>Failed to init "
+              "db</p></html>";
+        } else if (req.url_or_err_msg == data->args->api_url) {
+          const auto [err, json_keyvals] =
+              PMA_HTTP::parse_simple_json(req.body);
+          if (err != PMA_HTTP::ErrorT::SUCCESS) {
+            PMA_EPrintln("ERROR: Failed to parse json from client {}!",
+                         data->addr_port_info.client_addr);
+            status = "HTTP/1.0 500 Internal Server Error";
+            body =
+                "<html><p>500 Internal Server Error</p><p>Failed to parse "
+                "json</p></html>";
+          } else if (json_keyvals.find("type") == json_keyvals.end() ||
+                     json_keyvals.find("id") == json_keyvals.end() ||
+                     json_keyvals.find("factors") == json_keyvals.end()) {
+            PMA_EPrintln("ERROR: Client {} omitted necessary info!",
+                         data->addr_port_info.client_addr);
+            status = "HTTP/1.0 400 Bad Request";
+            body = "<html><p>400 Bad Request</p><p>Missing info</p></html>";
+          } else if (data->args->flags.test(4)) {
+            bool ping_ok = false;
+            if (!data->msql_conn_opt->has_value() ||
+                !(*data->msql_conn_opt)->ping_check()) {
+              *data->msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                  (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
+                  (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
+                  (*data->msql_conf_opt)->db);
+              if (!data->msql_conn_opt->has_value() ||
+                  !(*data->msql_conn_opt)->ping_check()) {
+                PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Problem with "
+                    "DB</p></html>";
+              } else {
+                ping_ok = true;
+              }
+            } else {
+              ping_ok = true;
+            }
+            if (ping_ok) {
+              const auto [err, port] = PMA_MSQL::validate_client(
+                  data->msql_conn_opt->value(), data->args->challenge_timeout,
+                  json_keyvals.find("id")->second,
+                  json_keyvals.find("factors")->second,
+                  data->addr_port_info.client_addr);
+              if (err == PMA_MSQL::Error::SUCCESS) {
+                PMA_Println("Challenge success from {}:{} port {}",
+                            data->addr_port_info.client_addr,
+                            data->addr_port_info.remote_port,
+                            data->addr_port_info.local_port);
+                content_type = "Content-type: text/plain";
+                body = "Correct";
+                std::unique_lock<std::mutex> cached_allowed_lock(
+                    *data->cached_allowed_mutex);
+                data->cached_allowed->insert(std::make_pair(
+                    std::format("{}:{}", data->addr_port_info.client_addr,
+                                data->addr_port_info.local_port),
+                    time_now));
+              } else {
+                PMA_EPrintln(
+                    "Warning: Client {}:{} -> {} failed challenge due to {}",
+                    data->addr_port_info.client_addr,
+                    data->addr_port_info.remote_port,
+                    data->addr_port_info.local_port,
+                    PMA_MSQL::error_to_str(err));
+                if (PMA_MSQL::error_is_client_err(err)) {
+                  status = "HTTP/1.0 400 Bad Request";
+                  content_type = "Content-type: text/plain";
+                  body = "Incorrect";
+                } else {
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed to "
+                      "validate req</p></html>";
+                }
+              }
+            }
+          } else {
+            const auto [err, msg, port] = PMA_SQL::verify_answer(
+                sqliteCtx, json_keyvals.find("factors")->second,
+                data->addr_port_info.client_addr,
+                json_keyvals.find("id")->second);
+            if (err != PMA_SQL::ErrorT::SUCCESS) {
+              PMA_EPrintln(
+                  "Warning: Client {}:{} -> {} failed challenge due to {}, "
+                  "{}",
+                  data->addr_port_info.client_addr,
+                  data->addr_port_info.remote_port,
+                  data->addr_port_info.local_port,
+                  PMA_SQL::error_t_to_string(err), msg);
+              status = "HTTP/1.0 400 Bad Request";
+              content_type = "Content-type: text/plain";
+              body = "Incorrect";
+            } else {
+              PMA_Println("Challenge success from {}:{} port {}",
+                          data->addr_port_info.client_addr,
+                          data->addr_port_info.remote_port,
+                          data->addr_port_info.local_port);
+              content_type = "Content-type: text/plain";
+              body = "Correct";
+              std::unique_lock<std::mutex> cached_allowed_lock(
+                  *data->cached_allowed_mutex);
+              data->cached_allowed->insert(std::make_pair(
+                  std::format("{}:{}", data->addr_port_info.client_addr,
+                              data->addr_port_info.local_port),
+                  time_now));
+            }
+          }
+
+        } else if (req.url_or_err_msg == data->args->js_factors_url) {
+          if (auto id_iter = req.queries.find("id");
+              id_iter != req.queries.end()) {
+            if (data->args->flags.test(4)) {
+              bool ping_ok = false;
+              if (!data->msql_conn_opt->has_value() ||
+                  !(*data->msql_conn_opt)->ping_check()) {
+                *data->msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                    (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
+                    (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
+                    (*data->msql_conf_opt)->db);
+                if (!data->msql_conn_opt->has_value() ||
+                    !(*data->msql_conn_opt)->ping_check()) {
+                  PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Problem with "
+                      "DB</p></html>";
+                } else {
+                  ping_ok = true;
+                }
+              } else {
+                ping_ok = true;
+              }
+              if (ping_ok) {
+                const auto [itp_err, port] = PMA_MSQL::get_id_to_port_port(
+                    data->msql_conn_opt->value(), id_iter->second);
+                if (itp_err == PMA_MSQL::Error::SUCCESS) {
+                  const auto [cf_err, chall, hashed_id] =
+                      PMA_MSQL::set_challenge_factor(
+                          data->msql_conn_opt->value(),
+                          data->addr_port_info.client_addr, port,
+                          data->args->factors, data->args->challenge_timeout);
+                  if (cf_err == PMA_MSQL::Error::SUCCESS) {
+                    PMA_Println("Requested challenge from {}:{} -> {}",
+                                data->addr_port_info.client_addr,
+                                data->addr_port_info.remote_port,
+                                data->addr_port_info.local_port);
+                    body = JS_FACTORS_WORKER;
+                    PMA_HELPER::str_replace_all(body, "{API_URL}",
+                                                data->args->api_url);
+                    PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}", chall);
+                    PMA_HELPER::str_replace_all(body, "{UUID}", hashed_id);
+                    content_type = "Content-type: text/javascript";
+                  } else {
+                    if (PMA_MSQL::error_is_client_err(cf_err)) {
+                      status = "HTTP/1.0 400 Bad Request";
+                      body =
+                          "<html><p>400 Bad Request</p><p>(Failed setup "
+                          "challenge)</p></html>";
+                    } else {
+                      status = "HTTP/1.0 500 Internal Server Error";
+                      body =
+                          "<html><p>500 Internal Server Error</p><p>Failed "
+                          "to set up challenge</p></html>";
+                    }
+                  }
+                } else {
+                  if (PMA_MSQL::error_is_client_err(itp_err)) {
+                    PMA_EPrintln(
+                        "WARNING: Bad request from client {}:{} -> {} due to "
+                        "{}",
+                        data->addr_port_info.client_addr,
+                        data->addr_port_info.remote_port,
+                        data->addr_port_info.local_port,
+                        PMA_MSQL::error_to_str(itp_err));
+                    status = "HTTP/1.0 400 Bad Request";
+                    body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
+                  } else {
+                    PMA_EPrintln(
+                        "WARNING: handling client {}:{} -> {} due to {}",
+                        data->addr_port_info.client_addr,
+                        data->addr_port_info.remote_port,
+                        data->addr_port_info.local_port,
+                        PMA_MSQL::error_to_str(itp_err));
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Failed to "
+                        "set up challenge</p></html>";
+                  }
+                }
+              }
+            } else {
+              PMA_SQL::cleanup_stale_challenges(sqliteCtx,
+                                                data->args->challenge_timeout);
+              const auto [err, msg_or_chal, answ, id] =
+                  PMA_SQL::generate_challenge(sqliteCtx, data->args->factors,
+                                              data->addr_port_info.client_addr,
+                                              id_iter->second);
+              if (err != PMA_SQL::ErrorT::SUCCESS) {
+                PMA_EPrintln(
+                    "ERROR: Failed to prepare challenge for client {}: {}, "
+                    "{}",
+                    data->addr_port_info.client_addr,
+                    PMA_SQL::error_t_to_string(err), msg_or_chal);
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to "
+                    "prepare challenge</p></html>";
+              } else {
+                PMA_Println("Requested challenge from {}:{} -> {}",
+                            data->addr_port_info.client_addr,
+                            data->addr_port_info.remote_port,
+                            data->addr_port_info.local_port);
+                body = JS_FACTORS_WORKER;
+                PMA_HELPER::str_replace_all(body, "{API_URL}",
+                                            data->args->api_url);
+                PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}",
+                                            msg_or_chal);
+                PMA_HELPER::str_replace_all(body, "{UUID}", id);
+                content_type = "Content-type: text/javascript";
+              }
+            }
+          } else {
+            status = "HTTP/1.0 400 Bad Request";
+            body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
+          }
+        } else if (data->args->flags.test(4)) {
+          {
+            std::unique_lock<std::mutex> cached_allowed_lock(
+                *data->cached_allowed_mutex);
+            if (auto cached_iter = data->cached_allowed->find(
+                    std::format("{}:{}", data->addr_port_info.client_addr,
+                                data->addr_port_info.local_port));
+                cached_iter != data->cached_allowed->end()) {
+              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
+                data->cached_allowed->erase(cached_iter);
+              } else {
+                do_curl_forwarding(data->addr_port_info.client_addr,
+                                   data->addr_port_info.local_port, body,
+                                   status, content_type, req, *data->args);
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+            }
+          }
+
+          bool ping_ok = false;
+          if (!data->msql_conn_opt->has_value() ||
+              !(*data->msql_conn_opt)->ping_check()) {
+            *data->msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
+                (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
+                (*data->msql_conf_opt)->db);
+            if (!data->msql_conn_opt->has_value() ||
+                !(*data->msql_conn_opt)->ping_check()) {
+              PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+              status = "HTTP/1.0 500 Internal Server Error";
+              body =
+                  "<html><p>500 Internal Server Error</p><p>Problem with "
+                  "DB</p></html>";
+            } else {
+              ping_ok = true;
+            }
+          } else {
+            ping_ok = true;
+          }
+
+          if (ping_ok) {
+            PMA_MSQL::Error is_allowed_e = PMA_MSQL::client_is_allowed(
+                data->msql_conn_opt->value(), data->addr_port_info.client_addr,
+                data->addr_port_info.local_port, data->args->allowed_timeout);
+            if (is_allowed_e == PMA_MSQL::Error::SUCCESS) {
+              std::unique_lock<std::mutex> cached_allowed_lock(
+                  *data->cached_allowed_mutex);
+              data->cached_allowed->insert(std::make_pair(
+                  std::format("{}:{}", data->addr_port_info.client_addr,
+                              data->addr_port_info.local_port),
+                  time_now));
+              do_curl_forwarding(data->addr_port_info.client_addr,
+                                 data->addr_port_info.local_port, body, status,
+                                 content_type, req, *data->args);
+              goto PMA_RESPONSE_SEND_LOCATION;
+            } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
+              const auto [err, id] = PMA_MSQL::init_id_to_port(
+                  data->msql_conn_opt->value(), data->addr_port_info.local_port,
+                  data->args->challenge_timeout);
+              if (err == PMA_MSQL::Error::SUCCESS) {
+                body = HTML_BODY_FACTORS;
+                PMA_HELPER::str_replace_all(
+                    body, "{JS_FACTORS_URL}",
+                    std::format("{}?id={}", data->args->js_factors_url, id));
+              } else {
+                PMA_EPrintln(
+                    "ERROR: Failed to init id-to-port for client {}! {}",
+                    data->addr_port_info.client_addr,
+                    PMA_MSQL::error_to_str(err));
+                if (PMA_MSQL::error_is_client_err(err)) {
+                  status = "HTTP/1.0 400 Bad Request";
+                  body = "<html><p>400 Bad Request</p></html>";
+                } else {
+                  status = "HTTP/1.0 500 Internal Server Error";
+                  body =
+                      "<html><p>500 Internal Server Error</p><p>Failed "
+                      "prepare for client</p></html>";
+                }
+              }
+            } else {
+              PMA_EPrintln("ERROR: Failed to check if client {} is allowed: {}",
+                           data->addr_port_info.client_addr,
+                           PMA_MSQL::error_to_str(is_allowed_e));
+              if (PMA_MSQL::error_is_client_err(is_allowed_e)) {
+                status = "HTTP/1.0 400 Bad Request";
+                body = "<html><p>400 Bad Request</p></html>";
+              } else {
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to "
+                    "check client</p></html>";
+              }
+            }
+          }
+        } else {
+          {
+            std::unique_lock<std::mutex> cached_allowed_lock(
+                *data->cached_allowed_mutex);
+            if (auto cached_iter = data->cached_allowed->find(
+                    std::format("{}:{}", data->addr_port_info.client_addr,
+                                data->addr_port_info.local_port));
+                cached_iter != data->cached_allowed->end()) {
+              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
+                data->cached_allowed->erase(cached_iter);
+              } else {
+                do_curl_forwarding(data->addr_port_info.client_addr,
+                                   data->addr_port_info.local_port, body,
+                                   status, content_type, req, *data->args);
+                goto PMA_RESPONSE_SEND_LOCATION;
+              }
+            }
+          }
+
+          PMA_SQL::cleanup_stale_entries(sqliteCtx,
+                                         data->args->allowed_timeout);
+
+          const auto [err, msg, is_allowed] = PMA_SQL::is_allowed_ip_port(
+              sqliteCtx, data->addr_port_info.client_addr,
+              data->addr_port_info.local_port);
+          if (err != PMA_SQL::ErrorT::SUCCESS || !is_allowed) {
+            PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
+                                               data->args->challenge_timeout);
+            const auto [err, msg, id] = PMA_SQL::init_id_to_port(
+                sqliteCtx, data->addr_port_info.local_port);
+            body = HTML_BODY_FACTORS;
+            PMA_HELPER::str_replace_all(
+                body, "{JS_FACTORS_URL}",
+                std::format("{}?id={}", data->args->js_factors_url, id));
+          } else {
+            std::unique_lock<std::mutex> cached_allowed_lock(
+                *data->cached_allowed_mutex);
+            data->cached_allowed->insert(std::make_pair(
+                std::format("{}:{}", data->addr_port_info.client_addr,
+                            data->addr_port_info.local_port),
+                time_now));
+            do_curl_forwarding(data->addr_port_info.client_addr,
+                               data->addr_port_info.local_port, body, status,
+                               content_type, req, *data->args);
+            goto PMA_RESPONSE_SEND_LOCATION;
+          }
+        }
+
+      PMA_RESPONSE_SEND_LOCATION:
+        std::string full =
+            std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
+                        content_type, body.size(), body);
+        ssize_t write_ret = write(data->conn_fd, full.data(), full.size());
+        if (write_ret != static_cast<ssize_t>(full.size())) {
+          if (write_ret > 0) {
+            data->addr_port_info.remaining_buffer =
+                full.substr(static_cast<size_t>(write_ret));
+          } else {
+            PMA_EPrintln(
+                "ERROR: Failed to send response to client {} (write_ret {})!",
+                data->addr_port_info.client_addr, write_ret);
+            break;
+          }
+        } else if (write_ret == -1) {
+          PMA_EPrintln("ERROR: Failed to write to client {}, errno {}!",
+                       data->addr_port_info.client_addr, errno);
+          break;
+        } else {
+          // Success, intentionally left blank.
+        }
+      } else {
+        PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
+                     req.url_or_err_msg);
+        break;
+      }
+    } else if (read_ret == 0) {
+#ifndef NDEBUG
+      PMA_Println("EOF From client {}:{} -> {}, closing...",
+                  data->addr_port_info.client_addr,
+                  data->addr_port_info.remote_port,
+                  data->addr_port_info.local_port);
+#endif
+      break;
+    }
+  }  // while ticks < timeout ticks
+
+  if (data->addr_port_info.ticks >= TIMEOUT_ITER_TICKS) {
+#ifndef NDEBUG
+    PMA_Println("Timed out connection from {}:{} on port {}",
+                data->addr_port_info.client_addr,
+                data->addr_port_info.remote_port,
+                data->addr_port_info.local_port);
+#endif
+  }
+}
+
+void thread_cleanup_fn(void *ud) {
+  ThreadData *data = reinterpret_cast<ThreadData *>(ud);
+  if (data->conn_fd > 0) {
+    close(data->conn_fd);
+  }
+  delete data;
+}
+
 int main(int argc, char **argv) {
   const PMA_ARGS::Args args(argc, argv);
 
@@ -766,17 +1308,12 @@ int main(int argc, char **argv) {
     return 4;
   }
 
-  // Mapping is a connection-fd to AddrPortInfo of host/server
-  std::unordered_map<int, AddrPortInfo> connections;
-  GenericCleanup<std::unordered_map<int, AddrPortInfo> *> cleanup_connections(
-      &connections, [](std::unordered_map<int, AddrPortInfo> **s) {
-        PMA_Println("Cleaning up connections...");
-        for (auto iter = (*s)->begin(); iter != (*s)->end(); ++iter) {
-          if (iter->first >= 0) {
-            close(iter->first);
-          }
-        }
-      });
+  ThreadPool thread_pool;
+  if (args.thread_count <= 1) {
+    thread_pool.set_thread_count(1);
+  } else {
+    thread_pool.set_thread_count(args.thread_count);
+  }
 
   PMA_HELPER::set_signal_handler(SIGINT, receive_signal);
   PMA_HELPER::set_signal_handler(SIGHUP, receive_signal);
@@ -788,9 +1325,10 @@ int main(int argc, char **argv) {
   std::memset(&sain6, 0, sizeof(struct sockaddr_in6));
   socklen_t sain_len;
 
-  std::deque<int> to_remove_connections;
-  std::array<char, REQ_READ_BUF_SIZE> buf;
+  // std::deque<int> to_remove_connections;
+  // std::array<char, REQ_READ_BUF_SIZE> buf;
 
+  std::mutex cached_allowed_mutex;
   std::unordered_map<std::string,
                      std::chrono::time_point<std::chrono::steady_clock> >
       cached_allowed;
@@ -805,6 +1343,7 @@ int main(int argc, char **argv) {
     time_now = std::chrono::steady_clock::now();
     if (time_now - time_prev > CACHED_CLEAR_T) {
       time_prev = time_now;
+      std::unique_lock<std::mutex> cached_allowed_lock(cached_allowed_mutex);
       cached_allowed.clear();
     }
 
@@ -863,10 +1402,20 @@ int main(int argc, char **argv) {
             close(ret);
           }
 
-          AddrPortInfo new_conn_info = iter->second;
-          new_conn_info.client_addr = std::move(client_ipv4);
-          new_conn_info.remote_port = PMA_HELPER::be_swap_u16(sain4.sin_port);
-          connections.emplace(ret, std::move(new_conn_info));
+          ThreadData *new_data = new ThreadData;
+          new_data->addr_port_info = iter->second;
+          new_data->addr_port_info.client_addr = std::move(client_ipv4);
+          new_data->addr_port_info.remote_port =
+              PMA_HELPER::be_swap_u16(sain4.sin_port);
+          new_data->args = &args;
+          new_data->msql_conn_opt = &msql_conn_opt;
+          new_data->msql_conf_opt = &msql_conf_opt;
+          new_data->cached_allowed_mutex = &cached_allowed_mutex;
+          new_data->cached_allowed = &cached_allowed;
+          new_data->conn_fd = ret;
+
+          thread_pool.add_func(thread_handle_connection_fn, new_data,
+                               thread_cleanup_fn);
         } else {
           // IPV6 new connection
           std::string client_ipv6 = PMA_HTTP::ipv6_addr_to_str(
@@ -888,503 +1437,23 @@ int main(int argc, char **argv) {
             close(ret);
           }
 
-          AddrPortInfo new_conn_info = iter->second;
-          new_conn_info.client_addr = client_ipv6;
-          new_conn_info.remote_port = PMA_HELPER::be_swap_u16(sain6.sin6_port);
-          connections.emplace(ret, std::move(new_conn_info));
+          ThreadData *new_data = new ThreadData;
+          new_data->addr_port_info = iter->second;
+          new_data->addr_port_info.client_addr = std::move(client_ipv6);
+          new_data->addr_port_info.remote_port =
+              PMA_HELPER::be_swap_u16(sain4.sin_port);
+          new_data->args = &args;
+          new_data->msql_conn_opt = &msql_conn_opt;
+          new_data->msql_conf_opt = &msql_conf_opt;
+          new_data->cached_allowed_mutex = &cached_allowed_mutex;
+          new_data->cached_allowed = &cached_allowed;
+          new_data->conn_fd = ret;
+
+          thread_pool.add_func(thread_handle_connection_fn, new_data,
+                               thread_cleanup_fn);
         }
       }  // while (ret >= 0)
     }  // for (sockets ... )
-
-    // Handle connections
-    for (auto iter = connections.begin(); iter != connections.end(); ++iter) {
-      iter->second.ticks += 1;
-      if (iter->second.ticks >= TIMEOUT_ITER_TICKS) {
-#ifndef NDEBUG
-        PMA_Println("Timed out connection from {}:{} on port {}",
-                    iter->second.client_addr, iter->second.remote_port,
-                    iter->second.local_port);
-#endif
-        to_remove_connections.push_back(iter->first);
-        continue;
-      }
-
-      if (iter->second.remaining_buffer.has_value()) {
-        ssize_t write_ret =
-            write(iter->first, iter->second.remaining_buffer.value().data(),
-                  iter->second.remaining_buffer.value().size());
-        if (write_ret == -1) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            // Nonblocking-IO indicating to write later, intentionally left
-            // blank.
-          } else {
-            PMA_EPrintln(
-                "ERROR: Failed to send partial response to client {} "
-                "(write_ret {}, errno {})!",
-                iter->second.client_addr, write_ret, errno);
-            to_remove_connections.push_back(iter->first);
-          }
-        } else if (write_ret !=
-                   static_cast<ssize_t>(
-                       iter->second.remaining_buffer.value().size())) {
-          if (write_ret > 0) {
-            iter->second.remaining_buffer =
-                iter->second.remaining_buffer.value().substr(
-                    static_cast<size_t>(write_ret));
-          } else {
-            PMA_EPrintln(
-                "ERROR: Failed to send partial response to client {} "
-                "(write_ret {}, errno {})!",
-                iter->second.client_addr, write_ret, errno);
-            to_remove_connections.push_back(iter->first);
-          }
-        } else {
-          iter->second.remaining_buffer = std::nullopt;
-          iter->second.ticks = 0;
-        }
-        continue;
-      }
-
-      ssize_t read_ret = read(iter->first, buf.data(), buf.size() - 1);
-      if (read_ret == -1) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          // Nonblocking-IO indicating no bytes to read
-          continue;
-        } else {
-          PMA_Println("Failed to read from client {} (errno {})",
-                      iter->second.client_addr, errno);
-          to_remove_connections.push_back(iter->first);
-          continue;
-        }
-      }
-      if (read_ret > 0) {
-        iter->second.ticks = 0;
-        buf.at(static_cast<size_t>(read_ret)) = 0;
-        PMA_HTTP::Request req = PMA_HTTP::handle_request_parse(
-            std::string(buf.data(), static_cast<size_t>(read_ret)));
-        if (req.error_enum == PMA_HTTP::ErrorT::SUCCESS) {
-#ifndef NDEBUG
-          PMA_Println("URL: {}, FULL URL: {}, Params:", req.url_or_err_msg,
-                      req.full_url);
-          for (auto qiter = req.queries.begin(); qiter != req.queries.end();
-               ++qiter) {
-            PMA_Println("  {}={}", qiter->first, qiter->second);
-          }
-          PMA_Println("Headers:");
-          for (auto hiter = req.headers.begin(); hiter != req.headers.end();
-               ++hiter) {
-            PMA_Println("  {}: {}", hiter->first, hiter->second);
-          }
-#endif
-          if (args.flags.test(0)) {
-            if (auto fiter = req.headers.find("x-real-ip");
-                fiter != req.headers.end()) {
-#ifndef NDEBUG
-              PMA_Println("x-real-ip header found, changing client addr: {}",
-                          fiter->second);
-#endif
-              iter->second.client_addr = fiter->second;
-            }
-          }
-
-          std::string status = "HTTP/1.0 200 OK";
-          std::string content_type = "Content-type: text/html; charset=utf-8";
-          std::string body;
-          PMA_SQL::SQLITECtx sqliteCtx;
-          PMA_SQL::ErrorT err = PMA_SQL::ErrorT::SUCCESS;
-          std::string msg;
-          if (!args.flags.test(4)) {
-            std::tie(sqliteCtx, err, msg) =
-                PMA_SQL::init_sqlite(args.sqlite_path);
-          }
-          if (err != PMA_SQL::ErrorT::SUCCESS) {
-            PMA_EPrintln("ERROR: Failed to initialize sqlite: {}, {}",
-                         PMA_SQL::error_t_to_string(err), msg);
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Failed to init "
-                "db</p></html>";
-          } else if (req.url_or_err_msg == args.api_url) {
-            const auto [err, json_keyvals] =
-                PMA_HTTP::parse_simple_json(req.body);
-            if (err != PMA_HTTP::ErrorT::SUCCESS) {
-              PMA_EPrintln("ERROR: Failed to parse json from client {}!",
-                           iter->second.client_addr);
-              status = "HTTP/1.0 500 Internal Server Error";
-              body =
-                  "<html><p>500 Internal Server Error</p><p>Failed to parse "
-                  "json</p></html>";
-            } else if (json_keyvals.find("type") == json_keyvals.end() ||
-                       json_keyvals.find("id") == json_keyvals.end() ||
-                       json_keyvals.find("factors") == json_keyvals.end()) {
-              PMA_EPrintln("ERROR: Client {} omitted necessary info!",
-                           iter->second.client_addr);
-              status = "HTTP/1.0 400 Bad Request";
-              body = "<html><p>400 Bad Request</p><p>Missing info</p></html>";
-            } else if (args.flags.test(4)) {
-              bool ping_ok = false;
-              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
-                msql_conn_opt = PMA_MSQL::Connection::connect_msql(
-                    msql_conf_opt->addr, msql_conf_opt->port,
-                    msql_conf_opt->user, msql_conf_opt->pass,
-                    msql_conf_opt->db);
-                if (!msql_conn_opt.has_value() ||
-                    !msql_conn_opt->ping_check()) {
-                  PMA_EPrintln("ERROR: Connection to MSQL server lost!");
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Problem with "
-                      "DB</p></html>";
-                } else {
-                  ping_ok = true;
-                }
-              } else {
-                ping_ok = true;
-              }
-              if (ping_ok) {
-                const auto [err, port] = PMA_MSQL::validate_client(
-                    msql_conn_opt.value(), args.challenge_timeout,
-                    json_keyvals.find("id")->second,
-                    json_keyvals.find("factors")->second,
-                    iter->second.client_addr);
-                if (err == PMA_MSQL::Error::SUCCESS) {
-                  PMA_Println("Challenge success from {}:{} port {}",
-                              iter->second.client_addr,
-                              iter->second.remote_port,
-                              iter->second.local_port);
-                  content_type = "Content-type: text/plain";
-                  body = "Correct";
-                  cached_allowed.insert(std::make_pair(
-                      std::format("{}:{}", iter->second.client_addr,
-                                  iter->second.local_port),
-                      time_now));
-                } else {
-                  PMA_EPrintln(
-                      "Warning: Client {}:{} -> {} failed challenge due to {}",
-                      iter->second.client_addr, iter->second.remote_port,
-                      iter->second.local_port, PMA_MSQL::error_to_str(err));
-                  if (PMA_MSQL::error_is_client_err(err)) {
-                    status = "HTTP/1.0 400 Bad Request";
-                    content_type = "Content-type: text/plain";
-                    body = "Incorrect";
-                  } else {
-                    status = "HTTP/1.0 500 Internal Server Error";
-                    body =
-                        "<html><p>500 Internal Server Error</p><p>Failed to "
-                        "validate req</p></html>";
-                  }
-                }
-              }
-            } else {
-              const auto [err, msg, port] = PMA_SQL::verify_answer(
-                  sqliteCtx, json_keyvals.find("factors")->second,
-                  iter->second.client_addr, json_keyvals.find("id")->second);
-              if (err != PMA_SQL::ErrorT::SUCCESS) {
-                PMA_EPrintln(
-                    "Warning: Client {}:{} -> {} failed challenge due to {}, "
-                    "{}",
-                    iter->second.client_addr, iter->second.remote_port,
-                    iter->second.local_port, PMA_SQL::error_t_to_string(err),
-                    msg);
-                status = "HTTP/1.0 400 Bad Request";
-                content_type = "Content-type: text/plain";
-                body = "Incorrect";
-              } else {
-                PMA_Println("Challenge success from {}:{} port {}",
-                            iter->second.client_addr, iter->second.remote_port,
-                            iter->second.local_port);
-                content_type = "Content-type: text/plain";
-                body = "Correct";
-                cached_allowed.insert(std::make_pair(
-                    std::format("{}:{}", iter->second.client_addr,
-                                iter->second.local_port),
-                    time_now));
-              }
-            }
-
-          } else if (req.url_or_err_msg == args.js_factors_url) {
-            if (auto id_iter = req.queries.find("id");
-                id_iter != req.queries.end()) {
-              if (args.flags.test(4)) {
-                bool ping_ok = false;
-                if (!msql_conn_opt.has_value() ||
-                    !msql_conn_opt->ping_check()) {
-                  msql_conn_opt = PMA_MSQL::Connection::connect_msql(
-                      msql_conf_opt->addr, msql_conf_opt->port,
-                      msql_conf_opt->user, msql_conf_opt->pass,
-                      msql_conf_opt->db);
-                  if (!msql_conn_opt.has_value() ||
-                      !msql_conn_opt->ping_check()) {
-                    PMA_EPrintln("ERROR: Connection to MSQL server lost!");
-                    status = "HTTP/1.0 500 Internal Server Error";
-                    body =
-                        "<html><p>500 Internal Server Error</p><p>Problem with "
-                        "DB</p></html>";
-                  } else {
-                    ping_ok = true;
-                  }
-                } else {
-                  ping_ok = true;
-                }
-                if (ping_ok) {
-                  const auto [itp_err, port] = PMA_MSQL::get_id_to_port_port(
-                      msql_conn_opt.value(), id_iter->second);
-                  if (itp_err == PMA_MSQL::Error::SUCCESS) {
-                    const auto [cf_err, chall, hashed_id] =
-                        PMA_MSQL::set_challenge_factor(
-                            msql_conn_opt.value(), iter->second.client_addr,
-                            port, args.factors, args.challenge_timeout);
-                    if (cf_err == PMA_MSQL::Error::SUCCESS) {
-                      PMA_Println("Requested challenge from {}:{} -> {}",
-                                  iter->second.client_addr,
-                                  iter->second.remote_port,
-                                  iter->second.local_port);
-                      body = JS_FACTORS_WORKER;
-                      PMA_HELPER::str_replace_all(body, "{API_URL}",
-                                                  args.api_url);
-                      PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}",
-                                                  chall);
-                      PMA_HELPER::str_replace_all(body, "{UUID}", hashed_id);
-                      content_type = "Content-type: text/javascript";
-                    } else {
-                      if (PMA_MSQL::error_is_client_err(cf_err)) {
-                        status = "HTTP/1.0 400 Bad Request";
-                        body =
-                            "<html><p>400 Bad Request</p><p>(Failed setup "
-                            "challenge)</p></html>";
-                      } else {
-                        status = "HTTP/1.0 500 Internal Server Error";
-                        body =
-                            "<html><p>500 Internal Server Error</p><p>Failed "
-                            "to set up challenge</p></html>";
-                      }
-                    }
-                  } else {
-                    if (PMA_MSQL::error_is_client_err(itp_err)) {
-                      PMA_EPrintln(
-                          "WARNING: Bad request from client {}:{} -> {} due to "
-                          "{}",
-                          iter->second.client_addr, iter->second.remote_port,
-                          iter->second.local_port,
-                          PMA_MSQL::error_to_str(itp_err));
-                      status = "HTTP/1.0 400 Bad Request";
-                      body =
-                          "<html><p>400 Bad Request</p><p>(No id)</p></html>";
-                    } else {
-                      PMA_EPrintln(
-                          "WARNING: handling client {}:{} -> {} due to {}",
-                          iter->second.client_addr, iter->second.remote_port,
-                          iter->second.local_port,
-                          PMA_MSQL::error_to_str(itp_err));
-                      status = "HTTP/1.0 500 Internal Server Error";
-                      body =
-                          "<html><p>500 Internal Server Error</p><p>Failed to "
-                          "set up challenge</p></html>";
-                    }
-                  }
-                }
-              } else {
-                PMA_SQL::cleanup_stale_challenges(sqliteCtx,
-                                                  args.challenge_timeout);
-                const auto [err, msg_or_chal, answ, id] =
-                    PMA_SQL::generate_challenge(sqliteCtx, args.factors,
-                                                iter->second.client_addr,
-                                                id_iter->second);
-                if (err != PMA_SQL::ErrorT::SUCCESS) {
-                  PMA_EPrintln(
-                      "ERROR: Failed to prepare challenge for client {}: {}, "
-                      "{}",
-                      iter->second.client_addr, PMA_SQL::error_t_to_string(err),
-                      msg_or_chal);
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to "
-                      "prepare challenge</p></html>";
-                } else {
-                  PMA_Println("Requested challenge from {}:{} -> {}",
-                              iter->second.client_addr,
-                              iter->second.remote_port,
-                              iter->second.local_port);
-                  body = JS_FACTORS_WORKER;
-                  PMA_HELPER::str_replace_all(body, "{API_URL}", args.api_url);
-                  PMA_HELPER::str_replace_all(body, "{LARGE_NUMBER}",
-                                              msg_or_chal);
-                  PMA_HELPER::str_replace_all(body, "{UUID}", id);
-                  content_type = "Content-type: text/javascript";
-                }
-              }
-            } else {
-              status = "HTTP/1.0 400 Bad Request";
-              body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
-            }
-          } else if (args.flags.test(4)) {
-            if (auto cached_iter = cached_allowed.find(
-                    std::format("{}:{}", iter->second.client_addr,
-                                iter->second.local_port));
-                cached_iter != cached_allowed.end()) {
-              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
-                cached_allowed.erase(cached_iter);
-              } else {
-                do_curl_forwarding(iter->second.client_addr,
-                                   iter->second.local_port, body, status,
-                                   content_type, req, args);
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-            }
-
-            bool ping_ok = false;
-            if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
-              msql_conn_opt = PMA_MSQL::Connection::connect_msql(
-                  msql_conf_opt->addr, msql_conf_opt->port, msql_conf_opt->user,
-                  msql_conf_opt->pass, msql_conf_opt->db);
-              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
-                PMA_EPrintln("ERROR: Connection to MSQL server lost!");
-                status = "HTTP/1.0 500 Internal Server Error";
-                body =
-                    "<html><p>500 Internal Server Error</p><p>Problem with "
-                    "DB</p></html>";
-              } else {
-                ping_ok = true;
-              }
-            } else {
-              ping_ok = true;
-            }
-
-            if (ping_ok) {
-              PMA_MSQL::Error is_allowed_e = PMA_MSQL::client_is_allowed(
-                  msql_conn_opt.value(), iter->second.client_addr,
-                  iter->second.local_port, args.allowed_timeout);
-              if (is_allowed_e == PMA_MSQL::Error::SUCCESS) {
-                cached_allowed.insert(std::make_pair(
-                    std::format("{}:{}", iter->second.client_addr,
-                                iter->second.local_port),
-                    time_now));
-                do_curl_forwarding(iter->second.client_addr,
-                                   iter->second.local_port, body, status,
-                                   content_type, req, args);
-                goto PMA_RESPONSE_SEND_LOCATION;
-              } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
-                const auto [err, id] = PMA_MSQL::init_id_to_port(
-                    msql_conn_opt.value(), iter->second.local_port,
-                    args.challenge_timeout);
-                if (err == PMA_MSQL::Error::SUCCESS) {
-                  body = HTML_BODY_FACTORS;
-                  PMA_HELPER::str_replace_all(
-                      body, "{JS_FACTORS_URL}",
-                      std::format("{}?id={}", args.js_factors_url, id));
-                } else {
-                  PMA_EPrintln(
-                      "ERROR: Failed to init id-to-port for client {}! {}",
-                      iter->second.client_addr, PMA_MSQL::error_to_str(err));
-                  if (PMA_MSQL::error_is_client_err(err)) {
-                    status = "HTTP/1.0 400 Bad Request";
-                    body = "<html><p>400 Bad Request</p></html>";
-                  } else {
-                    status = "HTTP/1.0 500 Internal Server Error";
-                    body =
-                        "<html><p>500 Internal Server Error</p><p>Failed "
-                        "prepare for client</p></html>";
-                  }
-                }
-              } else {
-                PMA_EPrintln(
-                    "ERROR: Failed to check if client {} is allowed: {}",
-                    iter->second.client_addr,
-                    PMA_MSQL::error_to_str(is_allowed_e));
-                if (PMA_MSQL::error_is_client_err(is_allowed_e)) {
-                  status = "HTTP/1.0 400 Bad Request";
-                  body = "<html><p>400 Bad Request</p></html>";
-                } else {
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to "
-                      "check client</p></html>";
-                }
-              }
-            }
-          } else {
-            if (auto cached_iter = cached_allowed.find(
-                    std::format("{}:{}", iter->second.client_addr,
-                                iter->second.local_port));
-                cached_iter != cached_allowed.end()) {
-              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
-                cached_allowed.erase(cached_iter);
-              } else {
-                do_curl_forwarding(iter->second.client_addr,
-                                   iter->second.local_port, body, status,
-                                   content_type, req, args);
-                goto PMA_RESPONSE_SEND_LOCATION;
-              }
-            }
-
-            PMA_SQL::cleanup_stale_entries(sqliteCtx, args.allowed_timeout);
-
-            const auto [err, msg, is_allowed] = PMA_SQL::is_allowed_ip_port(
-                sqliteCtx, iter->second.client_addr, iter->second.local_port);
-            if (err != PMA_SQL::ErrorT::SUCCESS || !is_allowed) {
-              PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
-                                                 args.challenge_timeout);
-              const auto [err, msg, id] =
-                  PMA_SQL::init_id_to_port(sqliteCtx, iter->second.local_port);
-              body = HTML_BODY_FACTORS;
-              PMA_HELPER::str_replace_all(
-                  body, "{JS_FACTORS_URL}",
-                  std::format("{}?id={}", args.js_factors_url, id));
-            } else {
-              cached_allowed.insert(
-                  std::make_pair(std::format("{}:{}", iter->second.client_addr,
-                                             iter->second.local_port),
-                                 time_now));
-              do_curl_forwarding(iter->second.client_addr,
-                                 iter->second.local_port, body, status,
-                                 content_type, req, args);
-              goto PMA_RESPONSE_SEND_LOCATION;
-            }
-          }
-
-        PMA_RESPONSE_SEND_LOCATION:
-          std::string full =
-              std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
-                          content_type, body.size(), body);
-          ssize_t write_ret = write(iter->first, full.data(), full.size());
-          if (write_ret != static_cast<ssize_t>(full.size())) {
-            if (write_ret > 0) {
-              iter->second.remaining_buffer =
-                  full.substr(static_cast<size_t>(write_ret));
-            } else {
-              PMA_EPrintln(
-                  "ERROR: Failed to send response to client {} (write_ret {})!",
-                  iter->second.client_addr, write_ret);
-              to_remove_connections.push_back(iter->first);
-            }
-          } else if (write_ret == -1) {
-            PMA_EPrintln("ERROR: Failed to write to client {}, errno {}!",
-                         iter->second.client_addr, errno);
-            to_remove_connections.push_back(iter->first);
-          } else {
-            // Success, intentionally left blank.
-          }
-        } else {
-          PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
-                       req.url_or_err_msg);
-          to_remove_connections.push_back(iter->first);
-        }
-      } else if (read_ret == 0) {
-#ifndef NDEBUG
-        PMA_Println("EOF From client {}:{} -> {}, closing...",
-                    iter->second.client_addr, iter->second.remote_port,
-                    iter->second.local_port);
-#endif
-        to_remove_connections.push_back(iter->first);
-      }
-    }
-
-    // Remove connections
-    for (int connection_fd : to_remove_connections) {
-      close(connection_fd);
-      connections.erase(connection_fd);
-    }
-    to_remove_connections.clear();
 
     std::cout << std::flush;
   }
