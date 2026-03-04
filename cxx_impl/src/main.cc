@@ -690,7 +690,6 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
 struct ThreadData {
   AddrPortInfo addr_port_info;
   const PMA_ARGS::Args *args;
-  std::optional<PMA_MSQL::Connection> *msql_conn_opt;
   const std::optional<PMA_MSQL::Conf> *msql_conf_opt;
   std::mutex *cached_allowed_mutex;
   std::unordered_map<std::string,
@@ -703,6 +702,19 @@ void thread_handle_connection_fn(void *ud) {
   ThreadData *data = reinterpret_cast<ThreadData *>(ud);
   std::array<char, REQ_READ_BUF_SIZE> buf;
   const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
+
+  std::optional<PMA_MSQL::Connection> msql_conn_opt;
+  if (data->args->flags.test(4)) {
+    msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+        data->msql_conf_opt->value().addr, data->msql_conf_opt->value().port,
+        data->msql_conf_opt->value().user, data->msql_conf_opt->value().pass,
+        data->msql_conf_opt->value().db);
+
+    if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+      PMA_EPrintln("ERROR: Thread failed to connect to MSQL!");
+      return;
+    }
+  }
 
   while (data->addr_port_info.ticks < TIMEOUT_ITER_TICKS) {
     std::this_thread::sleep_for(sleep_duration);
@@ -824,14 +836,12 @@ void thread_handle_connection_fn(void *ud) {
             body = "<html><p>400 Bad Request</p><p>Missing info</p></html>";
           } else if (data->args->flags.test(4)) {
             bool ping_ok = false;
-            if (!data->msql_conn_opt->has_value() ||
-                !(*data->msql_conn_opt)->ping_check()) {
-              *data->msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+            if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+              msql_conn_opt = PMA_MSQL::Connection::connect_msql(
                   (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
                   (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
                   (*data->msql_conf_opt)->db);
-              if (!data->msql_conn_opt->has_value() ||
-                  !(*data->msql_conn_opt)->ping_check()) {
+              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
                 PMA_EPrintln("ERROR: Connection to MSQL server lost!");
                 status = "HTTP/1.0 500 Internal Server Error";
                 body =
@@ -845,7 +855,7 @@ void thread_handle_connection_fn(void *ud) {
             }
             if (ping_ok) {
               const auto [err, port] = PMA_MSQL::validate_client(
-                  data->msql_conn_opt->value(), data->args->challenge_timeout,
+                  msql_conn_opt.value(), data->args->challenge_timeout,
                   json_keyvals.find("id")->second,
                   json_keyvals.find("factors")->second,
                   data->addr_port_info.client_addr);
@@ -918,14 +928,13 @@ void thread_handle_connection_fn(void *ud) {
               id_iter != req.queries.end()) {
             if (data->args->flags.test(4)) {
               bool ping_ok = false;
-              if (!data->msql_conn_opt->has_value() ||
-                  !(*data->msql_conn_opt)->ping_check()) {
-                *data->msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+                msql_conn_opt = PMA_MSQL::Connection::connect_msql(
                     (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
                     (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
                     (*data->msql_conf_opt)->db);
-                if (!data->msql_conn_opt->has_value() ||
-                    !(*data->msql_conn_opt)->ping_check()) {
+                if (!msql_conn_opt.has_value() ||
+                    !msql_conn_opt->ping_check()) {
                   PMA_EPrintln("ERROR: Connection to MSQL server lost!");
                   status = "HTTP/1.0 500 Internal Server Error";
                   body =
@@ -939,11 +948,11 @@ void thread_handle_connection_fn(void *ud) {
               }
               if (ping_ok) {
                 const auto [itp_err, port] = PMA_MSQL::get_id_to_port_port(
-                    data->msql_conn_opt->value(), id_iter->second);
+                    msql_conn_opt.value(), id_iter->second);
                 if (itp_err == PMA_MSQL::Error::SUCCESS) {
                   const auto [cf_err, chall, hashed_id] =
                       PMA_MSQL::set_challenge_factor(
-                          data->msql_conn_opt->value(),
+                          msql_conn_opt.value(),
                           data->addr_port_info.client_addr, port,
                           data->args->factors, data->args->challenge_timeout);
                   if (cf_err == PMA_MSQL::Error::SUCCESS) {
@@ -1050,14 +1059,12 @@ void thread_handle_connection_fn(void *ud) {
           }
 
           bool ping_ok = false;
-          if (!data->msql_conn_opt->has_value() ||
-              !(*data->msql_conn_opt)->ping_check()) {
-            *data->msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+          if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+            msql_conn_opt = PMA_MSQL::Connection::connect_msql(
                 (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
                 (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
                 (*data->msql_conf_opt)->db);
-            if (!data->msql_conn_opt->has_value() ||
-                !(*data->msql_conn_opt)->ping_check()) {
+            if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
               PMA_EPrintln("ERROR: Connection to MSQL server lost!");
               status = "HTTP/1.0 500 Internal Server Error";
               body =
@@ -1072,7 +1079,7 @@ void thread_handle_connection_fn(void *ud) {
 
           if (ping_ok) {
             PMA_MSQL::Error is_allowed_e = PMA_MSQL::client_is_allowed(
-                data->msql_conn_opt->value(), data->addr_port_info.client_addr,
+                msql_conn_opt.value(), data->addr_port_info.client_addr,
                 data->addr_port_info.local_port, data->args->allowed_timeout);
             if (is_allowed_e == PMA_MSQL::Error::SUCCESS) {
               std::unique_lock<std::mutex> cached_allowed_lock(
@@ -1087,7 +1094,7 @@ void thread_handle_connection_fn(void *ud) {
               goto PMA_RESPONSE_SEND_LOCATION;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
               const auto [err, id] = PMA_MSQL::init_id_to_port(
-                  data->msql_conn_opt->value(), data->addr_port_info.local_port,
+                  msql_conn_opt.value(), data->addr_port_info.local_port,
                   data->args->challenge_timeout);
               if (err == PMA_MSQL::Error::SUCCESS) {
                 body = HTML_BODY_FACTORS;
@@ -1408,7 +1415,6 @@ int main(int argc, char **argv) {
           new_data->addr_port_info.remote_port =
               PMA_HELPER::be_swap_u16(sain4.sin_port);
           new_data->args = &args;
-          new_data->msql_conn_opt = &msql_conn_opt;
           new_data->msql_conf_opt = &msql_conf_opt;
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;
@@ -1443,7 +1449,6 @@ int main(int argc, char **argv) {
           new_data->addr_port_info.remote_port =
               PMA_HELPER::be_swap_u16(sain4.sin_port);
           new_data->args = &args;
-          new_data->msql_conn_opt = &msql_conn_opt;
           new_data->msql_conf_opt = &msql_conf_opt;
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;

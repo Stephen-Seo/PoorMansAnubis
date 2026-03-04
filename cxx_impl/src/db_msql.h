@@ -130,8 +130,8 @@ class Value {
 
 class Connection {
  public:
-  /// There can only be 1 valid Connection instance at a time.
-  /// The private static timed_mutex ensures this.
+  /// For threaded support, there must be support for multiple instances of
+  /// Connection existing at the same time.
   static std::optional<Connection> connect_msql(std::string addr, uint16_t port,
                                                 std::string user,
                                                 std::string pass,
@@ -161,8 +161,6 @@ class Connection {
   StmtRet execute_stmt(const std::string &stmt, std::vector<Value> bind_params);
 
  private:
-  // Destructor should unlock this.
-  static std::timed_mutex m;
   // 0 - invalid connection if set.
   std::bitset<32> flags;
   int fd;
