@@ -1858,8 +1858,9 @@ PMA_MSQL::parse_init_handshake_pkt(uint8_t *data, size_t size) {
   }
 
   // Server version.
-  std::fprintf(stderr, "NOTICE: Connecting to server, reported version: %s\n",
-               data + idx);
+  // std::fprintf(stderr, "NOTICE: Connecting to server, reported version:
+  // %s\n",
+  //             data + idx);
   while (data[idx] != 0 && idx < size) {
     ++idx;
   }
