@@ -163,9 +163,6 @@ class Connection {
  private:
   // Destructor should unlock this.
   static std::timed_mutex m;
-
-  std::timed_mutex execute_mutex;
-
   // 0 - invalid connection if set.
   std::bitset<32> flags;
   int fd;

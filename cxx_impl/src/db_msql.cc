@@ -447,9 +447,7 @@ PMA_MSQL::Value::U::U(double d) {
 
 std::timed_mutex PMA_MSQL::Connection::m = std::timed_mutex();
 
-PMA_MSQL::Connection::Connection() : execute_mutex(), flags(), fd(-1) {
-  flags.set(0);
-}
+PMA_MSQL::Connection::Connection() : flags(), fd(-1) { flags.set(0); }
 
 PMA_MSQL::Connection::~Connection() {
   if (!flags.test(0)) {
@@ -490,17 +488,14 @@ PMA_MSQL::Connection::~Connection() {
 }
 
 PMA_MSQL::Connection::Connection(int fd, uint32_t connection_id)
-    : execute_mutex(), flags(), fd(fd), connection_id(connection_id) {
+    : flags(), fd(fd), connection_id(connection_id) {
   if (fd < 0) {
     flags.set(0);
   }
 }
 
 PMA_MSQL::Connection::Connection(Connection &&other)
-    : execute_mutex(),
-      flags(other.flags),
-      fd(other.fd),
-      connection_id(other.connection_id) {
+    : flags(other.flags), fd(other.fd), connection_id(other.connection_id) {
   other.fd = -1;
   other.flags.set(0);
 }
@@ -626,13 +621,6 @@ bool PMA_MSQL::Connection::ping_check() {
 
 PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     const std::string &stmt, std::vector<Value> bind_params) {
-  if (!execute_mutex.try_lock_for(std::chrono::seconds(5))) {
-    return std::nullopt;
-  }
-
-  GenericCleanup<std::timed_mutex *> execute_mutex_cleanup(
-      &execute_mutex, [](std::timed_mutex **mutex) { (**mutex).unlock(); });
-
   if (!is_valid()) {
     return std::nullopt;
   }
