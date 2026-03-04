@@ -55,6 +55,21 @@ ThreadPool::ThreadPool()
       stop_var(std::make_shared<std::atomic_bool>(false)),
       cond_var(std::make_shared<CondVarTuple>()) {}
 
+ThreadPool::~ThreadPool() {
+  stop_var->store(true, std::memory_order_release);
+  std::get<std::condition_variable>(*cond_var).notify_all();
+
+  for (auto iter = thread_handles.begin(); iter != thread_handles.end();
+       ++iter) {
+    iter->join();
+  }
+
+  for (auto iter = pending_fns->begin(); iter != pending_fns->end(); ++iter) {
+    // Call cleanup_fn on userdata.
+    std::get<2> (*iter)(std::get<1>(*iter));
+  }
+}
+
 ThreadPool::ThreadPool(ThreadPool &&other)
     : thread_handles(std::move(other.thread_handles)),
       pending_fns(std::move(other.pending_fns)),

@@ -28,6 +28,7 @@
 class ThreadPool {
  public:
   ThreadPool();
+  ~ThreadPool();
 
   // disallow copy
   ThreadPool(const ThreadPool &) = delete;
