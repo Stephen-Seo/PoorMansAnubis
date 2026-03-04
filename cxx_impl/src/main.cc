@@ -836,7 +836,7 @@ void thread_handle_connection_fn(void *ud) {
             body = "<html><p>400 Bad Request</p><p>Missing info</p></html>";
           } else if (data->args->flags.test(4)) {
             bool ping_ok = false;
-            if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+            if (!msql_conn_opt.has_value() || !msql_conn_opt->is_valid()) {
               msql_conn_opt = PMA_MSQL::Connection::connect_msql(
                   (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
                   (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
@@ -928,7 +928,7 @@ void thread_handle_connection_fn(void *ud) {
               id_iter != req.queries.end()) {
             if (data->args->flags.test(4)) {
               bool ping_ok = false;
-              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+              if (!msql_conn_opt.has_value() || !msql_conn_opt->is_valid()) {
                 msql_conn_opt = PMA_MSQL::Connection::connect_msql(
                     (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
                     (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
@@ -1059,7 +1059,7 @@ void thread_handle_connection_fn(void *ud) {
           }
 
           bool ping_ok = false;
-          if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+          if (!msql_conn_opt.has_value() || !msql_conn_opt->is_valid()) {
             msql_conn_opt = PMA_MSQL::Connection::connect_msql(
                 (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
                 (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
