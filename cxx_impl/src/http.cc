@@ -869,6 +869,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv6_socket_server(
       ipv6_addr = ipv6_addr_out;
       scope_id = scope_out;
     } catch (const std::exception &e) {
+      close(socket_fd);
       if (typeid(e) == typeid(std::out_of_range)) {
         return {ErrorT::FAILED_TO_PARSE_IPV6,
                 "Failed to parse ipv6 address: indexing out-of-bounds", -1};
@@ -924,6 +925,7 @@ std::tuple<PMA_HTTP::ErrorT, std::string, int> PMA_HTTP::get_ipv4_socket_server(
     try {
       sain.sin_addr.s_addr = str_to_ipv4_addr(addr);
     } catch (const std::exception &e) {
+      close(socket_fd);
       if (typeid(e) == typeid(std::out_of_range)) {
         return {ErrorT::FAILED_TO_PARSE_IPV4,
                 "Failed to parse ipv4 address: indexing out-of-bounds", -1};
@@ -969,7 +971,14 @@ PMA_HTTP::connect_ipv6_socket_client(std::string server_addr,
   sain6.sin6_family = AF_INET6;
   sain6.sin6_port = 0;
   sain6.sin6_flowinfo = 0;
-  const auto [cli_ipv6_addr, cli_scope] = str_to_ipv6_addr(client_addr);
+  std::array<uint8_t, 16> cli_ipv6_addr;
+  uint32_t cli_scope;
+  try {
+    std::tie(cli_ipv6_addr, cli_scope) = str_to_ipv6_addr(client_addr);
+  } catch (const std::exception &e) {
+    close(socket_fd);
+    throw e;
+  }
   std::memcpy(sain6.sin6_addr.s6_addr, cli_ipv6_addr.data(), 16);
   sain6.sin6_scope_id = cli_scope;
 
@@ -982,7 +991,14 @@ PMA_HTTP::connect_ipv6_socket_client(std::string server_addr,
   }
 
   sain6.sin6_port = PMA_HELPER::be_swap_u16(port);
-  const auto [serv_ipv6_addr, serv_scope] = str_to_ipv6_addr(server_addr);
+  std::array<uint8_t, 16> serv_ipv6_addr;
+  uint32_t serv_scope;
+  try {
+    std::tie(serv_ipv6_addr, serv_scope) = str_to_ipv6_addr(server_addr);
+  } catch (const std::exception &e) {
+    close(socket_fd);
+    throw e;
+  }
   std::memcpy(sain6.sin6_addr.s6_addr, serv_ipv6_addr.data(), 16);
   sain6.sin6_scope_id = serv_scope;
 
@@ -1044,7 +1060,12 @@ PMA_HTTP::connect_ipv4_socket_client(std::string server_addr,
   struct sockaddr_in sain;
   sain.sin_family = AF_INET;
   sain.sin_port = 0;
-  sain.sin_addr.s_addr = str_to_ipv4_addr(client_addr);
+  try {
+    sain.sin_addr.s_addr = str_to_ipv4_addr(client_addr);
+  } catch (const std::exception &e) {
+    close(socket_fd);
+    throw e;
+  }
 
   int ret = bind(socket_fd, reinterpret_cast<const sockaddr *>(&sain),
                  sizeof(struct sockaddr_in));
@@ -1057,7 +1078,12 @@ PMA_HTTP::connect_ipv4_socket_client(std::string server_addr,
   }
 
   sain.sin_port = PMA_HELPER::be_swap_u16(port);
-  sain.sin_addr.s_addr = str_to_ipv4_addr(server_addr);
+  try {
+    sain.sin_addr.s_addr = str_to_ipv4_addr(server_addr);
+  } catch (const std::exception &e) {
+    close(socket_fd);
+    throw e;
+  }
 
   ret = connect(socket_fd, reinterpret_cast<sockaddr *>(&sain),
                 sizeof(struct sockaddr_in));
