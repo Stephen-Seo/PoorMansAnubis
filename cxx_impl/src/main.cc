@@ -703,18 +703,8 @@ void thread_handle_connection_fn(void *ud) {
   std::array<char, REQ_READ_BUF_SIZE> buf;
   const auto sleep_duration = std::chrono::milliseconds(SLEEP_MILLISECONDS);
 
+  // Lazy load the connection to msql.
   std::optional<PMA_MSQL::Connection> msql_conn_opt;
-  if (data->args->flags.test(4)) {
-    msql_conn_opt = PMA_MSQL::Connection::connect_msql(
-        data->msql_conf_opt->value().addr, data->msql_conf_opt->value().port,
-        data->msql_conf_opt->value().user, data->msql_conf_opt->value().pass,
-        data->msql_conf_opt->value().db);
-
-    if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
-      PMA_EPrintln("ERROR: Thread failed to connect to MSQL!");
-      return;
-    }
-  }
 
   while (data->addr_port_info.ticks < TIMEOUT_ITER_TICKS) {
     std::this_thread::sleep_for(sleep_duration);
@@ -842,7 +832,8 @@ void thread_handle_connection_fn(void *ud) {
                   (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
                   (*data->msql_conf_opt)->db);
               if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
-                PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+                PMA_EPrintln(
+                    "ERROR: Thread failed to connect with MSQL server!");
                 status = "HTTP/1.0 500 Internal Server Error";
                 body =
                     "<html><p>500 Internal Server Error</p><p>Problem with "
@@ -935,7 +926,8 @@ void thread_handle_connection_fn(void *ud) {
                     (*data->msql_conf_opt)->db);
                 if (!msql_conn_opt.has_value() ||
                     !msql_conn_opt->ping_check()) {
-                  PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+                  PMA_EPrintln(
+                      "ERROR: Thread failed to connect with MSQL server!");
                   status = "HTTP/1.0 500 Internal Server Error";
                   body =
                       "<html><p>500 Internal Server Error</p><p>Problem with "
@@ -1065,7 +1057,7 @@ void thread_handle_connection_fn(void *ud) {
                 (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
                 (*data->msql_conf_opt)->db);
             if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
-              PMA_EPrintln("ERROR: Connection to MSQL server lost!");
+              PMA_EPrintln("ERROR: Thread failed to connect with MSQL server!");
               status = "HTTP/1.0 500 Internal Server Error";
               body =
                   "<html><p>500 Internal Server Error</p><p>Problem with "
