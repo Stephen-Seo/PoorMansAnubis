@@ -445,8 +445,6 @@ PMA_MSQL::Value::U::U(double d) {
   this->d = std::make_shared<double>(d);
 }
 
-std::timed_mutex PMA_MSQL::Connection::m = std::timed_mutex();
-
 PMA_MSQL::Connection::Connection() : flags(), fd(-1) { flags.set(0); }
 
 PMA_MSQL::Connection::~Connection() {
@@ -483,7 +481,6 @@ PMA_MSQL::Connection::~Connection() {
       }
       close(fd);
     }
-    m.unlock();
   }
 }
 
@@ -544,7 +541,6 @@ bool PMA_MSQL::Connection::ping_check() {
         } else {
           close(this->fd);
           this->flags.set(0);
-          m.unlock();
           return false;
         }
       } else if (static_cast<size_t>(write_ret) < remaining) {
@@ -572,13 +568,11 @@ bool PMA_MSQL::Connection::ping_check() {
       } else {
         close(this->fd);
         this->flags.set(0);
-        m.unlock();
         return false;
       }
     } else if (read_ret == 0) {
       close(this->fd);
       this->flags.set(0);
-      m.unlock();
       return false;
     } else {
       size = static_cast<size_t>(read_ret);
@@ -592,7 +586,6 @@ bool PMA_MSQL::Connection::ping_check() {
   if (size < 4) {
     close(this->fd);
     this->flags.set(0);
-    m.unlock();
     return false;
   }
 
@@ -614,7 +607,6 @@ bool PMA_MSQL::Connection::ping_check() {
   } else {
     close(this->fd);
     this->flags.set(0);
-    m.unlock();
     return false;
   }
 }
@@ -1310,17 +1302,6 @@ std::vector<PMA_HELPER::BinaryPart> PMA_MSQL::packets_to_parts(
 std::optional<PMA_MSQL::Connection> PMA_MSQL::Connection::connect_msql(
     std::string addr, uint16_t port, std::string user, std::string pass,
     std::string dbname) {
-  bool locked = Connection::m.try_lock_for(CONN_TRY_LOCK_DURATION);
-  if (!locked) {
-    return std::nullopt;
-  }
-  GenericCleanup<bool *> unlock_on_fail(&locked, [](bool **locked) {
-    if (*locked && **locked) {
-      Connection::m.unlock();
-      **locked = false;
-    }
-  });
-
   PMA_HTTP::ErrorT errt = PMA_HTTP::ErrorT::INVALID_STATE;
   std::string errm;
   int fd;
@@ -1631,8 +1612,6 @@ std::optional<PMA_MSQL::Connection> PMA_MSQL::Connection::connect_msql(
     return std::nullopt;
   }
 
-  // Prevent unlock, Connection implicitly owns the lock now.
-  locked = false;
   return Connection(fd, connection_id);
 }
 
@@ -1879,8 +1858,9 @@ PMA_MSQL::parse_init_handshake_pkt(uint8_t *data, size_t size) {
   }
 
   // Server version.
-  std::fprintf(stderr, "NOTICE: Connecting to server, reported version: %s\n",
-               data + idx);
+  // std::fprintf(stderr, "NOTICE: Connecting to server, reported version:
+  // %s\n",
+  //             data + idx);
   while (data[idx] != 0 && idx < size) {
     ++idx;
   }

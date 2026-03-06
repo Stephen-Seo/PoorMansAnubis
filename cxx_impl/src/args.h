@@ -56,6 +56,7 @@ struct Args {
   std::string mysql_conf_path;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;
+  uint32_t thread_count;
 };
 
 }  // namespace PMA_ARGS

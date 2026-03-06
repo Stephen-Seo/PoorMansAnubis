@@ -68,6 +68,9 @@ void pma_print_usage() {
       "  --allowed-timeout=<minutes> : Set how long a client is allowed to "
       "access before requiring challenge again");
   PMA_Println(
+      "  --threads=<integer> : Values greater than 1 enable a thread pool to "
+      "handle requests");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -99,7 +102,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       js_factors_url("/pma_factors.js"),
       sqlite_path("sqlite_db"),
       challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
-      allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES) {
+      allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
+      thread_count(1) {
   --argc;
   ++argv;
 
@@ -334,6 +338,25 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln(
             "ERROR: Failed to parse timeout from "
             "--allowed-timeout=<minutes> (out of range)!");
+        flags.set(2);
+        return;
+      }
+    } else if (std::strncmp(argv[0], "--threads=", 10) == 0) {
+      try {
+        unsigned long parsed = std::stoul(std::string(argv[0] + 10));
+        if (parsed > 0xFFFFFFFF) {
+          PMA_EPrintln("ERROR: Failed to parse --threads=... (too large!)");
+          flags.set(2);
+          return;
+        }
+        thread_count = static_cast<uint32_t>(parsed);
+      } catch (const std::invalid_argument &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --threads=... (invalid argument!)");
+        flags.set(2);
+        return;
+      } catch (const std::out_of_range &e) {
+        PMA_EPrintln("ERROR: Failed to parse --threads=... (out of range!)");
         flags.set(2);
         return;
       }

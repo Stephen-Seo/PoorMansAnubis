@@ -123,6 +123,7 @@ Args for the C++ implementation are as follows:
         example: "--js-factors-url=/pma_factors.js"
       --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
       --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
+      --threads=<integer> : Values greater than 1 enable a thread pool to handle requests
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
         example header: "override-dest-url: http://127.0.0.1:8888"
       WARNING: If --enable-override-dest-url is used, you must ensure that

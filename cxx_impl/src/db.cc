@@ -308,7 +308,8 @@ PMA_SQL::init_sqlite(std::string filepath) {
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
-    const PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
+    PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
+  auto lock = ctx.get_mutex_lock_guard();
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -331,7 +332,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
-    const PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
+    PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
+  auto lock = ctx.get_mutex_lock_guard();
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -354,7 +356,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
-    const PMA_SQL::SQLITECtx &ctx, uint32_t allowed_timeout) {
+    PMA_SQL::SQLITECtx &ctx, uint32_t allowed_timeout) {
+  auto lock = ctx.get_mutex_lock_guard();
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -378,6 +381,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
     SQLITECtx &ctx, uint16_t port) {
+  auto lock = ctx.get_mutex_lock_guard();
   bool exists_with_id = true;
   std::string id_hashed;
   while (exists_with_id) {
@@ -424,6 +428,7 @@ std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
 std::tuple<PMA_SQL::ErrorT, std::string, std::string, std::string>
 PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
                             std::string client_ip, std::string hashed_id) {
+  auto lock = ctx.get_mutex_lock_guard();
   uint16_t port = 0;
   {
     const auto [err_enum, err_msg, opt_vec] =
@@ -458,9 +463,6 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
   char *answer = work_factors2_factors_to_str(factors, nullptr);
   std::string answer_str = answer;
   std::free(answer);
-
-  // Acquire a mutex lock_guard.
-  auto lock = ctx.get_mutex_lock_guard();
 
   // Get a unique identifier for CHALLENGE_FACTOR.
   std::string hash_id;
