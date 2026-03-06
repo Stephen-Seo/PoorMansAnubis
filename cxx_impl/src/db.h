@@ -67,12 +67,7 @@ class SQLITECtx {
 
   sqlite3 *get_sqlite_ctx() const;
 
-  std::mutex &get_mutex();
-
-  std::lock_guard<std::mutex> get_mutex_lock_guard();
-
  private:
-  std::mutex mutex;
   void *ctx;
 };
 
