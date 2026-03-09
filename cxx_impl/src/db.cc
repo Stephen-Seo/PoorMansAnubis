@@ -172,9 +172,9 @@ std::string PMA_SQL::error_t_to_string(PMA_SQL::ErrorT err) {
   }
 }
 
-PMA_SQL::SQLITECtx::SQLITECtx() : mutex(), ctx(nullptr) {}
+PMA_SQL::SQLITECtx::SQLITECtx() : ctx(nullptr) {}
 
-PMA_SQL::SQLITECtx::SQLITECtx(std::string sqlite_path) : mutex(), ctx(nullptr) {
+PMA_SQL::SQLITECtx::SQLITECtx(std::string sqlite_path) : ctx(nullptr) {
   sqlite3 *db = nullptr;
   int ret = sqlite3_open(sqlite_path.c_str(), &db);
 
@@ -208,12 +208,6 @@ void *PMA_SQL::SQLITECtx::get_ctx() const { return ctx; }
 
 sqlite3 *PMA_SQL::SQLITECtx::get_sqlite_ctx() const {
   return reinterpret_cast<sqlite3 *>(ctx);
-}
-
-std::mutex &PMA_SQL::SQLITECtx::get_mutex() { return mutex; }
-
-std::lock_guard<std::mutex> PMA_SQL::SQLITECtx::get_mutex_lock_guard() {
-  return std::lock_guard<std::mutex>(mutex);
 }
 
 void PMA_SQL::exec_sqlite_stmt_str_cleanup(void *ud) {
@@ -309,7 +303,6 @@ PMA_SQL::init_sqlite(std::string filepath) {
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
     PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
-  auto lock = ctx.get_mutex_lock_guard();
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -333,7 +326,6 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
     PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
-  auto lock = ctx.get_mutex_lock_guard();
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -357,7 +349,6 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
     PMA_SQL::SQLITECtx &ctx, uint32_t allowed_timeout) {
-  auto lock = ctx.get_mutex_lock_guard();
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -381,7 +372,6 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
     SQLITECtx &ctx, uint16_t port) {
-  auto lock = ctx.get_mutex_lock_guard();
   bool exists_with_id = true;
   std::string id_hashed;
   while (exists_with_id) {
@@ -428,7 +418,6 @@ std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
 std::tuple<PMA_SQL::ErrorT, std::string, std::string, std::string>
 PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
                             std::string client_ip, std::string hashed_id) {
-  auto lock = ctx.get_mutex_lock_guard();
   uint16_t port = 0;
   {
     const auto [err_enum, err_msg, opt_vec] =
@@ -528,8 +517,6 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
 
 std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
     SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id) {
-  auto lock = ctx.get_mutex_lock_guard();
-
   std::string hash;
   // get hash
   {
@@ -594,8 +581,6 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::unordered_set<uint16_t>>
 PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr) {
-  auto lock = ctx.get_mutex_lock_guard();
-
   const auto [err_enum, err_msg, opt_vec] =
       SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string>(
           ctx, "SELECT PORT FROM ALLOWED_IP WHERE IP = ?", std::nullopt,
@@ -623,8 +608,6 @@ PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr) {
 
 std::tuple<PMA_SQL::ErrorT, std::string, bool> PMA_SQL::is_allowed_ip_port(
     SQLITECtx &ctx, std::string ipaddr, uint16_t port) {
-  auto lock = ctx.get_mutex_lock_guard();
-
   const auto [err_enum, err_msg, opt_vec] =
       SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string, int>(
           ctx, "SELECT PORT FROM ALLOWED_IP WHERE IP = ? AND PORT = ?",
