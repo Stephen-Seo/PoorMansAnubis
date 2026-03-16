@@ -267,6 +267,56 @@ https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_set_header
 It may be safer to rely on multiple "--addr-port=..." and
 "--port-to-dest-url=..." instead of using "--enable-override-dest-url".
 
+================================================================================
+
+Maintenance
+
+================================================================================
+
+To upkeep the "bundled" version of the C++ version of this software, the
+bundled dependencies need to be checked periodically. In other words, they need
+to be kept up to date. This is required because the "bundled" version statically
+links all of its dependencies; all depenencies are included in the executable.
+If it had been linked with shared libraries, the shared libraries would need to
+be installed on systems running the software or bundled with the software
+separately.
+
+PoorMansAnbuis/cxx_impl/bundled/links.txt contains a list of links that should
+lead to pages that list the version number of the latest version of said
+depenencies. They should be checked against the list of SHA256SUM files.
+
+To update a dependency "foo" that was version 1.0 and now is 2.0, the download
+link to its source must be updated in the Makefile. Note that the Makefile
+depends on a corresponding SHA256SUM file. In this case,
+SHA256SUM_foo-1.0.tar.gz.txt shall be replaced with
+SHA256SUM_foo-2.0.tar.gz.txt with an updated sha256 hash (for example; the
+filenames may be somewhat different). It is apparent, then, to download the
+source tarball to create the sha256 hash file. Note that these SHA256SUM files
+expect the tarball to exist in "download_cache/foo-2.0.tar.gz" (using "foo" as
+an example; please rename accordingly). Such a SHA256SUM file can be created
+with: `sha256sum download_cache/foo-2.0.tar.gz > SHA256SUM_foo-2.0.tar.gz.txt`.
+(Note that this will only work if the current-working-directory is the
+directory holding the "download_cache" directory; The "download_cache"
+directory is ignored with ".gitignore" and is created upon downloading
+dependencies via the Makefile.)
+
+IT IS IMPERATIVE that the Makefile is fully updated when updating a dependency,
+otherwise there will be build issues that can be hard to diagnose. Note that
+dependencies are expected to extract to a directory named e.g. "foo-2.0/", and
+that the Makefile expects such a directory to exist in multiple lines. If a
+dependency extracts to a directory name that is not like "foo-2.0/", then the
+Makefile will need to be updated to handle such.
+
+One may argue that it would be better to store the version number in a
+variable, but this will cause developers to assume that only the version number
+should be changed to update. Though it may be pedantic, the Makefile is thus
+designed in this manner.
+
+Note that if a new version of a dependency breaks the build, it will require
+some changing of commands in the Makefile e.g. changing a parameter to a
+command invoking "cmake". In such cases, it may be helpful to compare against
+another existing build process (should it be allowed), or to ask for help from
+those knowledgable with dependency management with C/C++.
 
 ================================================================================
 
