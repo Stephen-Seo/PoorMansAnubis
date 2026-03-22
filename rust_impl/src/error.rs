@@ -20,7 +20,9 @@ use std::{error, fmt::Display};
 pub enum Error {
     Generic(String),
     #[cfg(feature = "mysql")]
-    MySQL(mysql_async::Error),
+    MySQL(mysql::Error),
+    #[cfg(feature = "mysql")]
+    MySQLURL(mysql::UrlError),
     #[cfg(feature = "sqlite")]
     Sqlite(rusqlite::Error),
     IO(std::io::Error),
@@ -42,6 +44,8 @@ impl error::Error for Error {
             Error::Generic(_) => None,
             #[cfg(feature = "mysql")]
             Error::MySQL(error) => error.source(),
+            #[cfg(feature = "mysql")]
+            Error::MySQLURL(error) => error.source(),
             #[cfg(feature = "sqlite")]
             Error::Sqlite(error) => error.source(),
             Error::IO(error) => error.source(),
@@ -65,6 +69,8 @@ impl Display for Error {
             Error::Generic(s) => f.write_str(s),
             #[cfg(feature = "mysql")]
             Error::MySQL(error) => error.fmt(f),
+            #[cfg(feature = "mysql")]
+            Error::MySQLURL(error) => error.fmt(f),
             #[cfg(feature = "sqlite")]
             Error::Sqlite(error) => error.fmt(f),
             Error::IO(error) => error.fmt(f),
@@ -95,9 +101,16 @@ impl From<&str> for Error {
 }
 
 #[cfg(feature = "mysql")]
-impl From<mysql_async::Error> for Error {
-    fn from(value: mysql_async::Error) -> Self {
+impl From<mysql::Error> for Error {
+    fn from(value: mysql::Error) -> Self {
         Error::MySQL(value)
+    }
+}
+
+#[cfg(feature = "mysql")]
+impl From<mysql::UrlError> for Error {
+    fn from(value: mysql::UrlError) -> Self {
+        Error::MySQLURL(value)
     }
 }
 
