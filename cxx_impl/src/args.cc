@@ -71,6 +71,8 @@ void pma_print_usage() {
       "  --threads=<integer> : Values greater than 1 enable a thread pool to "
       "handle requests");
   PMA_Println(
+      "  --enable-libcurl : Enables fetching dest urls by using libcurl");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -360,6 +362,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         flags.set(2);
         return;
       }
+    } else if (std::strcmp(argv[0], "--enable-libcurl") == 0) {
+      flags.set(5);
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

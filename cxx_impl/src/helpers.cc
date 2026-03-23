@@ -248,3 +248,40 @@ std::array<char, 40> PMA_HELPER::sha1_digest_hex(uint8_t *data, size_t size) {
 
   return digest_s20_to_hex(digest);
 }
+
+std::string PMA_HELPER::trim_whitespace(const std::string &s) {
+  if (s.empty()) {
+    return {};
+  }
+
+  std::optional<size_t> leading_idx;
+  for (size_t idx = 0; idx < s.size(); ++idx) {
+    if (s.at(idx) == ' ' || s.at(idx) == '\t' || s.at(idx) == '\r' ||
+        s.at(idx) == '\n') {
+      leading_idx = idx;
+    } else {
+      break;
+    }
+  }
+
+  std::size_t ending_idx = s.size();
+  for (size_t idx = ending_idx; idx-- > 0;) {
+    if (s.at(idx) == ' ' || s.at(idx) == '\t' || s.at(idx) == '\r' ||
+        s.at(idx) == '\n') {
+      ending_idx = idx;
+    } else {
+      break;
+    }
+  }
+
+  if (leading_idx.has_value()) {
+    if (leading_idx.value() + 1 >= ending_idx) {
+      return {};
+    }
+
+    return s.substr(leading_idx.value() + 1,
+                    ending_idx - leading_idx.value() - 1);
+  } else {
+    return s.substr(0, ending_idx);
+  }
+}

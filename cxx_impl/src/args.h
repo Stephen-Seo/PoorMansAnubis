@@ -49,6 +49,7 @@ struct Args {
   // 2 - failed to parse args
   // 3 - potentially dangerous flags enabled
   // 4 - use msql
+  // 5 - use libcurl
   std::bitset<32> flags;
   std::string api_url;
   std::string js_factors_url;

@@ -1207,6 +1207,19 @@ int main() {
     CHECK_TRUE(s == "One TTwo TThree Four Five");
   }
 
+  // Test PMA_HELPER::trim_whitespace
+  {
+    std::string s("  some  whitespace in this sentence...  ");
+    std::string r = PMA_HELPER::trim_whitespace(s);
+    CHECK_TRUE(r == "some  whitespace in this sentence...");
+    s = "some  whitespace in this sentence...  ";
+    r = PMA_HELPER::trim_whitespace(s);
+    CHECK_TRUE(r == "some  whitespace in this sentence...");
+    s = "  some  whitespace in this sentence...";
+    r = PMA_HELPER::trim_whitespace(s);
+    CHECK_TRUE(r == "some  whitespace in this sentence...");
+  }
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;

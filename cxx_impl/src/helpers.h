@@ -123,6 +123,8 @@ std::array<uint8_t, 20> sha1_digest(uint8_t *data, size_t size);
 std::array<char, 40> digest_s20_to_hex(const std::array<uint8_t, 20> &);
 std::array<char, 40> sha1_digest_hex(uint8_t *data, size_t size);
 
+std::string trim_whitespace(const std::string &s);
+
 }  // namespace PMA_HELPER
 
 ////////////////////////////////////////////////////////////////////////////////

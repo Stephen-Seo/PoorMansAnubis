@@ -27,6 +27,8 @@ extern const char *JS_FACTORS_WORKER;
 constexpr unsigned long long REQ_READ_BUF_SIZE = 1024 * 40;
 
 constexpr unsigned int SLEEP_MILLISECONDS = 2;
+constexpr std::chrono::milliseconds SLEEP_MILLISECONDS_CHRONO =
+    std::chrono::milliseconds(SLEEP_MILLISECONDS);
 // 7 seconds
 constexpr unsigned int TIMEOUT_ITER_TICKS = 7000 / SLEEP_MILLISECONDS;
 
