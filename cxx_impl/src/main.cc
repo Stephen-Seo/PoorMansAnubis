@@ -878,16 +878,33 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     }
 
     // Write headers
-    for (auto iter = req.headers.cbegin(); iter != req.headers.cend(); ++iter) {
-      to_write = iter->first;
-      to_write.push_back(':');
-      to_write.push_back(' ');
-      to_write.append(iter->second);
-      to_write.append("\r\n");
-      remaining = to_write.size();
+    {
+      int_fast8_t accept_header_written = 0;
+      for (auto iter = req.headers.cbegin(); iter != req.headers.cend();
+           ++iter) {
+        if (PMA_HELPER::ascii_str_to_lower(iter->first) == "accept") {
+          to_write = "accept: text/html,application/xhtml+xml,*/*\r\n";
+          accept_header_written = 1;
+        } else {
+          to_write = iter->first;
+          to_write.push_back(':');
+          to_write.push_back(' ');
+          to_write.append(iter->second);
+          to_write.append("\r\n");
+        }
+        remaining = to_write.size();
 
-      if (write_fn()) {
-        return;
+        if (write_fn()) {
+          return;
+        }
+      }
+
+      if (!accept_header_written) {
+        to_write = "accept: text/html,application/xhtml+xml,*/*\r\n";
+        remaining = to_write.size();
+        if (write_fn()) {
+          return;
+        }
       }
     }
 
@@ -964,7 +981,9 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
           } else if (end_idx == 0) {
             before_content = 0;
 
-            body.append(partial.substr(2));
+            if (partial.size() > 2) {
+              body.append(partial.substr(2));
+            }
             partial.clear();
           } else {
             std::string header_name;
@@ -981,9 +1000,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
                 partial.substr(separator + 1, end_idx - separator - 1));
 
             if (PMA_HELPER::ascii_str_to_lower(header_name) !=
-                    "content-length" &&
-                PMA_HELPER::ascii_str_to_lower(header_name) !=
-                    "transfer-encoding") {
+                "content-length") {
               content_type.append(
                   std::format("{}: {}\r\n", header_name, header_value));
             }
