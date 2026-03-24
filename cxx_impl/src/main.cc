@@ -696,7 +696,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
                                std::string &body, std::string &status,
                                std::string &content_type,
                                const PMA_HTTP::Request &req,
-                               const PMA_ARGS::Args &args) {
+                               const PMA_ARGS::Args &args,
+                               const PMA_HELPER::MimeTypes &mime_types) {
   std::string addr;
   uint32_t port = 80;
 
@@ -833,7 +834,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     // write method
     std::string to_write = req.method;
     to_write.push_back(' ');
-    size_t remaining = to_write.size();
+    size_t remaining = 0;
 
     const auto write_fn = [&]() -> bool {
       while (true) {
@@ -864,86 +865,93 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       return false;
     };
 
-    if (write_fn()) {
-      return;
-    }
-
     // Write path
-    to_write = req.full_url;
+    to_write.append(req.full_url);
     to_write.append(" HTTP/1.1\r\n");
-    remaining = to_write.size();
-
-    if (write_fn()) {
-      return;
-    }
 
     // Write headers
-    {
-      int_fast8_t accept_header_written = 0;
-      for (auto iter = req.headers.cbegin(); iter != req.headers.cend();
-           ++iter) {
-        if (PMA_HELPER::ascii_str_to_lower(iter->first) == "accept") {
-          to_write = "accept: text/html,application/xhtml+xml,*/*\r\n";
-          accept_header_written = 1;
-        } else {
-          to_write = iter->first;
-          to_write.push_back(':');
-          to_write.push_back(' ');
-          to_write.append(iter->second);
-          to_write.append("\r\n");
-        }
-        remaining = to_write.size();
-
-        if (write_fn()) {
-          return;
-        }
-      }
-
-      if (!accept_header_written) {
-        to_write = "accept: text/html,application/xhtml+xml,*/*\r\n";
-        remaining = to_write.size();
-        if (write_fn()) {
-          return;
-        }
-      }
+    for (auto iter = req.headers.cbegin(); iter != req.headers.cend(); ++iter) {
+      // PMA_EPrintln("DEBUG_write_header: {}: {} END_write_header",
+      // iter->first,
+      //              iter->second);
+      to_write.append(iter->first);
+      to_write.push_back(':');
+      to_write.push_back(' ');
+      to_write.append(iter->second);
+      to_write.append("\r\n");
     }
 
     // End of headers
-    to_write = "\r\n";
+    to_write.append("\r\n");
+
+    if (!req.body.empty()) {
+      // Request content data
+      to_write.append(req.body);
+    }
+
     remaining = to_write.size();
 
     if (write_fn()) {
       return;
     }
+  }
 
-    if (!req.body.empty()) {
-      // Request content data
-      to_write = req.body;
-      remaining = to_write.size();
-
-      if (write_fn()) {
-        return;
-      }
+  std::string mime_type;
+  {
+    std::string ext = PMA_HELPER::get_file_ext(req.full_url);
+    if (!ext.empty()) {
+      mime_type = mime_types.get_mimetype_from_ext(ext);
     }
   }
 
-  std::array<char, 4096> buf;
+  std::array<char, REQ_READ_BUF_SIZE> buf;
   int_fast8_t before_first_line = 1;
   int_fast8_t before_content = 1;
-  std::string partial;
+  std::optional<int_fast8_t> buf_read_to_full;
+  std::string temp;
+  std::string header_name;
+  std::string header_value;
+  size_t skip_before_idx = 0;
+  size_t wait_ticks = 0;
+  std::optional<size_t> recv_content_size;
 
   body.clear();
   status.clear();
   content_type.clear();
 
+  const auto verify_header_fn = [&header_name, &header_value, &content_type,
+                                 &recv_content_size]() {
+    if (PMA_HELPER::ascii_str_to_lower(header_name) != "content-length") {
+      content_type.append(std::format("{}: {}\r\n", header_name, header_value));
+    } else {
+      try {
+        size_t content_size = std::stoull(header_value);
+        if (content_size > 0) {
+          recv_content_size = content_size;
+          PMA_EPrintln("DEBUG: content_size: {}", content_size);
+        }
+      } catch (const std::exception &e) {
+      }
+    }
+    header_name.clear();
+    header_value.clear();
+  };
+
   while (true) {
+    skip_before_idx = 0;
     ssize_t read_ret = read(socket_fd, buf.data(), buf.size());
     if (read_ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        if (!status.empty() && partial.empty()) {
+        if (recv_content_size.has_value() && recv_content_size.value() == 0) {
+          break;
+        } else if (buf_read_to_full.has_value() &&
+                   buf_read_to_full.value() == 0) {
           break;
         }
         std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+        if (++wait_ticks > SLEEP_MAX_TICKS) {
+          break;
+        }
         continue;
       } else {
         PMA_EPrintln("ERROR: Failed to read response, errno {}", errno);
@@ -964,56 +972,118 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       }
       break;
     } else {
-      partial.append(std::string(buf.data(), static_cast<size_t>(read_ret)));
-      while (!partial.empty()) {
-        if (before_first_line) {
-          size_t end_idx = partial.find("\r\n");
-          if (end_idx == std::string::npos) {
-            break;
-          }
-          status = std::string(partial.data(), end_idx);
-          partial = partial.substr(end_idx + 2);
-          before_first_line = 0;
-        } else if (before_content) {
-          size_t end_idx = partial.find("\r\n");
-          if (end_idx == std::string::npos) {
-            break;
-          } else if (end_idx == 0) {
-            before_content = 0;
-
-            if (partial.size() > 2) {
-              body.append(partial.substr(2));
-            }
-            partial.clear();
-          } else {
-            std::string header_name;
-            std::string header_value;
-
-            size_t separator = partial.find(":");
-            if (separator == std::string::npos) {
-              break;
-            }
-
-            header_name =
-                PMA_HELPER::trim_whitespace(partial.substr(0, separator));
-            header_value = PMA_HELPER::trim_whitespace(
-                partial.substr(separator + 1, end_idx - separator - 1));
-
-            if (PMA_HELPER::ascii_str_to_lower(header_name) !=
-                "content-length") {
-              content_type.append(
-                  std::format("{}: {}\r\n", header_name, header_value));
-            }
-
-            partial = partial.substr(end_idx + 2);
-          }
-        } else {
-          body.append(partial);
-          partial.clear();
-        }
+      if (read_ret == buf.size()) {
+        PMA_EPrintln("DEBUG: set buf_read_to_full to 1");
+        buf_read_to_full = 1;
+      } else {
+        PMA_EPrintln("DEBUG: set buf_read_to_full to 0");
+        buf_read_to_full = 0;
       }
+
+      const size_t read_size = static_cast<size_t>(read_ret);
+      for (size_t idx = 0; idx < read_size; ++idx) {
+        if (before_first_line) {
+          if (buf.at(idx) != '\r') {
+            status.push_back(buf.at(idx));
+          } else if (read_size > idx + 1 && buf.at(idx + 1) == '\n') {
+            before_first_line = 0;
+            skip_before_idx = idx + 2;
+          } else {
+            PMA_EPrintln("ERROR: Invalid forwarded status line");
+            status = "HTTP/1.0 500 Internal Server Error";
+            body =
+                "<html><p>500 Internal Server Error</p><p>Failed to "
+                "forward</p></html>";
+            return;
+          }
+        } else if (before_content) {
+          if (idx < skip_before_idx) {
+            continue;
+          } else {
+            skip_before_idx = 0;
+          }
+
+          if (buf.at(idx) != '\r') {
+            if (buf.at(idx) == ':' && header_name.empty()) {
+              header_name = std::move(temp);
+              temp.clear();
+            } else {
+              temp.push_back(buf.at(idx));
+            }
+          } else if (read_size > idx + 3 && buf.at(idx + 1) == '\n' &&
+                     buf.at(idx + 2) == '\r' && buf.at(idx + 3) == '\n') {
+            if (!temp.empty() && !header_name.empty() && header_value.empty()) {
+              header_value = PMA_HELPER::trim_whitespace(temp);
+              temp.clear();
+              verify_header_fn();
+            } else if (!temp.empty()) {
+              PMA_EPrintln(
+                  "ERROR: Invalid forwarded last header internal state");
+              status = "HTTP/1.0 500 Internal Server Error";
+              content_type.clear();
+              body =
+                  "<html><p>500 Internal Server Error</p><p>Failed to "
+                  "forward</p></html>";
+              return;
+            }
+            before_content = 0;
+            skip_before_idx = idx + 4;
+          } else if (read_size > idx + 1 && buf.at(idx + 1) == '\n') {
+            if (!temp.empty() && !header_name.empty() && header_value.empty()) {
+              header_value = PMA_HELPER::trim_whitespace(temp);
+              temp.clear();
+              verify_header_fn();
+              skip_before_idx = idx + 2;
+            } else if (!temp.empty()) {
+              PMA_EPrintln("ERROR: Invalid forwarded headers internal state");
+              status = "HTTP/1.0 500 Internal Server Error";
+              content_type.clear();
+              body =
+                  "<html><p>500 Internal Server Error</p><p>Failed to "
+                  "forward</p></html>";
+              return;
+            }
+          } else {
+            PMA_EPrintln("ERROR: Invalid forwarded headers");
+            status = "HTTP/1.0 500 Internal Server Error";
+            content_type.clear();
+            body =
+                "<html><p>500 Internal Server Error</p><p>Failed to "
+                "forward</p></html>";
+            return;
+          }
+        } else if (idx < skip_before_idx) {
+          continue;
+        } else {
+          // body.push_back(buf.at(idx));
+          body.append(buf.data() + idx, read_size - idx);
+          if (recv_content_size.has_value()) {
+            if (recv_content_size.value() < read_size - idx) {
+              PMA_EPrintln(
+                  "ERROR: Invalid state handling content size: size is {}, "
+                  "value is {}",
+                  recv_content_size.value(), read_size - idx);
+              status = "HTTP/1.0 500 Internal Server Error";
+              content_type.clear();
+              body =
+                  "<html><p>500 Internal Server Error</p><p>Failed to "
+                  "forward</p></html>";
+              return;
+            } else {
+              recv_content_size.value() -= read_size - idx;
+              PMA_EPrintln("DEBUG: recv_content_size now {}",
+                           recv_content_size.value());
+            }
+          }
+          break;
+        }
+      }  // for idx < read_size
     }
-  }
+  }  // while
+
+  // if (!mime_type.empty()) {
+  //   content_type.append(std::format("Content-Type: {}\r\n", mime_type));
+  // }
 
   if (!content_type.empty()) {
     // Remove ending CRLF because it is added later on.
@@ -1029,6 +1099,7 @@ struct ThreadData {
   std::unordered_map<std::string,
                      std::chrono::time_point<std::chrono::steady_clock> >
       *cached_allowed;
+  const PMA_HELPER::MimeTypes *mime_types;
   int conn_fd;
 };
 
@@ -1383,7 +1454,7 @@ void thread_handle_connection_fn(void *ud) {
                   do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                             data->addr_port_info.local_port,
                                             body, status, content_type, req,
-                                            *data->args);
+                                            *data->args, *data->mime_types);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1428,7 +1499,7 @@ void thread_handle_connection_fn(void *ud) {
                 do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                           data->addr_port_info.local_port, body,
                                           status, content_type, req,
-                                          *data->args);
+                                          *data->args, *data->mime_types);
               }
               goto PMA_RESPONSE_SEND_LOCATION;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
@@ -1489,7 +1560,7 @@ void thread_handle_connection_fn(void *ud) {
                   do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                             data->addr_port_info.local_port,
                                             body, status, content_type, req,
-                                            *data->args);
+                                            *data->args, *data->mime_types);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1525,7 +1596,8 @@ void thread_handle_connection_fn(void *ud) {
             } else {
               do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                         data->addr_port_info.local_port, body,
-                                        status, content_type, req, *data->args);
+                                        status, content_type, req, *data->args,
+                                        *data->mime_types);
             }
             goto PMA_RESPONSE_SEND_LOCATION;
           }
@@ -1615,6 +1687,8 @@ int main(int argc, char **argv) {
   }
 
   curl_global_init(CURL_GLOBAL_SSL);
+
+  PMA_HELPER::MimeTypes mime_types{};
 
   // Mapping is a socket-fd to AddrPortInfo
   std::unordered_map<int, AddrPortInfo> sockets;
@@ -1770,6 +1844,7 @@ int main(int argc, char **argv) {
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;
           new_data->conn_fd = ret;
+          new_data->mime_types = &mime_types;
 
           thread_pool.add_func(thread_handle_connection_fn, new_data,
                                thread_cleanup_fn);
@@ -1804,6 +1879,7 @@ int main(int argc, char **argv) {
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;
           new_data->conn_fd = ret;
+          new_data->mime_types = &mime_types;
 
           thread_pool.add_func(thread_handle_connection_fn, new_data,
                                thread_cleanup_fn);

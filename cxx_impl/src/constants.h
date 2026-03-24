@@ -50,4 +50,6 @@ constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 1;
 
 constexpr int SOCKET_BACKLOG_SIZE = 2048;
 
+constexpr size_t SLEEP_MAX_TICKS = 500 / SLEEP_MILLISECONDS;
+
 #endif
