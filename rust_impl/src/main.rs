@@ -18,6 +18,7 @@ mod args;
 mod constants;
 mod error;
 mod ffi;
+mod ffi_msql;
 mod helpers;
 mod json_types;
 mod salvo_compat;
