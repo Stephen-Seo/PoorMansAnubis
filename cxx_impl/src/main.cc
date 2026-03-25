@@ -695,6 +695,7 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
 void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
                                std::string &body, std::string &status,
                                std::string &content_type,
+                               std::bitset<32> &forward_flags,
                                const PMA_HTTP::Request &req,
                                const PMA_ARGS::Args &args,
                                const PMA_HELPER::MimeTypes &mime_types) {
@@ -920,15 +921,21 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
   content_type.clear();
 
   const auto verify_header_fn = [&header_name, &header_value, &content_type,
-                                 &recv_content_size]() {
-    if (PMA_HELPER::ascii_str_to_lower(header_name) != "content-length") {
+                                 &recv_content_size, &forward_flags]() {
+    if (PMA_HELPER::ascii_str_to_lower(header_name) == "transfer-encoding" &&
+        PMA_HELPER::ascii_str_to_lower(
+            PMA_HELPER::trim_whitespace(header_value)) == "chunked") {
+      forward_flags.set(0);
+    }
+    if (PMA_HELPER::ascii_str_to_lower(header_name) != "content-length" &&
+        PMA_HELPER::ascii_str_to_lower(header_name) != "connection") {
       content_type.append(std::format("{}: {}\r\n", header_name, header_value));
     } else {
       try {
         size_t content_size = std::stoull(header_value);
         if (content_size > 0) {
           recv_content_size = content_size;
-          PMA_EPrintln("DEBUG: content_size: {}", content_size);
+          // PMA_EPrintln("DEBUG: content_size: {}", content_size);
         }
       } catch (const std::exception &e) {
       }
@@ -973,10 +980,10 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       break;
     } else {
       if (read_ret == buf.size()) {
-        PMA_EPrintln("DEBUG: set buf_read_to_full to 1");
+        // PMA_EPrintln("DEBUG: set buf_read_to_full to 1");
         buf_read_to_full = 1;
       } else {
-        PMA_EPrintln("DEBUG: set buf_read_to_full to 0");
+        // PMA_EPrintln("DEBUG: set buf_read_to_full to 0");
         buf_read_to_full = 0;
       }
 
@@ -1071,8 +1078,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
               return;
             } else {
               recv_content_size.value() -= read_size - idx;
-              PMA_EPrintln("DEBUG: recv_content_size now {}",
-                           recv_content_size.value());
+              // PMA_EPrintln("DEBUG: recv_content_size now {}",
+              //              recv_content_size.value());
             }
           }
           break;
@@ -1085,10 +1092,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
   //   content_type.append(std::format("Content-Type: {}\r\n", mime_type));
   // }
 
-  if (!content_type.empty()) {
-    // Remove ending CRLF because it is added later on.
-    content_type.resize(content_type.size() - 2);
-  }
+  // Append "Connection: close" without ending "\r\n" as it is added later.
+  content_type.append("Connection: close");
 }
 
 struct ThreadData {
@@ -1204,6 +1209,10 @@ void thread_handle_connection_fn(void *ud) {
           std::tie(sqliteCtx, err, msg) =
               PMA_SQL::init_sqlite(data->args->sqlite_path);
         }
+
+        // 0 - content-type: chunked
+        std::bitset<32> forward_flags;
+
         if (err != PMA_SQL::ErrorT::SUCCESS) {
           PMA_EPrintln("ERROR: Failed to initialize sqlite: {}, {}",
                        PMA_SQL::error_t_to_string(err), msg);
@@ -1453,8 +1462,9 @@ void thread_handle_connection_fn(void *ud) {
                 } else {
                   do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                             data->addr_port_info.local_port,
-                                            body, status, content_type, req,
-                                            *data->args, *data->mime_types);
+                                            body, status, content_type,
+                                            forward_flags, req, *data->args,
+                                            *data->mime_types);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1498,8 +1508,8 @@ void thread_handle_connection_fn(void *ud) {
               } else {
                 do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                           data->addr_port_info.local_port, body,
-                                          status, content_type, req,
-                                          *data->args, *data->mime_types);
+                                          status, content_type, forward_flags,
+                                          req, *data->args, *data->mime_types);
               }
               goto PMA_RESPONSE_SEND_LOCATION;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
@@ -1559,8 +1569,9 @@ void thread_handle_connection_fn(void *ud) {
                 } else {
                   do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                             data->addr_port_info.local_port,
-                                            body, status, content_type, req,
-                                            *data->args, *data->mime_types);
+                                            body, status, content_type,
+                                            forward_flags, req, *data->args,
+                                            *data->mime_types);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1596,17 +1607,21 @@ void thread_handle_connection_fn(void *ud) {
             } else {
               do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                         data->addr_port_info.local_port, body,
-                                        status, content_type, req, *data->args,
-                                        *data->mime_types);
+                                        status, content_type, forward_flags,
+                                        req, *data->args, *data->mime_types);
             }
             goto PMA_RESPONSE_SEND_LOCATION;
           }
         }
 
       PMA_RESPONSE_SEND_LOCATION:
-        std::string full =
-            std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
-                        content_type, body.size(), body);
+        std::string full;
+        if (forward_flags.test(0)) {
+          full = std::format("{}\r\n{}\r\n\r\n{}", status, content_type, body);
+        } else {
+          full = std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
+                             content_type, body.size(), body);
+        }
         ssize_t write_ret = write(data->conn_fd, full.data(), full.size());
         if (write_ret != static_cast<ssize_t>(full.size())) {
           if (write_ret > 0) {
