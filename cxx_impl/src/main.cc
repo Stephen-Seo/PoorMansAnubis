@@ -908,7 +908,6 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
   std::array<char, REQ_READ_BUF_SIZE> buf;
   int_fast8_t before_first_line = 1;
   int_fast8_t before_content = 1;
-  std::optional<int_fast8_t> buf_read_to_full;
   std::string temp;
   std::string header_name;
   std::string header_value;
@@ -951,9 +950,6 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         if (recv_content_size.has_value() && recv_content_size.value() == 0) {
           break;
-        } else if (buf_read_to_full.has_value() &&
-                   buf_read_to_full.value() == 0) {
-          break;
         }
         std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
         if (++wait_ticks > SLEEP_MAX_TICKS) {
@@ -979,14 +975,6 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       }
       break;
     } else {
-      if (read_ret == buf.size()) {
-        // PMA_EPrintln("DEBUG: set buf_read_to_full to 1");
-        buf_read_to_full = 1;
-      } else {
-        // PMA_EPrintln("DEBUG: set buf_read_to_full to 0");
-        buf_read_to_full = 0;
-      }
-
       const size_t read_size = static_cast<size_t>(read_ret);
       for (size_t idx = 0; idx < read_size; ++idx) {
         if (before_first_line) {
