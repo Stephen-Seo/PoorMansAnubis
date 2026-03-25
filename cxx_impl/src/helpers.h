@@ -130,6 +130,7 @@ std::string trim_whitespace(const std::string &s);
 // Returns empty if no extension exists.
 std::string get_file_ext(const std::string &s);
 
+// Currently unused. Re-enable tests in src/test.cc if to be used.
 class MimeTypes {
  public:
   MimeTypes();

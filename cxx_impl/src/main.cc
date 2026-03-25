@@ -697,8 +697,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
                                std::string &content_type,
                                std::bitset<32> &forward_flags,
                                const PMA_HTTP::Request &req,
-                               const PMA_ARGS::Args &args,
-                               const PMA_HELPER::MimeTypes &mime_types) {
+                               const PMA_ARGS::Args &args) {
   std::string addr;
   uint32_t port = 80;
 
@@ -837,35 +836,6 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     to_write.push_back(' ');
     size_t remaining = 0;
 
-    const auto write_fn = [&]() -> bool {
-      while (true) {
-        ssize_t write_ret =
-            write(socket_fd, to_write.data() + (to_write.size() - remaining),
-                  remaining);
-        if (write_ret == -1) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
-            continue;
-          } else {
-            PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
-                         errno);
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Failed to "
-                "fetch</p></html>";
-            return true;
-          }
-        } else {
-          remaining -= static_cast<size_t>(write_ret);
-          if (remaining == 0) {
-            break;
-          }
-        }
-      }
-
-      return false;
-    };
-
     // Write path
     to_write.append(req.full_url);
     to_write.append(" HTTP/1.1\r\n");
@@ -892,16 +862,29 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
 
     remaining = to_write.size();
 
-    if (write_fn()) {
-      return;
-    }
-  }
-
-  std::string mime_type;
-  {
-    std::string ext = PMA_HELPER::get_file_ext(req.full_url);
-    if (!ext.empty()) {
-      mime_type = mime_types.get_mimetype_from_ext(ext);
+    while (true) {
+      ssize_t write_ret =
+          write(socket_fd, to_write.data() + (to_write.size() - remaining),
+                remaining);
+      if (write_ret == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+          continue;
+        } else {
+          PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
+                       errno);
+          status = "HTTP/1.0 500 Internal Server Error";
+          body =
+              "<html><p>500 Internal Server Error</p><p>Failed to "
+              "fetch</p></html>";
+          return;
+        }
+      } else {
+        remaining -= static_cast<size_t>(write_ret);
+        if (remaining == 0) {
+          break;
+        }
+      }
     }
   }
 
@@ -1092,7 +1075,6 @@ struct ThreadData {
   std::unordered_map<std::string,
                      std::chrono::time_point<std::chrono::steady_clock> >
       *cached_allowed;
-  const PMA_HELPER::MimeTypes *mime_types;
   int conn_fd;
 };
 
@@ -1451,8 +1433,7 @@ void thread_handle_connection_fn(void *ud) {
                   do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                             data->addr_port_info.local_port,
                                             body, status, content_type,
-                                            forward_flags, req, *data->args,
-                                            *data->mime_types);
+                                            forward_flags, req, *data->args);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1497,7 +1478,7 @@ void thread_handle_connection_fn(void *ud) {
                 do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                           data->addr_port_info.local_port, body,
                                           status, content_type, forward_flags,
-                                          req, *data->args, *data->mime_types);
+                                          req, *data->args);
               }
               goto PMA_RESPONSE_SEND_LOCATION;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
@@ -1558,8 +1539,7 @@ void thread_handle_connection_fn(void *ud) {
                   do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                             data->addr_port_info.local_port,
                                             body, status, content_type,
-                                            forward_flags, req, *data->args,
-                                            *data->mime_types);
+                                            forward_flags, req, *data->args);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1596,7 +1576,7 @@ void thread_handle_connection_fn(void *ud) {
               do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
                                         data->addr_port_info.local_port, body,
                                         status, content_type, forward_flags,
-                                        req, *data->args, *data->mime_types);
+                                        req, *data->args);
             }
             goto PMA_RESPONSE_SEND_LOCATION;
           }
@@ -1847,7 +1827,6 @@ int main(int argc, char **argv) {
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;
           new_data->conn_fd = ret;
-          new_data->mime_types = &mime_types;
 
           thread_pool.add_func(thread_handle_connection_fn, new_data,
                                thread_cleanup_fn);
@@ -1882,7 +1861,6 @@ int main(int argc, char **argv) {
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;
           new_data->conn_fd = ret;
-          new_data->mime_types = &mime_types;
 
           thread_pool.add_func(thread_handle_connection_fn, new_data,
                                thread_cleanup_fn);

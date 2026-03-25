@@ -1228,20 +1228,21 @@ int main() {
   }
 
   // Test PMA_HELPER::MimeTypes::get_mimetype_from_ext
-  {
-    PMA_HELPER::MimeTypes types{};
-    if (types.is_loaded()) {
-      std::string type = types.get_mimetype_from_ext("css");
-      PMA_EPrintln("css -> {}, is {}", type,
-                   type.empty() ? "empty" : "not empty");
-      CHECK_TRUE(types.get_mimetype_from_ext("html") == "text/html");
-      CHECK_TRUE(types.get_mimetype_from_ext("css") == "text/css");
-      CHECK_TRUE(types.get_mimetype_from_ext("js") == "text/javascript");
-      CHECK_TRUE(types.get_mimetype_from_ext("png") == "image/png");
-    } else {
-      PMA_Println("Cannot test MimeTypes: not loaded.");
-    }
-  }
+  // NOTICE: Unused. Re-enable tests if needed to be used.
+  //{
+  //  PMA_HELPER::MimeTypes types{};
+  //  if (types.is_loaded()) {
+  //    std::string type = types.get_mimetype_from_ext("css");
+  //    PMA_EPrintln("css -> {}, is {}", type,
+  //                 type.empty() ? "empty" : "not empty");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("html") == "text/html");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("css") == "text/css");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("js") == "text/javascript");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("png") == "image/png");
+  //  } else {
+  //    PMA_Println("Cannot test MimeTypes: not loaded.");
+  //  }
+  //}
 
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
