@@ -845,6 +845,9 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       // PMA_EPrintln("DEBUG_write_header: {}: {} END_write_header",
       // iter->first,
       //              iter->second);
+      if (PMA_HELPER::ascii_str_to_lower(iter->first) == "connection") {
+        continue;
+      }
       to_write.append(iter->first);
       to_write.push_back(':');
       to_write.push_back(' ');
