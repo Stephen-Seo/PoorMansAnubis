@@ -860,7 +860,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     // }
 
     to_write.append(std::format("Host: {}:{}\r\n", addr, port));
-    to_write.append("Accept: */*\r\n");
+    to_write.append(
+        "Accept: text/html,application/xhtml+xml,application/xml,*/*\r\n");
     to_write.append("User-Agent: PoorMansAnubis\r\n");
     to_write.append("Connection: close\r\n");
     to_write.append(std::format("x-real-ip: {}\r\n", cli_addr));
@@ -929,7 +930,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     if (header_name_lower != "content-length" &&
         header_name_lower != "connection" &&
         header_name_lower != "accept-ranges") {
-      PMA_EPrintln("  recv header: {}: {}", header_name, header_value);
+      //PMA_EPrintln("  recv header: {}: {}", header_name, header_value);
       content_type.append(std::format("{}: {}\r\n", header_name, header_value));
     } else {
       try {
