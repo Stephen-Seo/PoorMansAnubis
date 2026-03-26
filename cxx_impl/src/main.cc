@@ -980,6 +980,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       }
       break;
     } else {
+      wait_ticks = 0;
       const size_t read_size = static_cast<size_t>(read_ret);
       for (size_t idx = 0; idx < read_size; ++idx) {
         if (before_first_line) {
