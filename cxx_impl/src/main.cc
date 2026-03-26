@@ -841,21 +841,29 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     to_write.append(" HTTP/1.1\r\n");
 
     // Write headers
-    for (auto iter = req.headers.cbegin(); iter != req.headers.cend(); ++iter) {
-      // PMA_EPrintln("DEBUG_write_header: {}: {} END_write_header",
-      // iter->first,
-      //              iter->second);
-      if (PMA_HELPER::ascii_str_to_lower(iter->first) == "connection") {
-        continue;
-      }
-      to_write.append(iter->first);
-      to_write.push_back(':');
-      to_write.push_back(' ');
-      to_write.append(iter->second);
-      to_write.append("\r\n");
-    }
+    // PMA_EPrintln("DEBUG: Writing headers:");
+    // for (auto iter = req.headers.cbegin(); iter != req.headers.cend();
+    // ++iter) {
+    //   {
+    //     std::string header_name_lower =
+    //         PMA_HELPER::ascii_str_to_lower(iter->first);
+    //     if (header_name_lower != "user-agent") {
+    //       continue;
+    //     }
+    //   }
+    //   to_write.append(iter->first);
+    //   to_write.push_back(':');
+    //   to_write.push_back(' ');
+    //   to_write.append(iter->second);
+    //   to_write.append("\r\n");
+    //   PMA_EPrintln("  {}: {}", iter->first, iter->second);
+    // }
 
+    to_write.append(std::format("Host: {}:{}\r\n", addr, port));
+    to_write.append("Accept: */*\r\n");
+    to_write.append("User-Agent: PoorMansAnubis\r\n");
     to_write.append("Connection: close\r\n");
+    to_write.append(std::format("x-real-ip: {}\r\n", cli_addr));
 
     // End of headers
     to_write.append("\r\n");
@@ -864,6 +872,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       // Request content data
       to_write.append(req.body);
     }
+
+    // PMA_EPrintln("DEBUG: to_write: {} END_to_write", to_write);
 
     remaining = to_write.size();
 
@@ -874,6 +884,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       if (write_ret == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+          // PMA_EPrintln("DEGUG: write forwarding req: EAGAIN/EWOULDBLOCK");
           continue;
         } else {
           PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
@@ -909,13 +920,16 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
 
   const auto verify_header_fn = [&header_name, &header_value, &content_type,
                                  &recv_content_size, &forward_flags]() {
-    if (PMA_HELPER::ascii_str_to_lower(header_name) == "transfer-encoding" &&
+    std::string header_name_lower = PMA_HELPER::ascii_str_to_lower(header_name);
+    if (header_name_lower == "transfer-encoding" &&
         PMA_HELPER::ascii_str_to_lower(
             PMA_HELPER::trim_whitespace(header_value)) == "chunked") {
       forward_flags.set(0);
     }
-    if (PMA_HELPER::ascii_str_to_lower(header_name) != "content-length" &&
-        PMA_HELPER::ascii_str_to_lower(header_name) != "connection") {
+    if (header_name_lower != "content-length" &&
+        header_name_lower != "connection" &&
+        header_name_lower != "accept-ranges") {
+      PMA_EPrintln("  recv header: {}: {}", header_name, header_value);
       content_type.append(std::format("{}: {}\r\n", header_name, header_value));
     } else {
       try {
@@ -940,7 +954,9 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
           break;
         }
         std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
-        if (++wait_ticks > SLEEP_MAX_TICKS) {
+        if (++wait_ticks > TIMEOUT_ITER_TICKS) {
+          // PMA_EPrintln(
+          //     "DEBUG: write forwarding req resp: EAGAIN/EWOULDBLOCK break");
           break;
         }
         continue;
@@ -1070,6 +1086,21 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
 
   // Append "Connection: close" without ending "\r\n" as it is added later.
   content_type.append("Connection: close");
+
+  // PMA_EPrintln("DEBUG_status: {} END_status; status size: {}", status,
+  //              status.size());
+  // PMA_EPrintln("DEBUG_content_type: {} END_content_type, content size: {}",
+  //              content_type, content_type.size());
+  // PMA_EPrintln("DEBUG_body: {:.100} END_body, body size: {}", body,
+  //              body.size());
+
+  if (status.empty()) {
+    status = "HTTP/1.0 500 Internal Server Error";
+    content_type = "Connection: close";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to "
+        "forward, no response</p></html>";
+  }
 }
 
 struct ThreadData {

@@ -30,7 +30,9 @@ constexpr unsigned int SLEEP_MILLISECONDS = 2;
 constexpr std::chrono::milliseconds SLEEP_MILLISECONDS_CHRONO =
     std::chrono::milliseconds(SLEEP_MILLISECONDS);
 // 7 seconds
-constexpr unsigned int TIMEOUT_ITER_TICKS = 7000 / SLEEP_MILLISECONDS;
+constexpr unsigned int TIMEOUT_MILLISECONDS = 5000;
+constexpr unsigned int TIMEOUT_ITER_TICKS =
+    TIMEOUT_MILLISECONDS / SLEEP_MILLISECONDS;
 
 constexpr size_t CACHED_TIMEOUT_SECONDS = 120;
 constexpr std::chrono::seconds CACHED_TIMEOUT_T =
@@ -49,7 +51,5 @@ constexpr uint32_t ALLOWED_IP_TIMEOUT_MINUTES = 60;
 constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 1;
 
 constexpr int SOCKET_BACKLOG_SIZE = 2048;
-
-constexpr size_t SLEEP_MAX_TICKS = 500 / SLEEP_MILLISECONDS;
 
 #endif
