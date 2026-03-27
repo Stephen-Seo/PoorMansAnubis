@@ -841,24 +841,6 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     to_write.append(" HTTP/1.1\r\n");
 
     // Write headers
-    // PMA_EPrintln("DEBUG: Writing headers:");
-    // for (auto iter = req.headers.cbegin(); iter != req.headers.cend();
-    // ++iter) {
-    //   {
-    //     std::string header_name_lower =
-    //         PMA_HELPER::ascii_str_to_lower(iter->first);
-    //     if (header_name_lower != "user-agent") {
-    //       continue;
-    //     }
-    //   }
-    //   to_write.append(iter->first);
-    //   to_write.push_back(':');
-    //   to_write.push_back(' ');
-    //   to_write.append(iter->second);
-    //   to_write.append("\r\n");
-    //   PMA_EPrintln("  {}: {}", iter->first, iter->second);
-    // }
-
     to_write.append(std::format("Host: {}:{}\r\n", addr, port));
     to_write.append(
         "Accept: text/html,application/xhtml+xml,application/xml,*/*\r\n");
@@ -1090,26 +1072,15 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     }
   }  // while
 
-  // if (!mime_type.empty()) {
-  //   content_type.append(std::format("Content-Type: {}\r\n", mime_type));
-  // }
-
-  // Append "Connection: close" without ending "\r\n" as it is added later.
-  content_type.append("Connection: close");
-
-  // PMA_EPrintln("DEBUG_status: {} END_status; status size: {}", status,
-  //              status.size());
-  // PMA_EPrintln("DEBUG_content_type: {} END_content_type, content size: {}",
-  //              content_type, content_type.size());
-  // PMA_EPrintln("DEBUG_body: {:.100} END_body, body size: {}", body,
-  //              body.size());
-
   if (status.empty()) {
     status = "HTTP/1.0 500 Internal Server Error";
     content_type = "Connection: close";
     body =
         "<html><p>500 Internal Server Error</p><p>Failed to "
         "forward, no response</p></html>";
+  } else {
+    // Append "Connection: close" without ending "\r\n" as it is added later.
+    content_type.append("Connection: close");
   }
 }
 
