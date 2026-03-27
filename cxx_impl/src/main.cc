@@ -912,6 +912,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         if (remaining == 0) {
           break;
         }
+        wait_ticks = 0;
       }
     }
   }
@@ -957,7 +958,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     header_value.clear();
   };
 
-  while (true) {
+  while (wait_ticks < TIMEOUT_ITER_TICKS) {
     skip_before_idx = 0;
     ssize_t read_ret = read(socket_fd, buf.data(), buf.size());
     if (read_ret == -1) {
@@ -966,11 +967,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
           break;
         }
         std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
-        if (++wait_ticks > TIMEOUT_ITER_TICKS) {
-          // PMA_EPrintln(
-          //     "DEBUG: write forwarding req resp: EAGAIN/EWOULDBLOCK break");
-          break;
-        }
+        ++wait_ticks;
         continue;
       } else {
         PMA_EPrintln("ERROR: Failed to read response, errno {}", errno);
