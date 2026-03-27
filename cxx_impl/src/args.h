@@ -58,6 +58,8 @@ struct Args {
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;
   uint32_t thread_count;
+  uint32_t req_timeout_milliseconds;
+  uint32_t req_timeout_ticks;
 };
 
 }  // namespace PMA_ARGS

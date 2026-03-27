@@ -73,6 +73,9 @@ void pma_print_usage() {
   PMA_Println(
       "  --enable-libcurl : Enables fetching dest urls by using libcurl");
   PMA_Println(
+      "  --req-timeout-millis=<milliseconds> : Sets the number of milliseconds "
+      "until timeout during forwarding requests (default 5000)");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -105,7 +108,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       sqlite_path("sqlite_db"),
       challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
-      thread_count(1) {
+      thread_count(1),
+      req_timeout_milliseconds(TIMEOUT_MILLISECONDS),
+      req_timeout_ticks(TIMEOUT_ITER_TICKS) {
   --argc;
   ++argv;
 
@@ -364,6 +369,36 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
     } else if (std::strcmp(argv[0], "--enable-libcurl") == 0) {
       flags.set(5);
+    } else if (std::strncmp(argv[0], "--req-timeout-millis=", 21) == 0) {
+      std::string s(argv[0] + 21);
+      unsigned long value;
+      try {
+        value = std::stoul(s);
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse value passed to --req-timeout-millis=... "
+            "!");
+        flags.set(2);
+        return;
+      }
+      if (value < TIMEOUT_MILLISECONDS_MIN) {
+        PMA_EPrintln(
+            "ERROR: Value passed to --req-timeout-millis=... ({}) is too low "
+            "(minimum is {})!",
+            value, TIMEOUT_MILLISECONDS_MIN);
+        flags.set(2);
+        return;
+      } else if (value > TIMEOUT_MILLISECONDS_MAX) {
+        PMA_EPrintln(
+            "ERROR: Value passed to --req-timeout-millis=... ({}) is too high "
+            "(maximum is {})!",
+            value, TIMEOUT_MILLISECONDS_MAX);
+        flags.set(2);
+        return;
+      }
+
+      req_timeout_milliseconds = static_cast<uint32_t>(value);
+      req_timeout_ticks = req_timeout_milliseconds / SLEEP_MILLISECONDS;
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

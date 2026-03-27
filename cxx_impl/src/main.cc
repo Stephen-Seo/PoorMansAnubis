@@ -870,7 +870,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
           // PMA_EPrintln("DEGUG: write forwarding req: EAGAIN/EWOULDBLOCK");
-          if (++wait_ticks > TIMEOUT_ITER_TICKS) {
+          if (++wait_ticks > args.req_timeout_ticks) {
             PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
                          errno);
             status = "HTTP/1.0 500 Internal Server Error";
@@ -940,7 +940,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     header_value.clear();
   };
 
-  while (wait_ticks < TIMEOUT_ITER_TICKS) {
+  while (wait_ticks < args.req_timeout_ticks) {
     skip_before_idx = 0;
     ssize_t read_ret = read(socket_fd, buf.data(), buf.size());
     if (read_ret == -1) {
@@ -1102,7 +1102,7 @@ void thread_handle_connection_fn(void *ud) {
   // Lazy load the connection to msql.
   std::optional<PMA_MSQL::Connection> msql_conn_opt;
 
-  while (data->addr_port_info.ticks < TIMEOUT_ITER_TICKS) {
+  while (data->addr_port_info.ticks < THREAD_TIMEOUT_TICKS) {
     std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
     data->addr_port_info.ticks += 1;
 
@@ -1645,7 +1645,7 @@ void thread_handle_connection_fn(void *ud) {
     }
   }  // while ticks < timeout ticks
 
-  if (data->addr_port_info.ticks >= TIMEOUT_ITER_TICKS) {
+  if (data->addr_port_info.ticks >= THREAD_TIMEOUT_TICKS) {
 #ifndef NDEBUG
     PMA_Println("Timed out connection from {}:{} on port {}",
                 data->addr_port_info.client_addr,
