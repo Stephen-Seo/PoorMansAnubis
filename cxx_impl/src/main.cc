@@ -701,11 +701,17 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
   std::string addr;
   uint32_t port = 80;
 
-  if (auto iter = args.port_to_dest_urls.find(cli_port);
-      iter != args.port_to_dest_urls.end()) {
+  {
+    auto iter = args.port_to_dest_urls.find(cli_port);
+    std::string full_addr;
+    if (iter != args.port_to_dest_urls.end()) {
+      full_addr = iter->second;
+    } else {
+      full_addr = args.default_dest_url;
+    }
     std::optional<size_t> http_idx;
-    for (size_t idx = 0; idx + 7 < iter->second.size(); ++idx) {
-      if (std::strncmp("http://", iter->second.data() + idx, 7) == 0) {
+    for (size_t idx = 0; idx + 7 < full_addr.size(); ++idx) {
+      if (std::strncmp("http://", full_addr.data() + idx, 7) == 0) {
         http_idx = idx;
         break;
       }
@@ -715,11 +721,10 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       size_t end_idx = http_idx.value() + 7;
       size_t decimal_count = 0;
       int_fast8_t has_number = 0;
-      for (; end_idx < iter->second.size(); ++end_idx) {
-        if (iter->second.at(end_idx) >= '0' &&
-            iter->second.at(end_idx) <= '9') {
+      for (; end_idx < full_addr.size(); ++end_idx) {
+        if (full_addr.at(end_idx) >= '0' && full_addr.at(end_idx) <= '9') {
           has_number = 1;
-        } else if (iter->second.at(end_idx) == '.') {
+        } else if (full_addr.at(end_idx) == '.') {
           if (has_number == 0) {
             PMA_EPrintln(
                 "ERROR: Failed to parse ip addr from url (invalid ipv4)!");
@@ -742,16 +747,15 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
             return;
           }
         } else if (decimal_count == 3) {
-          if (iter->second.at(end_idx) < '0' ||
-              iter->second.at(end_idx) > '9') {
+          if (full_addr.at(end_idx) < '0' || full_addr.at(end_idx) > '9') {
             break;
           }
         }
       }
 
       if (has_number && decimal_count == 3) {
-        addr = iter->second.substr(http_idx.value() + 7,
-                                   end_idx - (http_idx.value() + 7));
+        addr = full_addr.substr(http_idx.value() + 7,
+                                end_idx - (http_idx.value() + 7));
       } else {
         PMA_EPrintln(
             "ERROR: Failed to parse ip addr from url (failed to parse ipv4)!");
@@ -762,12 +766,12 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         return;
       }
 
-      if (end_idx < iter->second.size() && iter->second.at(end_idx) == ':') {
+      if (end_idx < full_addr.size() && full_addr.at(end_idx) == ':') {
         // Port is specified
         port = 0;
-        for (size_t idx = end_idx + 1; idx < iter->second.size(); ++idx) {
-          if (iter->second.at(idx) >= '0' && iter->second.at(idx) <= '9') {
-            uint32_t digit = static_cast<uint16_t>(iter->second.at(idx) - '0');
+        for (size_t idx = end_idx + 1; idx < full_addr.size(); ++idx) {
+          if (full_addr.at(idx) >= '0' && full_addr.at(idx) <= '9') {
+            uint32_t digit = static_cast<uint16_t>(full_addr.at(idx) - '0');
             port = static_cast<uint32_t>(port * 10 + digit);
             if (port > 0xFFFF) {
               PMA_EPrintln(
