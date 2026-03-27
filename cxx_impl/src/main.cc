@@ -1474,6 +1474,7 @@ void thread_handle_connection_fn(void *ud) {
               if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
                 data->cached_allowed->erase(cached_iter);
               } else {
+                cached_allowed_lock.unlock();
                 if (data->args->flags.test(5)) {
                   do_curl_forwarding(data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
@@ -1519,6 +1520,7 @@ void thread_handle_connection_fn(void *ud) {
                   std::format("{}:{}", data->addr_port_info.client_addr,
                               data->addr_port_info.local_port),
                   time_now));
+              cached_allowed_lock.unlock();
               if (data->args->flags.test(5)) {
                 do_curl_forwarding(data->addr_port_info.client_addr,
                                    data->addr_port_info.local_port, body,
@@ -1580,6 +1582,7 @@ void thread_handle_connection_fn(void *ud) {
               if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
                 data->cached_allowed->erase(cached_iter);
               } else {
+                cached_allowed_lock.unlock();
                 if (data->args->flags.test(5)) {
                   do_curl_forwarding(data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
@@ -1617,6 +1620,7 @@ void thread_handle_connection_fn(void *ud) {
                 std::format("{}:{}", data->addr_port_info.client_addr,
                             data->addr_port_info.local_port),
                 time_now));
+            cached_allowed_lock.unlock();
             if (data->args->flags.test(5)) {
               do_curl_forwarding(data->addr_port_info.client_addr,
                                  data->addr_port_info.local_port, body, status,
