@@ -878,6 +878,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
 
     remaining = to_write.size();
 
+    size_t wait_ticks = 0;
+
     while (true) {
       ssize_t write_ret =
           write(socket_fd, to_write.data() + (to_write.size() - remaining),
@@ -886,6 +888,15 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
           // PMA_EPrintln("DEGUG: write forwarding req: EAGAIN/EWOULDBLOCK");
+          if (++wait_ticks > TIMEOUT_ITER_TICKS) {
+            PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
+                         errno);
+            status = "HTTP/1.0 500 Internal Server Error";
+            body =
+                "<html><p>500 Internal Server Error</p><p>Failed to "
+                "fetch, timed out write</p></html>";
+            return;
+          }
           continue;
         } else {
           PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
