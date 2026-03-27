@@ -30,8 +30,9 @@ void ThreadPool::thread_function(
       std::unique_lock<std::mutex> lock(std::get<std::mutex>(*cond_var));
       if (pending_fns->empty()) {
         std::get<std::condition_variable>(*cond_var).wait(lock);
-        continue;
-      } else {
+      }
+
+      if (!pending_fns->empty()) {
         fn = std::move(std::get<0>(pending_fns->back()));
         ud = std::get<1>(pending_fns->back());
         cleanup_fn = std::move(std::get<2>(pending_fns->back()));
