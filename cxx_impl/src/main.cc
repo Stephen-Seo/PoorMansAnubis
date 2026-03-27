@@ -157,6 +157,21 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
   }
 #endif
 
+  // Set curl connection timeout
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
+                                  args.req_timeout_milliseconds);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set curl timeout (client {}, port "
+        "{})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl timeout</p></html>";
+    return;
+  }
+
   // Set curl destination
   if (auto header_iter = req.headers.find("override-dest-url");
       header_iter != req.headers.end() && args.flags.test(1)) {
