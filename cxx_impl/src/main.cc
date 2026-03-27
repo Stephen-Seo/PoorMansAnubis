@@ -869,6 +869,12 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     to_write.append("Connection: close\r\n");
     to_write.append(std::format("x-real-ip: {}\r\n", cli_addr));
 
+    if (auto iter = req.headers.find("content-type"); iter != req.headers.end()) {
+      to_write.append("Content-Type: ");
+      to_write.append(iter->second);
+      to_write.append("\r\n");
+    }
+
     // End of headers
     to_write.append("\r\n");
 
