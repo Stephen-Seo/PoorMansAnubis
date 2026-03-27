@@ -792,7 +792,9 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         }
       }
     } else {
-      PMA_EPrintln("ERROR: Failed to parse ip addr from url (no \"http://\")!");
+      PMA_EPrintln(
+          "ERROR: Failed to parse ip addr from url (no \"http://\")! (For "
+          "https://, use \"--enable-libcurl\")");
       status = "HTTP/1.0 500 Internal Server Error";
       body =
           "<html><p>500 Internal Server Error</p><p>Invalid "
