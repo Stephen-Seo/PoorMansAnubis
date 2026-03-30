@@ -1207,6 +1207,43 @@ int main() {
     CHECK_TRUE(s == "One TTwo TThree Four Five");
   }
 
+  // Test PMA_HELPER::trim_whitespace
+  {
+    std::string s("  some  whitespace in this sentence...  ");
+    std::string r = PMA_HELPER::trim_whitespace(s);
+    CHECK_TRUE(r == "some  whitespace in this sentence...");
+    s = "some  whitespace in this sentence...  ";
+    r = PMA_HELPER::trim_whitespace(s);
+    CHECK_TRUE(r == "some  whitespace in this sentence...");
+    s = "  some  whitespace in this sentence...";
+    r = PMA_HELPER::trim_whitespace(s);
+    CHECK_TRUE(r == "some  whitespace in this sentence...");
+  }
+
+  // Test PMA_HELPER::get_file_ext
+  {
+    CHECK_TRUE(PMA_HELPER::get_file_ext("one.css") == "css");
+    CHECK_TRUE(PMA_HELPER::get_file_ext("two.mp3") == "mp3");
+    CHECK_TRUE(PMA_HELPER::get_file_ext("three/four").empty());
+  }
+
+  // Test PMA_HELPER::MimeTypes::get_mimetype_from_ext
+  // NOTICE: Unused. Re-enable tests if needed to be used.
+  //{
+  //  PMA_HELPER::MimeTypes types{};
+  //  if (types.is_loaded()) {
+  //    std::string type = types.get_mimetype_from_ext("css");
+  //    PMA_EPrintln("css -> {}, is {}", type,
+  //                 type.empty() ? "empty" : "not empty");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("html") == "text/html");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("css") == "text/css");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("js") == "text/javascript");
+  //    CHECK_TRUE(types.get_mimetype_from_ext("png") == "image/png");
+  //  } else {
+  //    PMA_Println("Cannot test MimeTypes: not loaded.");
+  //  }
+  //}
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;

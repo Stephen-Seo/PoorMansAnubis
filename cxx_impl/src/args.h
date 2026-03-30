@@ -21,6 +21,7 @@
 #include <bitset>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -49,14 +50,17 @@ struct Args {
   // 2 - failed to parse args
   // 3 - potentially dangerous flags enabled
   // 4 - use msql
+  // 5 - use libcurl
   std::bitset<32> flags;
   std::string api_url;
   std::string js_factors_url;
   std::string sqlite_path;
   std::string mysql_conf_path;
+  std::optional<uint32_t> thread_count;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;
-  uint32_t thread_count;
+  uint32_t req_timeout_milliseconds;
+  uint32_t req_timeout_ticks;
 };
 
 }  // namespace PMA_ARGS

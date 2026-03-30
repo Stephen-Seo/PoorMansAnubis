@@ -17,8 +17,10 @@
 #include "helpers.h"
 
 // Standard library includes
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 
 // Posix includes
 #include <signal.h>
@@ -247,4 +249,137 @@ std::array<char, 40> PMA_HELPER::sha1_digest_hex(uint8_t *data, size_t size) {
   std::array<uint8_t, 20> digest = sha1_digest(data, size);
 
   return digest_s20_to_hex(digest);
+}
+
+std::string PMA_HELPER::trim_whitespace(const std::string &s) {
+  if (s.empty()) {
+    return {};
+  }
+
+  std::optional<size_t> leading_idx;
+  for (size_t idx = 0; idx < s.size(); ++idx) {
+    if (s.at(idx) == ' ' || s.at(idx) == '\t' || s.at(idx) == '\r' ||
+        s.at(idx) == '\n') {
+      leading_idx = idx;
+    } else {
+      break;
+    }
+  }
+
+  std::size_t ending_idx = s.size();
+  for (size_t idx = ending_idx; idx-- > 0;) {
+    if (s.at(idx) == ' ' || s.at(idx) == '\t' || s.at(idx) == '\r' ||
+        s.at(idx) == '\n') {
+      ending_idx = idx;
+    } else {
+      break;
+    }
+  }
+
+  if (leading_idx.has_value()) {
+    if (leading_idx.value() + 1 >= ending_idx) {
+      return {};
+    }
+
+    return s.substr(leading_idx.value() + 1,
+                    ending_idx - leading_idx.value() - 1);
+  } else {
+    return s.substr(0, ending_idx);
+  }
+}
+
+std::string PMA_HELPER::get_file_ext(const std::string &s) {
+  std::string ret;
+  for (size_t idx = s.size(); idx-- > 0;) {
+    if ((s.at(idx) >= 'a' && s.at(idx) <= 'z') ||
+        (s.at(idx) >= 'A' && s.at(idx) <= 'Z') ||
+        (s.at(idx) >= '0' && s.at(idx) <= '9')) {
+      ret.push_back(s.at(idx));
+    } else if (s.at(idx) == '.') {
+      break;
+    } else {
+      return {};
+    }
+  }
+
+  // Reverse the string since it was built in reverse order.
+  std::string real_ret;
+  for (size_t idx = ret.size(); idx-- > 0;) {
+    real_ret.push_back(ret.at(idx));
+  }
+  return real_ret;
+}
+
+PMA_HELPER::MimeTypes::MimeTypes() : flags(), ext_to_mime_type() {
+  std::ifstream ifs("/etc/nginx/mime.types");
+  if (!ifs.good()) {
+    ifs = std::ifstream("/etc/mime.types");
+    if (!ifs.good()) {
+      return;
+    }
+  }
+
+  std::array<char, 256> buf;
+  std::string mime_type;
+  std::string temp;
+  while (!ifs.eof()) {
+    mime_type.clear();
+    temp.clear();
+
+    ifs.getline(buf.data(), buf.size());
+    const auto gcount = ifs.gcount() - 1;
+
+    if (gcount > 0) {
+      const size_t count = static_cast<const size_t>(gcount);
+
+      int_fast8_t force_continue = 0;
+      for (size_t idx = 0; idx < count; ++idx) {
+        char next = buf.at(idx);
+        if (next == '#' || next == '{' || next == '}' || next == 0) {
+          force_continue = 1;
+          break;
+        } else if (mime_type.empty()) {
+          if (next == ' ' || next == '\t') {
+            if (temp.find('/') != std::string::npos) {
+              mime_type = PMA_HELPER::trim_whitespace(temp);
+            }
+            temp.clear();
+          } else {
+            temp.push_back(next);
+          }
+        } else {
+          if (next == ' ' || next == '\t' || next == ';') {
+            if (!temp.empty()) {
+              ext_to_mime_type.insert(
+                  std::make_pair(PMA_HELPER::trim_whitespace(temp), mime_type));
+              temp.clear();
+            }
+          } else {
+            temp.push_back(next);
+          }
+        }
+      }
+
+      if (force_continue) {
+        continue;
+      } else if (!temp.empty() && !mime_type.empty()) {
+        ext_to_mime_type.insert(
+            std::make_pair(PMA_HELPER::trim_whitespace(temp), mime_type));
+      }
+    }
+  }
+
+  if (!ext_to_mime_type.empty()) {
+    flags.set(0);
+  }
+}
+
+bool PMA_HELPER::MimeTypes::is_loaded() const { return flags.test(0); }
+
+std::string PMA_HELPER::MimeTypes::get_mimetype_from_ext(
+    const std::string &ext) const {
+  if (auto iter = ext_to_mime_type.find(ext); iter != ext_to_mime_type.end()) {
+    return iter->second;
+  }
+  return {};
 }

@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
   if (std::strncmp(argv[1], "--cli-ipv4=", 11) == 0 && std::strncmp(argv[2], "--ser-ipv4=", 11) == 0) {
     PMA_Println("Using ipv4 addr {}", argv[1] + 11);
-    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::connect_ipv4_socket_client(argv[1] + 11, argv[2] + 11, port);
+    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::connect_ipv4_socket_client(argv[2] + 11, argv[1] + 11, port);
 
     if (err_enum != PMA_HTTP::ErrorT::SUCCESS || ret_socket_fd < 0) {
       PMA_EPrintln("Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
   } else if (std::strncmp(argv[1], "--cli-ipv6=", 11) == 0 && std::strncmp(argv[2], "--ser-ipv6=", 11) == 0) {
     PMA_Println("Using ipv6 addr {}", argv[1] + 11);
 
-    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::connect_ipv6_socket_client(argv[1] + 11, argv[2] + 11, port);
+    const auto [err_enum, err_str, ret_socket_fd] = PMA_HTTP::connect_ipv6_socket_client(argv[2] + 11, argv[1] + 11, port);
 
     if (err_enum != PMA_HTTP::ErrorT::SUCCESS) {
       PMA_EPrintln("Error {}: {}", PMA_HTTP::error_t_to_str(err_enum), err_str);
@@ -71,9 +71,12 @@ int main(int argc, char **argv) {
 
   // Do write.
   PMA_Println("Start write request");
+  std::string write_req("GET / HTTP/1.1\r\nHost: ");
+  write_req.append(argv[2] + 11);
+  write_req.append("\r\n\r\n");
   while (true) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    ssize_t ret_write = write(socket_fd, "GET / HTTP/1.1\n\n", 16);
+    ssize_t ret_write = write(socket_fd, write_req.data(), write_req.size());
     if (ret_write == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         continue;

@@ -19,12 +19,14 @@
 
 // Standard library includes
 #include <array>
+#include <bitset>
 #include <cstdint>
 #include <format>
 #include <functional>
 #include <list>
 #include <optional>
 #include <string>
+#include <unordered_map>
 
 template <typename T>
 class GenericCleanup {
@@ -122,6 +124,27 @@ struct BinaryParts {
 std::array<uint8_t, 20> sha1_digest(uint8_t *data, size_t size);
 std::array<char, 40> digest_s20_to_hex(const std::array<uint8_t, 20> &);
 std::array<char, 40> sha1_digest_hex(uint8_t *data, size_t size);
+
+std::string trim_whitespace(const std::string &s);
+
+// Returns empty if no extension exists.
+std::string get_file_ext(const std::string &s);
+
+// Currently unused. Re-enable tests in src/test.cc if to be used.
+class MimeTypes {
+ public:
+  MimeTypes();
+
+  bool is_loaded() const;
+
+  // Expects the extension without the "."
+  std::string get_mimetype_from_ext(const std::string &ext) const;
+
+ private:
+  // 0 - is loaded
+  std::bitset<32> flags;
+  std::unordered_map<std::string, std::string> ext_to_mime_type;
+};
 
 }  // namespace PMA_HELPER
 

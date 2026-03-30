@@ -16,7 +16,11 @@
 
 #include "thread_pool.h"
 
+// Standard library includes
 #include <optional>
+
+// Local includes
+#include "constants.h"
 
 void ThreadPool::thread_function(
     std::shared_ptr<std::atomic_bool> stop,
@@ -25,21 +29,29 @@ void ThreadPool::thread_function(
   std::optional<std::function<void(void *)> > fn = std::nullopt;
   std::optional<void *> ud = std::nullopt;
   std::optional<std::function<void(void *)> > cleanup_fn = std::nullopt;
+
+  std::unique_lock<std::mutex> lock(std::get<std::mutex>(*cond_var),
+                                    std::defer_lock);
+
   while (!stop->load(std::memory_order_acquire)) {
-    {
-      std::unique_lock<std::mutex> lock(std::get<std::mutex>(*cond_var));
-      if (pending_fns->empty()) {
-        std::get<std::condition_variable>(*cond_var).wait(lock);
-        continue;
-      } else {
-        fn = std::move(std::get<0>(pending_fns->back()));
-        ud = std::get<1>(pending_fns->back());
-        cleanup_fn = std::move(std::get<2>(pending_fns->back()));
-        pending_fns->pop_back();
-      }
+    if (!lock.owns_lock()) {
+      lock.lock();
+    }
+
+    if (pending_fns->empty()) {
+      std::get<std::condition_variable>(*cond_var).wait(lock);
+    }
+
+    if (!pending_fns->empty()) {
+      fn = std::move(std::get<0>(pending_fns->back()));
+      ud = std::get<1>(pending_fns->back());
+      cleanup_fn = std::move(std::get<2>(pending_fns->back()));
+      pending_fns->pop_back();
     }
 
     if (fn.has_value() && ud.has_value() && cleanup_fn.has_value()) {
+      lock.unlock();
+
       fn.value()(ud.value());
       cleanup_fn.value()(ud.value());
 
@@ -135,6 +147,6 @@ void ThreadPool::add_func(std::function<void(void *)> fn, void *user_data,
 
   if (thread_handles.empty()) {
     // Handle the case of "set_thread_count(...)" not being called before this.
-    set_thread_count(1);
+    set_thread_count(DEFAULT_THREAD_COUNT);
   }
 }
