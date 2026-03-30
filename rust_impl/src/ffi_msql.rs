@@ -26,7 +26,7 @@ use std::{
 
 include!(concat!(env!("OUT_DIR"), "/msql_bindings.rs"));
 
-struct MSQLParamsWrapper {
+pub struct MSQLParamsWrapper {
     params: MSQL_Params,
 }
 
@@ -85,7 +85,17 @@ impl MSQLParamsWrapper {
     }
 }
 
-struct MSQLValueWrapper {
+#[derive(Copy, Clone, Debug)]
+pub enum MSQLValueType {
+    Error,
+    Null,
+    Int64,
+    UInt64,
+    String,
+    Double_f64,
+}
+
+pub struct MSQLValueWrapper {
     value: MSQL_Value,
 }
 
@@ -98,8 +108,17 @@ impl Drop for MSQLValueWrapper {
 }
 
 impl MSQLValueWrapper {
-    pub fn get_type(&self) -> i32 {
-        unsafe { MSQL_get_type(self.value) }
+    pub fn get_type(&self) -> MSQLValueType {
+        unsafe {
+            match MSQL_get_type(self.value) {
+                1 => MSQLValueType::Null,
+                2 => MSQLValueType::Int64,
+                3 => MSQLValueType::UInt64,
+                4 => MSQLValueType::String,
+                5 => MSQLValueType::Double_f64,
+                _ => MSQLValueType::Error,
+            }
+        }
     }
 
     pub fn get_i64(&self) -> Option<i64> {
@@ -164,7 +183,7 @@ impl MSQLValueWrapper {
     }
 }
 
-struct MSQLRowsWrapper {
+pub struct MSQLRowsWrapper {
     rows: MSQL_Rows,
 }
 
@@ -200,7 +219,7 @@ impl MSQLRowsWrapper {
     }
 }
 
-struct MSQLWrapper {
+pub struct MSQLWrapper {
     connection: MSQL_Connection,
 }
 
