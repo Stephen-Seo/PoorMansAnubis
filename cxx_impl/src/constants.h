@@ -56,4 +56,6 @@ constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 1;
 
 constexpr int SOCKET_BACKLOG_SIZE = 2048;
 
+constexpr uint32_t DEFAULT_THREAD_COUNT = 4;
+
 #endif

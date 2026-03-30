@@ -106,9 +106,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       api_url("/pma_api/"),
       js_factors_url("/pma_factors.js"),
       sqlite_path("sqlite_db"),
+      thread_count(),
       challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
-      thread_count(1),
       req_timeout_milliseconds(TIMEOUT_MILLISECONDS),
       req_timeout_ticks(TIMEOUT_ITER_TICKS) {
   --argc;

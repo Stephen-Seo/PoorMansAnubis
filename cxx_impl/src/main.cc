@@ -1781,10 +1781,11 @@ int main(int argc, char **argv) {
   }
 
   ThreadPool thread_pool;
-  if (args.thread_count <= 1) {
-    thread_pool.set_thread_count(1);
+  if (args.thread_count.has_value()) {
+    thread_pool.set_thread_count(args.thread_count.value());
   } else {
-    thread_pool.set_thread_count(args.thread_count);
+    thread_pool.set_thread_count(DEFAULT_THREAD_COUNT);
+    PMA_Println("NOTE: Set thread count to default {}", DEFAULT_THREAD_COUNT);
   }
 
   PMA_HELPER::set_signal_handler(SIGINT, receive_signal);
