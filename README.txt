@@ -137,6 +137,18 @@ Args for the C++ implementation are as follows:
 
 ================================================================================
 
+USING PoorMansAnubis WITHOUT LIBCURL
+
+================================================================================
+
+If `--enable-libcurl` is not specified, all destination urls (for
+`--dest-url=...` or `--port-to-dest-url=...`) must be in the format:
+"http://<ipv4_address>:<port>". If it is required to use more advanced urls,
+then one must enable libcurl with `--enable-libcurl`.
+
+
+================================================================================
+
 EXAMPLE Nginx CONFIG
 
 ================================================================================
