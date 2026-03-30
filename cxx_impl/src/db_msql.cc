@@ -3265,6 +3265,21 @@ size_t MSQL_row_count(MSQL_Rows rows) {
   return v->size();
 }
 
+size_t MSQL_col_count(MSQL_Rows rows) {
+  if (!rows) {
+    return 0;
+  }
+
+  std::vector<std::vector<PMA_MSQL::Value> > *v =
+      reinterpret_cast<std::vector<std::vector<PMA_MSQL::Value> > *>(rows);
+
+  if (v->empty()) {
+    return 0;
+  }
+
+  return v->at(0).size();
+}
+
 MSQL_Value MSQL_fetch(MSQL_Rows rows, size_t row_idx, size_t col_idx) {
   if (!rows) {
     return nullptr;
