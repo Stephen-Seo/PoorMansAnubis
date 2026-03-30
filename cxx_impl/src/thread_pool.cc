@@ -16,7 +16,11 @@
 
 #include "thread_pool.h"
 
+// Standard library includes
 #include <optional>
+
+// Local includes
+#include "constants.h"
 
 void ThreadPool::thread_function(
     std::shared_ptr<std::atomic_bool> stop,
@@ -143,6 +147,6 @@ void ThreadPool::add_func(std::function<void(void *)> fn, void *user_data,
 
   if (thread_handles.empty()) {
     // Handle the case of "set_thread_count(...)" not being called before this.
-    set_thread_count(1);
+    set_thread_count(DEFAULT_THREAD_COUNT);
   }
 }
