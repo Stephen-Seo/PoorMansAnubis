@@ -721,7 +721,10 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
   {
     auto iter = args.port_to_dest_urls.find(cli_port);
     std::string full_addr;
-    if (iter != args.port_to_dest_urls.end()) {
+    if (auto h_iter = req.headers.find("override-dest-url");
+        h_iter != req.headers.end() && args.flags.test(1)) {
+      full_addr = h_iter->second;
+    } else if (iter != args.port_to_dest_urls.end()) {
       full_addr = iter->second;
     } else {
       full_addr = args.default_dest_url;
