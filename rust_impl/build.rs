@@ -58,11 +58,10 @@ fn main() {
     }
 
     println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl");
-    println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl/bundled/out/lib");
     println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl/bundled/out/ssl/usr/lib");
     println!("cargo::rustc-link-lib=db_msql_capi");
-    println!("cargo::rustc-link-lib=blake3");
     println!("cargo::rustc-link-lib=crypto");
+    println!("cargo::rustc-link-lib=stdc++");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 

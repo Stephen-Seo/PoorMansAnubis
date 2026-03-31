@@ -135,14 +135,6 @@ pub fn parse_args() -> Result<Args, Error> {
             args.mysql_config_file = end.into();
             args.mysql_has_priority = true;
         } else if arg.starts_with("--sqlite-path=") {
-            #[cfg(not(feature = "sqlite"))]
-            {
-                return Err(String::from(
-                    r#"sqlite feature is not enabled, cannot use "--sqlite-db-path=""#,
-                )
-                .into());
-            }
-            #[allow(unreachable_code)]
             let end = arg.split_off(14);
             args.sqlite_db_file = end.into();
             args.mysql_has_priority = false;

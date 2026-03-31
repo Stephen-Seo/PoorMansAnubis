@@ -31,7 +31,6 @@ use std::time::{Duration, Instant};
 
 use std::{path::Path, sync::atomic::AtomicBool};
 
-#[cfg(feature = "sqlite")]
 use rusqlite::Connection;
 use salvo::{http::ResBody, prelude::*};
 use tokio::{
@@ -233,7 +232,6 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
     Ok(())
 }
 
-#[cfg(feature = "sqlite")]
 async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
     use rusqlite::Connection;
 
@@ -272,14 +270,11 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
 }
 
 async fn init_db(args: &args::Args) -> Result<(), Error> {
-    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         init_mysql_db(args).await?;
     } else {
         init_sqlite_db(args).await?;
     }
-    #[cfg(not(feature = "sqlite"))]
-    init_mysql_db(args).await?;
 
     Ok(())
 }
@@ -489,7 +484,6 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
     Ok(seq)
 }
 
-#[cfg(feature = "sqlite")]
 async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
     let seq: i64;
     let conn = Connection::open(&args.sqlite_db_file)?;
@@ -553,7 +547,6 @@ async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool
     }
 }
 
-#[cfg(feature = "sqlite")]
 async fn has_challenge_factor_id_sqlite(args: &args::Args, hash: &str) -> Result<bool, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
@@ -621,7 +614,6 @@ async fn set_challenge_factor_mysql(
     Ok(())
 }
 
-#[cfg(feature = "sqlite")]
 async fn set_challenge_factor_sqlite(
     args: &args::Args,
     ip: &str,
@@ -655,16 +647,10 @@ async fn set_up_factors_challenge(
     #[allow(clippy::needless_late_init)]
     let seq: u64;
 
-    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         seq = get_next_seq_mysql(depot).await?;
     } else {
         seq = get_next_seq_sqlite(args).await?;
-    }
-
-    #[cfg(not(feature = "sqlite"))]
-    {
-        seq = get_next_seq_mysql(depot).await?;
     }
 
     loop {
@@ -678,7 +664,6 @@ async fn set_up_factors_challenge(
 
         hash = hasher.to_string();
 
-        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             if has_challenge_factor_id_mysql(depot, &hash).await? {
                 continue;
@@ -686,22 +671,13 @@ async fn set_up_factors_challenge(
         } else if has_challenge_factor_id_sqlite(args, &hash).await? {
             continue;
         }
-        #[cfg(not(feature = "sqlite"))]
-        if has_challenge_factor_id_mysql(depot, &hash).await? {
-            continue;
-        }
 
         let factors_hash = blake3::hash(factors.as_bytes()).to_string();
 
-        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             set_challenge_factor_mysql(depot, ip, &hash, port, &factors_hash).await?;
         } else {
             set_challenge_factor_sqlite(args, ip, &hash, port, &factors_hash).await?;
-        }
-        #[cfg(not(feature = "sqlite"))]
-        {
-            set_challenge_factor_mysql(depot, ip, &hash, port, &factors_hash).await?;
         }
         break;
     }
@@ -793,7 +769,6 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
     )))
 }
 
-#[cfg(feature = "sqlite")]
 async fn challenge_port_sqlite(args: &args::Args, id: &str) -> Result<u16, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
@@ -822,15 +797,10 @@ async fn factors_js_fn(
 
     #[allow(unused_assignments)]
     let mut port: Result<u16, Error> = Err(Error::Generic("port uninitialized".into()));
-    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         port = challenge_port_mysql(depot, &id).await;
     } else {
         port = challenge_port_sqlite(args, &id).await;
-    }
-    #[cfg(not(feature = "sqlite"))]
-    {
-        port = challenge_port_mysql(depot, &id).await;
     }
     if port.is_err() {
         eprintln!(
@@ -989,7 +959,6 @@ async fn validate_client_mysql(
     }
 }
 
-#[cfg(feature = "sqlite")]
 async fn validate_client_sqlite(
     args: &args::Args,
     factors_response: &json_types::FactorsResponse,
@@ -1040,18 +1009,12 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 
     #[allow(unused_assignments)]
     let mut validate_result: Result<u16, Error> = Err(String::from("Invalid state").into());
-    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         validate_result =
             validate_client_mysql(args, depot, &factors_response, &client_info_ret.addr).await;
     } else {
         validate_result =
             validate_client_sqlite(args, &factors_response, &client_info_ret.addr).await;
-    }
-    #[cfg(not(feature = "sqlite"))]
-    {
-        validate_result =
-            validate_client_mysql(args, depot, &factors_response, &client_info_ret.addr).await;
     }
 
     if let Ok(port) = validate_result {
@@ -1172,7 +1135,6 @@ async fn check_is_allowed_mysql(
     }
 }
 
-#[cfg(feature = "sqlite")]
 async fn check_is_allowed_sqlite(args: &args::Args, addr: &str, port: u16) -> Result<bool, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
@@ -1283,7 +1245,6 @@ async fn init_id_to_port_mysql(
     Ok(hash)
 }
 
-#[cfg(feature = "sqlite")]
 async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, Error> {
     let mut hash: String;
 
@@ -1340,7 +1301,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     let mut is_allowed: bool =
         cached_allow.get_allowed(&req.remote_addr().to_string(), CACHED_TIMEOUT)?;
     if !is_allowed {
-        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             is_allowed = check_is_allowed_mysql(args, depot, &client_info_ret.addr, port).await?;
             if is_allowed {
@@ -1348,13 +1308,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             }
         } else {
             is_allowed = check_is_allowed_sqlite(args, &client_info_ret.addr, port).await?;
-            if is_allowed {
-                cached_allow.add_allowed(&req.remote_addr().to_string())?;
-            }
-        }
-        #[cfg(not(feature = "sqlite"))]
-        {
-            is_allowed = check_is_allowed_mysql(args, depot, &client_info_ret.addr, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
@@ -1415,15 +1368,10 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         #[allow(unused_assignments)]
         let mut hash: Option<String> = None;
 
-        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             hash = Some(init_id_to_port_mysql(args, depot, port).await?);
         } else {
             hash = Some(init_id_to_port_sqlite(args, port).await?);
-        }
-        #[cfg(not(feature = "sqlite"))]
-        {
-            hash = Some(init_id_to_port_mysql(args, depot, port).await?);
         }
 
         if let Some(hash) = hash {
@@ -1469,12 +1417,9 @@ async fn main() {
         );
     }
 
-    #[allow(clippy::needless_late_init)]
-    let router;
-    #[cfg(feature = "sqlite")]
-    if parsed_args.mysql_has_priority {
+    let router = if parsed_args.mysql_has_priority {
         let locked_bool = Arc::new(AtomicBool::new(false));
-        router = Router::new()
+        Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
             .hoop(affix_state::inject(locked_bool))
@@ -1484,9 +1429,9 @@ async fn main() {
                     .path(&parsed_args.js_factors_url)
                     .get(factors_js_fn),
             )
-            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
+            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn))
     } else {
-        router = Router::new()
+        Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
@@ -1495,23 +1440,9 @@ async fn main() {
                     .path(&parsed_args.js_factors_url)
                     .get(factors_js_fn),
             )
-            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
-    }
-    #[cfg(not(feature = "sqlite"))]
-    {
-        let locked_bool = Arc::new(AtomicBool::new(false));
-        router = Router::new()
-            .hoop(affix_state::inject(parsed_args.clone()))
-            .hoop(affix_state::inject(CachedAllow::new()))
-            .hoop(affix_state::inject(locked_bool))
-            .push(Router::new().path(&parsed_args.api_url).post(api_fn))
-            .push(
-                Router::new()
-                    .path(&parsed_args.js_factors_url)
-                    .get(factors_js_fn),
-            )
-            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
-    }
+            .push(Router::new().path("{**}").get(handler_fn).post(handler_fn))
+    };
+
     if parsed_args.addr_port_strs.len() == 1 {
         let addr_port_str = parsed_args.addr_port_strs[0].clone();
         let acceptor = TcpListener::new(addr_port_str).bind().await;
