@@ -6,6 +6,13 @@ CC_aarch64_linux_gnu=/usr/bin/aarch64-linux-gnu-gcc
 CXX_aarch64_linux_gnu=/usr/bin/aarch64-linux-gnu-g++
 
 /usr/bin/env \
+    CC=/usr/bin/aarch64-linux-gnu-gcc \
+    CXX=/usr/bin/aarch64-linux-gnu-g++ \
+    AR=/usr/bin/aarch64-linux-gnu-ar \
+    RANLIB=/usr/bin/aarch64-linux-gnu-ranlib \
+    LD=/usr/bin/aarch64-linux-gnu-ld \
+    TARGET_TRIPLE=aarch64-unknown-linux-gnu \
+    TARGET_ARCH=aarch64 \
     CC_aarch64_linux_gnu=${CC_aarch64_linux_gnu} \
     CXX_aarch64_linux_gnu=${CXX_aarch64_linxu_gnu} \
     AR_aarch64_linux_gnu=/usr/bin/aarch64-linux-gnu-ar \
