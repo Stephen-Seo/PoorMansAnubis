@@ -85,14 +85,14 @@ impl MSQLParamsWrapper {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum MSQLValueType {
+#[derive(Clone, Debug)]
+pub enum MSQLValueEnum {
     Error,
     Null,
-    Int64,
-    UInt64,
-    String,
-    Double_f64,
+    Int64(i64),
+    UInt64(u64),
+    String(String),
+    Double_f64(f64),
 }
 
 pub struct MSQLValueWrapper {
@@ -108,15 +108,39 @@ impl Drop for MSQLValueWrapper {
 }
 
 impl MSQLValueWrapper {
-    pub fn get_type(&self) -> MSQLValueType {
+    pub fn get(&self) -> MSQLValueEnum {
         unsafe {
             match MSQL_get_type(self.value) {
-                1 => MSQLValueType::Null,
-                2 => MSQLValueType::Int64,
-                3 => MSQLValueType::UInt64,
-                4 => MSQLValueType::String,
-                5 => MSQLValueType::Double_f64,
-                _ => MSQLValueType::Error,
+                1 => MSQLValueEnum::Null,
+                2 => {
+                    if let Some(i) = self.get_i64() {
+                        MSQLValueEnum::Int64(i)
+                    } else {
+                        MSQLValueEnum::Error
+                    }
+                }
+                3 => {
+                    if let Some(u) = self.get_u64() {
+                        MSQLValueEnum::UInt64(u)
+                    } else {
+                        MSQLValueEnum::Error
+                    }
+                }
+                4 => {
+                    if let Some(s) = self.get_string() {
+                        MSQLValueEnum::String(s)
+                    } else {
+                        MSQLValueEnum::Error
+                    }
+                }
+                5 => {
+                    if let Some(d) = self.get_f64() {
+                        MSQLValueEnum::Double_f64(d)
+                    } else {
+                        MSQLValueEnum::Error
+                    }
+                }
+                _ => MSQLValueEnum::Error,
             }
         }
     }
@@ -325,8 +349,8 @@ impl MSQLWrapper {
         if is_ok { Ok(()) } else { Err(()) }
     }
 
-    pub fn query_rows(&mut self, stmt: &str) -> Result<Option<MSQLRowsWrapper>, ()> {
-        let mut rows_ret: Option<MSQLRowsWrapper> = None;
+    pub fn query_rows(&mut self, stmt: &str) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, ()> {
+        let mut rows_ret: Option<Vec<Vec<MSQLValueEnum>>> = None;
         unsafe {
             let mut params = MSQL_create_params();
 
@@ -335,7 +359,16 @@ impl MSQLWrapper {
             let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params);
 
             if !rows.is_null() && MSQL_row_count(rows) != 0 {
-                rows_ret = Some(MSQLRowsWrapper { rows });
+                rows_ret = Some(Vec::new());
+                for row_idx in 0..MSQL_row_count(rows) {
+                    let mut row_vec: Vec<MSQLValueEnum> = Vec::new();
+                    for col_idx in 0..MSQL_col_count(rows) {
+                        let msql_val = MSQL_fetch(rows, row_idx, col_idx);
+                        let wrapped_val = MSQLValueWrapper { value: msql_val };
+                        row_vec.push(wrapped_val.get());
+                    }
+                    rows_ret.as_mut().unwrap().push(row_vec);
+                }
             } else {
                 MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
             }
@@ -343,27 +376,44 @@ impl MSQLWrapper {
             MSQL_cleanup_params(&mut params as *mut MSQL_Params);
         }
 
-        Ok(rows_ret)
+        if let Some(v) = rows_ret {
+            if v.is_empty() { Ok(None) } else { Ok(Some(v)) }
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn query_with_params_rows(
         &mut self,
         stmt: &str,
         params: &MSQLParamsWrapper,
-    ) -> Result<Option<MSQLRowsWrapper>, ()> {
-        let mut rows_ret: Option<MSQLRowsWrapper> = None;
+    ) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, ()> {
+        let mut rows_ret: Option<Vec<Vec<MSQLValueEnum>>> = None;
         unsafe {
             let stmt_c = CString::from_str(stmt).map_err(|_| ())?;
 
             let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params.get_params());
 
             if !rows.is_null() && MSQL_row_count(rows) != 0 {
-                rows_ret = Some(MSQLRowsWrapper { rows });
+                rows_ret = Some(Vec::new());
+                for row_idx in 0..MSQL_row_count(rows) {
+                    let mut row_vec: Vec<MSQLValueEnum> = Vec::new();
+                    for col_idx in 0..MSQL_col_count(rows) {
+                        let msql_val = MSQL_fetch(rows, row_idx, col_idx);
+                        let wrapped_val = MSQLValueWrapper { value: msql_val };
+                        row_vec.push(wrapped_val.get());
+                    }
+                    rows_ret.as_mut().unwrap().push(row_vec);
+                }
             } else {
                 MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
             }
         }
 
-        Ok(rows_ret)
+        if let Some(v) = rows_ret {
+            if v.is_empty() { Ok(None) } else { Ok(Some(v)) }
+        } else {
+            Ok(None)
+        }
     }
 }
