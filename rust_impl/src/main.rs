@@ -29,15 +29,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[cfg(feature = "mysql")]
 use std::{path::Path, sync::atomic::AtomicBool};
 
-#[cfg(feature = "mysql")]
-use mysql::{Pool, Row, params, prelude::Queryable};
 #[cfg(feature = "sqlite")]
 use rusqlite::Connection;
 use salvo::{http::ResBody, prelude::*};
-#[cfg(feature = "mysql")]
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -45,6 +41,8 @@ use tokio::{
 };
 
 use error::Error;
+
+use crate::ffi_msql::{MSQLParamsWrapper, MSQLValueEnum, MSQLWrapper};
 
 const GETRANDOM_BUF_SIZE: usize = 64;
 const CACHED_TIMEOUT: Duration = Duration::from_secs(120);
@@ -163,7 +161,6 @@ impl CachedAllow {
     }
 }
 
-#[cfg(feature = "mysql")]
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut map: HashMap<String, String> = HashMap::new();
 
@@ -181,45 +178,37 @@ async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> 
     Ok(map)
 }
 
-#[cfg(feature = "mysql")]
-async fn get_mysql_db_pool(args: &args::Args) -> Result<Pool, Error> {
+async fn get_mysql_db_conn(args: &args::Args) -> Result<MSQLWrapper, Error> {
     if args.mysql_has_priority {
         let config_map = parse_db_conf(&args.mysql_config_file)
             .await
             .expect("Parse config for mysql usage");
 
-        let opts = mysql::Opts::from_url(&format!(
-            "mysql://{}:{}@{}:{}/{}",
-            config_map
-                .get("user")
-                .ok_or("User not in mysql config".to_owned())?,
-            config_map
-                .get("password")
-                .ok_or("Password not in mysql config".to_owned())?,
+        let msql_conn = MSQLWrapper::try_new(
             config_map
                 .get("address")
-                .ok_or("Address not in mysql config".to_owned())?,
+                .ok_or("Address not in msql config")?,
             config_map
                 .get("port")
-                .ok_or("Port not in mysql config".to_owned())?,
+                .ok_or("Port not in msql config")?
+                .parse()?,
+            config_map.get("user").ok_or("User not in msql config")?,
+            config_map
+                .get("password")
+                .ok_or("Password not in msql config")?,
             config_map
                 .get("database")
-                .ok_or("Database not in mysql config".to_owned())?
-        ))?;
-
-        let pool = mysql::Pool::new(opts)?;
-
-        Ok(pool)
+                .ok_or("Database nto in msql config")?,
+        )
+        .map_err(|_| "Failed to create msql connection")?;
+        Ok(msql_conn)
     } else {
-        Err(String::from("Prioritizing sqlite over MySQL").into())
+        Err(String::from("Prioritizing sqlite over msql").into())
     }
 }
 
-#[cfg(feature = "mysql")]
 async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
-    let pool = get_mysql_db_pool(args).await?;
-
-    let mut conn = pool.get_conn()?;
+    let mut conn = get_mysql_db_conn(args).await?;
 
     conn.query_drop(r"DROP TABLE IF EXISTS RUST_SEQ_ID")?;
 
@@ -240,10 +229,6 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
     conn.query_drop(r"DROP TABLE IF EXISTS RUST_ID_TO_PORT_2")?;
 
     conn.query_drop(MSQL_RUST_ID_TO_PORT_3_CREATE)?;
-
-    drop(conn);
-
-    //pool.disconnect().await?;
 
     Ok(())
 }
@@ -287,16 +272,14 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
 }
 
 async fn init_db(args: &args::Args) -> Result<(), Error> {
-    #[cfg(all(feature = "mysql", feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         init_mysql_db(args).await?;
     } else {
         init_sqlite_db(args).await?;
     }
-    #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+    #[cfg(not(feature = "sqlite"))]
     init_mysql_db(args).await?;
-    #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-    init_sqlite_db(args).await?;
 
     Ok(())
 }
@@ -418,14 +401,11 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIP
     })
 }
 
-#[cfg(feature = "mysql")]
 async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
-    use mysql::PooledConn;
-
     let seq: u64;
-    let pool: &Pool = depot.obtain().unwrap();
+    let args: &args::Args = depot.obtain().unwrap();
     let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-    let conn: Arc<tMutex<PooledConn>> = Arc::new(tMutex::new(pool.get_conn()?));
+    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
 
     while locked_bool
         .compare_exchange_weak(
@@ -456,28 +436,54 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
 
     locked.query_drop("LOCK TABLE RUST_SEQ_ID_1 WRITE")?;
 
-    let seq_row: Option<Row> = locked.query_first("SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1")?;
+    let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> =
+        locked.query_rows("SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1")?;
 
-    if let Some(seq_r) = seq_row {
-        let id: u64 = seq_r.get(0).expect("Row should have ID");
-        seq = seq_r.get(1).expect("Row should have SEQ_ID");
-        if seq + 1 == 0xFFFFFFFFFFFFFFFF {
-            locked.exec_drop(
-                "UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id",
-                params! {"seq_id" => (1), "id" => id},
+    if let Some(seq_r) = seq_rows {
+        let id: u64 = match seq_r[0][0] {
+            MSQLValueEnum::Int64(i) => i as u64,
+            MSQLValueEnum::UInt64(u) => u,
+            _ => {
+                return Err(Error::Generic(String::from(
+                    "Failed to get ID from SEQ_ID table!",
+                )));
+            }
+        };
+
+        match seq_r[0][1] {
+            MSQLValueEnum::Int64(i) => seq = i as u64,
+            MSQLValueEnum::UInt64(u) => seq = u,
+            _ => {
+                return Err(Error::Generic(String::from(
+                    "Failed to get SEQ from SEQ_ID table!",
+                )));
+            }
+        }
+
+        if seq + 1 >= 0x7FFFFFFFFFFFFFFF {
+            let mut params = MSQLParamsWrapper::new();
+            params.append_uint64(1);
+            params.append_uint64(id);
+
+            locked.query_with_params_drop(
+                "UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?",
+                &params,
             )?;
         } else {
-            locked.exec_drop(
-                "UPDATE RUST_SEQ_ID_1 SET SEQ_ID = :seq_id WHERE ID = :id",
-                params! {"seq_id" => (seq + 1), "id" => id},
+            let mut params = MSQLParamsWrapper::new();
+            params.append_uint64(seq + 1);
+            params.append_uint64(id);
+
+            locked.query_with_params_drop(
+                "UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?",
+                &params,
             )?;
         }
     } else {
+        let mut params = MSQLParamsWrapper::new();
+        params.append_uint64(1);
+        locked.query_with_params_drop("INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (?)", &params)?;
         seq = 1;
-        locked.exec_drop(
-            "INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (:seq_id)",
-            params! {"seq_id" => (seq + 1)},
-        )?;
     }
 
     Ok(seq)
@@ -508,11 +514,10 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
     Ok(seq as u64)
 }
 
-#[cfg(feature = "mysql")]
 async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool, Error> {
-    let pool: &Pool = depot.obtain().unwrap();
+    let args: &args::Args = depot.obtain().unwrap();
     let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-    let mut conn = pool.get_conn()?;
+    let mut conn: MSQLWrapper = get_mysql_db_conn(args).await?;
 
     while locked_bool
         .compare_exchange_weak(
@@ -530,12 +535,22 @@ async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool
         b.store(false, std::sync::atomic::Ordering::SeqCst);
     });
 
-    let with_id: Option<String> = conn.exec_first(
-        r"SELECT ID FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
-        (hash,),
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(hash)?;
+    let rows_opt = conn.query_with_params_rows(
+        "SELECT ID FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
+        &params,
     )?;
 
-    Ok(with_id.is_some())
+    if let Some(rows) = rows_opt {
+        if let MSQLValueEnum::String(_) = &rows[0][0] {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    } else {
+        Ok(false)
+    }
 }
 
 #[cfg(feature = "sqlite")]
@@ -550,7 +565,6 @@ async fn has_challenge_factor_id_sqlite(args: &args::Args, hash: &str) -> Result
     }
 }
 
-#[cfg(feature = "mysql")]
 async fn set_challenge_factor_mysql(
     depot: &Depot,
     ip: &str,
@@ -558,9 +572,9 @@ async fn set_challenge_factor_mysql(
     port: u16,
     factors_hash: &str,
 ) -> Result<(), Error> {
-    let pool: &Pool = depot.obtain().unwrap();
+    let args: &args::Args = depot.obtain().unwrap();
     let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-    let conn = Arc::new(tMutex::new(pool.get_conn()?));
+    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
 
     while locked_bool
         .compare_exchange_weak(
@@ -591,9 +605,18 @@ async fn set_challenge_factor_mysql(
 
     locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
 
-    locked.exec_drop("INSERT INTO RUST_CHALLENGE_FACTORS_4 (ID, IP, PORT, FACTORS) VALUES (:id, :ip, :port, :factors)",
-            params!{"id" => hash, "ip" => ip, "port" => port, "factors" => factors_hash})
-        ?;
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(hash)?;
+    params.append_str(ip)?;
+    params.append_uint64(port as u64);
+    params.append_str(factors_hash)?;
+
+    locked
+        .query_with_params_drop(
+            "INSERT INTO RUST_CHALLENGE_FACTORS_4 (ID, IP, PORT, FACTORS) VALUES (?, ?, ?, ?)",
+            &params,
+        )
+        .ok();
 
     Ok(())
 }
@@ -632,21 +655,16 @@ async fn set_up_factors_challenge(
     #[allow(clippy::needless_late_init)]
     let seq: u64;
 
-    #[cfg(all(feature = "mysql", feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         seq = get_next_seq_mysql(depot).await?;
     } else {
         seq = get_next_seq_sqlite(args).await?;
     }
 
-    #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+    #[cfg(not(feature = "sqlite"))]
     {
         seq = get_next_seq_mysql(depot).await?;
-    }
-
-    #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-    {
-        seq = get_next_seq_sqlite(args).await?;
     }
 
     loop {
@@ -660,7 +678,7 @@ async fn set_up_factors_challenge(
 
         hash = hasher.to_string();
 
-        #[cfg(all(feature = "mysql", feature = "sqlite"))]
+        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             if has_challenge_factor_id_mysql(depot, &hash).await? {
                 continue;
@@ -668,30 +686,22 @@ async fn set_up_factors_challenge(
         } else if has_challenge_factor_id_sqlite(args, &hash).await? {
             continue;
         }
-        #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+        #[cfg(not(feature = "sqlite"))]
         if has_challenge_factor_id_mysql(depot, &hash).await? {
-            continue;
-        }
-        #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-        if has_challenge_factor_id_sqlite(args, &hash).await? {
             continue;
         }
 
         let factors_hash = blake3::hash(factors.as_bytes()).to_string();
 
-        #[cfg(all(feature = "mysql", feature = "sqlite"))]
+        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             set_challenge_factor_mysql(depot, ip, &hash, port, &factors_hash).await?;
         } else {
             set_challenge_factor_sqlite(args, ip, &hash, port, &factors_hash).await?;
         }
-        #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+        #[cfg(not(feature = "sqlite"))]
         {
             set_challenge_factor_mysql(depot, ip, &hash, port, &factors_hash).await?;
-        }
-        #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-        {
-            set_challenge_factor_sqlite(args, ip, &hash, port, &factors_hash).await?;
         }
         break;
     }
@@ -721,12 +731,11 @@ fn get_mapped_port_to_dest(args: &args::Args, req: &Request) -> Result<String, E
         .map(|s| s.to_owned())
 }
 
-#[cfg(feature = "mysql")]
 async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
     let mut port: Option<u16> = None;
-    let pool: &Pool = depot.obtain().unwrap();
+    let args: &args::Args = depot.obtain().unwrap();
     let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-    let conn: Arc<tMutex<mysql::PooledConn>> = Arc::new(tMutex::new(pool.get_conn()?));
+    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
 
     while locked_bool
         .compare_exchange_weak(
@@ -757,25 +766,29 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
 
     locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
 
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(id)?;
     {
-        let sel_row: Option<Row> = locked.exec_first(
-            "SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = :id",
-            params! {"id" => id},
-        )?;
-
-        if let Some(sel_r) = sel_row {
-            port = sel_r.get(0);
+        let rows_opt = locked
+            .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)?;
+        if let Some(rows) = rows_opt {
+            match rows[0][0] {
+                MSQLValueEnum::Int64(i) => port = Some(i as u16),
+                MSQLValueEnum::UInt64(u) => port = Some(u as u16),
+                _ => {
+                    return Err(Error::Generic(String::from(
+                        "Failed to get port from id-to-port",
+                    )));
+                }
+            }
         }
     }
 
     if port.is_some() {
-        locked.exec_drop(
-            "DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = :id",
-            params! {"id" => id},
-        )?;
+        locked.query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)?;
     }
 
-    port.ok_or(Into::<Error>::into(String::from(
+    port.ok_or(Error::Generic(String::from(
         "gen challenge, failed to get port",
     )))
 }
@@ -809,19 +822,15 @@ async fn factors_js_fn(
 
     #[allow(unused_assignments)]
     let mut port: Result<u16, Error> = Err(Error::Generic("port uninitialized".into()));
-    #[cfg(all(feature = "mysql", feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         port = challenge_port_mysql(depot, &id).await;
     } else {
         port = challenge_port_sqlite(args, &id).await;
     }
-    #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+    #[cfg(not(feature = "sqlite"))]
     {
         port = challenge_port_mysql(depot, &id).await;
-    }
-    #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-    {
-        port = challenge_port_sqlite(args, &id).await;
     }
     if port.is_err() {
         eprintln!(
@@ -852,7 +861,6 @@ async fn factors_js_fn(
     Ok(())
 }
 
-#[cfg(feature = "mysql")]
 async fn validate_client_mysql(
     args: &args::Args,
     depot: &Depot,
@@ -861,10 +869,8 @@ async fn validate_client_mysql(
 ) -> Result<u16, Error> {
     let correct;
     let mut port: u16 = 0;
-    let pool: &Pool = depot.obtain().unwrap();
+    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
     let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-    let conn: Arc<tMutex<mysql::PooledConn>> =
-        Arc::new(tMutex::new(pool.get_conn().map_err(Error::from)?));
 
     while locked_bool
         .compare_exchange_weak(
@@ -896,30 +902,50 @@ async fn validate_client_mysql(
 
         locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
 
-        locked
-        .exec_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, NOW()) >= :minutes",
-            params!{"minutes" => args.challenge_timeout_mins})
-        ?;
+        {
+            let mut params = MSQLParamsWrapper::new();
+            params.append_uint64(args.challenge_timeout_mins);
+
+            locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params)?;
+        }
 
         let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
-        let addr_port_row: Option<Row> = locked.exec_first(
-            "SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = :id AND FACTORS = :factors",
-            params! {"id" => &factors_response.id, "factors" => hashed_factors},
+        let mut params = MSQLParamsWrapper::new();
+        params.append_str(&factors_response.id)?;
+        params.append_str(&hashed_factors)?;
+
+        let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked.query_with_params_rows(
+            "SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ? AND FACTORS = ?",
+            &params,
         )?;
 
-        if let Some(addr_port_r) = addr_port_row {
-            let r_addr: String = addr_port_r.get(0).ok_or(Into::<Error>::into(String::from(
-                "No IP from ChallengeFactors",
-            )))?;
-            if r_addr == addr {
-                port = addr_port_r.get(1).ok_or(Into::<Error>::into(String::from(
-                    "No Port from ChallengeFactors",
-                )))?;
+        if let Some(rows) = addr_port_rows_opt {
+            let client_addr: String = match &rows[0][0] {
+                MSQLValueEnum::String(s) => s.to_owned(),
+                _ => {
+                    return Err(Error::Generic(String::from("No IP from ChallengeFactors")));
+                }
+            };
+
+            if client_addr == addr {
+                port = match rows[0][1] {
+                    MSQLValueEnum::Int64(i) => i as u16,
+                    MSQLValueEnum::UInt64(u) => u as u16,
+                    _ => {
+                        return Err(Error::Generic(String::from(
+                            "No Port from ChallengeFactors",
+                        )));
+                    }
+                };
                 correct = true;
-                locked.exec_drop(
-                    "DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = :id",
-                    params! {"id" => &factors_response.id},
+
+                let mut params = MSQLParamsWrapper::new();
+                params.append_str(&factors_response.id)?;
+
+                locked.query_with_params_drop(
+                    "DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
+                    &params,
                 )?;
             } else {
                 correct = false;
@@ -946,9 +972,15 @@ async fn validate_client_mysql(
             b.store(false, std::sync::atomic::Ordering::SeqCst);
         });
 
-        conn.lock().await.exec_drop(
-            "INSERT INTO RUST_ALLOWED_IPS (IP, PORT) VALUES (:ip, :port)",
-            params! { "ip" => addr, "port" => port },
+        let mut locked = conn.lock().await;
+
+        let mut params = MSQLParamsWrapper::new();
+        params.append_str(addr)?;
+        params.append_uint64(port as u64);
+
+        locked.query_with_params_drop(
+            "INSERT INTO RUST_ALLOWED_IPS (IP, PORT) VALUES (?, ?)",
+            &params,
         )?;
 
         Ok(port)
@@ -1008,7 +1040,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 
     #[allow(unused_assignments)]
     let mut validate_result: Result<u16, Error> = Err(String::from("Invalid state").into());
-    #[cfg(all(feature = "mysql", feature = "sqlite"))]
+    #[cfg(feature = "sqlite")]
     if args.mysql_has_priority {
         validate_result =
             validate_client_mysql(args, depot, &factors_response, &client_info_ret.addr).await;
@@ -1016,15 +1048,10 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
         validate_result =
             validate_client_sqlite(args, &factors_response, &client_info_ret.addr).await;
     }
-    #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+    #[cfg(not(feature = "sqlite"))]
     {
         validate_result =
             validate_client_mysql(args, depot, &factors_response, &client_info_ret.addr).await;
-    }
-    #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-    {
-        validate_result =
-            validate_client_sqlite(args, &factors_response, &client_info_ret.addr).await;
     }
 
     if let Ok(port) = validate_result {
@@ -1052,18 +1079,14 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     Ok(())
 }
 
-#[cfg(feature = "mysql")]
 async fn check_is_allowed_mysql(
     args: &args::Args,
     depot: &Depot,
     addr: &str,
     port: u16,
 ) -> Result<bool, Error> {
-    let is_allowed: bool;
-    let pool: &Pool = depot.obtain().unwrap();
     let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-    let conn: Arc<tMutex<mysql::PooledConn>> =
-        Arc::new(tMutex::new(pool.get_conn().map_err(Error::from)?));
+    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
 
     while locked_bool
         .compare_exchange_weak(
@@ -1095,9 +1118,12 @@ async fn check_is_allowed_mysql(
 
         locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS WRITE")?;
 
-        locked.exec_drop(
-            "DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes",
-            params! {"minutes" => args.allowed_timeout_mins},
+        let mut params = MSQLParamsWrapper::new();
+        params.append_uint64(args.allowed_timeout_mins);
+
+        locked.query_with_params_drop(
+            "DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
+            &params,
         )?;
     }
 
@@ -1130,21 +1156,20 @@ async fn check_is_allowed_mysql(
 
     locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS READ")?;
 
-    let ip_entry_row: Option<Row> = locked.exec_first(
-        "SELECT IP, ON_TIME FROM RUST_ALLOWED_IPS WHERE IP = :ipaddr AND PORT = :port",
-        params! {"ipaddr" => &addr, "port" => port},
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(addr)?;
+    params.append_uint64(port as u64);
+
+    let ip_entry_row_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked.query_with_params_rows(
+        "SELECT IP FROM RUST_ALLOWED_IPS WHERE IP = ? AND PORT = ?",
+        &params,
     )?;
 
-    if let Some(_ip_ent) = ip_entry_row {
-        //eprintln!("ip existed:");
-        //eprintln!("{:?}", ip_ent);
-        is_allowed = true;
+    if ip_entry_row_opt.is_some() {
+        Ok(true)
     } else {
-        //eprintln!("ip did not exist or timed out");
-        is_allowed = false;
+        Ok(false)
     }
-
-    Ok(is_allowed)
 }
 
 #[cfg(feature = "sqlite")]
@@ -1166,17 +1191,14 @@ async fn check_is_allowed_sqlite(args: &args::Args, addr: &str, port: u16) -> Re
     Ok(is_allowed)
 }
 
-#[cfg(feature = "mysql")]
 async fn init_id_to_port_mysql(
     args: &args::Args,
     depot: &Depot,
     port: u16,
 ) -> Result<String, Error> {
     let mut hash: String;
-    let pool: &Pool = depot.obtain().unwrap();
     let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-    let conn: Arc<tMutex<mysql::PooledConn>> =
-        Arc::new(tMutex::new(pool.get_conn().map_err(Error::from)?));
+    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
 
     while locked_bool
         .compare_exchange_weak(
@@ -1207,9 +1229,12 @@ async fn init_id_to_port_mysql(
 
     locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
 
-    locked.exec_drop(
-        "DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= :minutes",
-        params! {"minutes" => args.challenge_timeout_mins},
+    let mut params = MSQLParamsWrapper::new();
+    params.append_uint64(args.challenge_timeout_mins);
+
+    locked.query_with_params_drop(
+        "DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
+        &params,
     )?;
 
     let mut hasher = blake3::Hasher::new();
@@ -1218,28 +1243,41 @@ async fn init_id_to_port_mysql(
     hasher.update(&buf);
     hash = hasher.finalize().to_string();
 
-    loop {
-        let row: Option<Row> = locked.exec_first(
-            "SELECT ID FROM RUST_ID_TO_PORT_3 WHERE ID = :id",
-            params! {"id" => &hash},
-        )?;
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(&hash)?;
 
-        if let Some(r) = &row
-            && let Some(id) = r.get::<String, usize>(0)
-            && id == hash
-        {
-            hasher = blake3::Hasher::new();
-            getrandom::fill(&mut buf).map_err(Into::<Error>::into)?;
-            hasher.update(&buf);
-            hash = hasher.finalize().to_string();
-            continue;
+    loop {
+        let rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
+            .query_with_params_rows("SELECT ID FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)?;
+
+        if let Some(rows) = rows_opt {
+            let id: String = match &rows[0][0] {
+                MSQLValueEnum::String(s) => s.to_owned(),
+                _ => {
+                    return Err(Error::Generic(String::from(
+                        "Failed to fetch ID from id-to-port",
+                    )));
+                }
+            };
+
+            if id == hash {
+                hasher = blake3::Hasher::new();
+                getrandom::fill(&mut buf).map_err(Into::<Error>::into)?;
+                hasher.update(&buf);
+                hash = hasher.finalize().to_string();
+                continue;
+            }
         }
         break;
     }
 
-    locked.exec_drop(
-        "INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (:id, :port)",
-        params! {"id" => &hash, "port" => port},
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(&hash)?;
+    params.append_uint64(port as u64);
+
+    locked.query_with_params_drop(
+        "INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (?, ?)",
+        &params,
     )?;
 
     Ok(hash)
@@ -1302,7 +1340,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     let mut is_allowed: bool =
         cached_allow.get_allowed(&req.remote_addr().to_string(), CACHED_TIMEOUT)?;
     if !is_allowed {
-        #[cfg(all(feature = "mysql", feature = "sqlite"))]
+        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             is_allowed = check_is_allowed_mysql(args, depot, &client_info_ret.addr, port).await?;
             if is_allowed {
@@ -1314,16 +1352,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
         }
-        #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+        #[cfg(not(feature = "sqlite"))]
         {
             is_allowed = check_is_allowed_mysql(args, depot, &client_info_ret.addr, port).await?;
-            if is_allowed {
-                cached_allow.add_allowed(&req.remote_addr().to_string())?;
-            }
-        }
-        #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-        {
-            is_allowed = check_is_allowed_sqlite(args, &client_info_ret.addr, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
@@ -1384,19 +1415,15 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         #[allow(unused_assignments)]
         let mut hash: Option<String> = None;
 
-        #[cfg(all(feature = "mysql", feature = "sqlite"))]
+        #[cfg(feature = "sqlite")]
         if args.mysql_has_priority {
             hash = Some(init_id_to_port_mysql(args, depot, port).await?);
         } else {
             hash = Some(init_id_to_port_sqlite(args, port).await?);
         }
-        #[cfg(all(feature = "mysql", not(feature = "sqlite")))]
+        #[cfg(not(feature = "sqlite"))]
         {
             hash = Some(init_id_to_port_mysql(args, depot, port).await?);
-        }
-        #[cfg(all(feature = "sqlite", not(feature = "mysql")))]
-        {
-            hash = Some(init_id_to_port_sqlite(args, port).await?);
         }
 
         if let Some(hash) = hash {
@@ -1442,42 +1469,14 @@ async fn main() {
         );
     }
 
+    #[allow(clippy::needless_late_init)]
     let router;
-    #[cfg(feature = "mysql")]
+    #[cfg(feature = "sqlite")]
     if parsed_args.mysql_has_priority {
-        let config_map = parse_db_conf(&parsed_args.mysql_config_file)
-            .await
-            .expect("Parse config for mysql usage");
-        let opts: mysql::Opts = mysql::Opts::from_url(&format!(
-            "mysql://{}:{}@{}:{}/{}",
-            config_map
-                .get("user")
-                .ok_or("User not in mysql config".to_owned())
-                .unwrap(),
-            config_map
-                .get("password")
-                .ok_or("Password not in mysql config".to_owned())
-                .unwrap(),
-            config_map
-                .get("address")
-                .ok_or("Address not in mysql config".to_owned())
-                .unwrap(),
-            config_map
-                .get("port")
-                .ok_or("Port not in mysql config".to_owned())
-                .unwrap(),
-            config_map
-                .get("database")
-                .ok_or("Database not in mysql config".to_owned())
-                .unwrap()
-        ))
-        .expect("Should be able to parse mysql::Opts from args");
-        let pool: Pool = Pool::new(opts).expect("Should be able to create pool from mysql::Opts");
         let locked_bool = Arc::new(AtomicBool::new(false));
         router = Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
-            .hoop(affix_state::inject(pool))
             .hoop(affix_state::inject(locked_bool))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
@@ -1498,11 +1497,13 @@ async fn main() {
             )
             .push(Router::new().path("{**}").get(handler_fn).post(handler_fn));
     }
-    #[cfg(not(feature = "mysql"))]
+    #[cfg(not(feature = "sqlite"))]
     {
+        let locked_bool = Arc::new(AtomicBool::new(false));
         router = Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
+            .hoop(affix_state::inject(locked_bool))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
                 Router::new()

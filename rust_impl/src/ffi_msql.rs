@@ -65,8 +65,9 @@ impl MSQLParamsWrapper {
         }
     }
 
-    pub fn append_str(&mut self, string: &str) -> Result<(), ()> {
-        let c_string: CString = CString::from_str(string).map_err(|_| ())?;
+    pub fn append_str(&mut self, string: &str) -> Result<(), &str> {
+        let c_string: CString =
+            CString::from_str(string).map_err(|_| "Failed to CString a String param")?;
         unsafe {
             MSQL_append_param_str(self.params, c_string.as_ptr());
         }
@@ -247,6 +248,10 @@ pub struct MSQLWrapper {
     connection: MSQL_Connection,
 }
 
+// Pointer remains in the instance that cannot be cloned, should be safe to Send/Sync
+unsafe impl Send for MSQLWrapper {}
+unsafe impl Sync for MSQLWrapper {}
+
 impl Drop for MSQLWrapper {
     fn drop(&mut self) {
         unsafe {
@@ -305,13 +310,13 @@ impl MSQLWrapper {
         }
     }
 
-    pub fn query_drop(&mut self, stmt: &str) -> Result<(), ()> {
+    pub fn query_drop(&mut self, stmt: &str) -> Result<(), &str> {
         let mut is_ok = true;
 
         unsafe {
             let mut params = MSQL_create_params();
 
-            let stmt_c = CString::from_str(stmt).map_err(|_| ())?;
+            let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
             let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params);
 
@@ -324,18 +329,22 @@ impl MSQLWrapper {
             MSQL_cleanup_params(&mut params as *mut MSQL_Params);
         }
 
-        if is_ok { Ok(()) } else { Err(()) }
+        if is_ok {
+            Ok(())
+        } else {
+            Err("Failure to execute stmt")
+        }
     }
 
     pub fn query_with_params_drop(
         &mut self,
         stmt: &str,
         params: &MSQLParamsWrapper,
-    ) -> Result<(), ()> {
+    ) -> Result<(), &str> {
         let mut is_ok = true;
 
         unsafe {
-            let stmt_c = CString::from_str(stmt).map_err(|_| ())?;
+            let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
             let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params.get_params());
 
@@ -346,15 +355,19 @@ impl MSQLWrapper {
             MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
         }
 
-        if is_ok { Ok(()) } else { Err(()) }
+        if is_ok {
+            Ok(())
+        } else {
+            Err("Failure to execute stmt")
+        }
     }
 
-    pub fn query_rows(&mut self, stmt: &str) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, ()> {
+    pub fn query_rows(&mut self, stmt: &str) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, &str> {
         let mut rows_ret: Option<Vec<Vec<MSQLValueEnum>>> = None;
         unsafe {
             let mut params = MSQL_create_params();
 
-            let stmt_c = CString::from_str(stmt).map_err(|_| ())?;
+            let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
             let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params);
 
@@ -387,10 +400,10 @@ impl MSQLWrapper {
         &mut self,
         stmt: &str,
         params: &MSQLParamsWrapper,
-    ) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, ()> {
+    ) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, &str> {
         let mut rows_ret: Option<Vec<Vec<MSQLValueEnum>>> = None;
         unsafe {
-            let stmt_c = CString::from_str(stmt).map_err(|_| ())?;
+            let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
             let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params.get_params());
 

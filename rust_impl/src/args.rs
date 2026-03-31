@@ -92,10 +92,7 @@ pub fn parse_args() -> Result<Args, Error> {
         challenge_timeout_mins: crate::constants::CHALLENGE_FACTORS_TIMEOUT_MINUTES,
         allowed_timeout_mins: crate::constants::ALLOWED_IP_TIMEOUT_MINUTES,
         enable_override_dest_url: false,
-        #[cfg(feature = "mysql")]
         mysql_has_priority: true,
-        #[cfg(not(feature = "mysql"))]
-        mysql_has_priority: false,
     };
 
     let p_args = args_fn();
@@ -134,14 +131,6 @@ pub fn parse_args() -> Result<Args, Error> {
                 .to_owned();
             args.port_to_dest_urls.insert(port, url);
         } else if arg.starts_with("--mysql-conf=") {
-            #[cfg(not(feature = "mysql"))]
-            {
-                return Err(String::from(
-                    r#"mysql feature is not enabled, cannot use "--mysql-conf=""#,
-                )
-                .into());
-            }
-            #[allow(unreachable_code)]
             let end = arg.split_off(13);
             args.mysql_config_file = end.into();
             args.mysql_has_priority = true;

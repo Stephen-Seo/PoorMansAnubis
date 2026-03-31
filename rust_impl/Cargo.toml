@@ -9,7 +9,6 @@ salvo = { version = "0.89", features = ["affix-state"] }
 tokio = { version = "1", features = ["fs", "io-util", "sync", "rt-multi-thread"] }
 futures = "0.3"
 reqwest = { version = "0.13", features = ["native-tls-vendored"] }
-mysql = { version = "28.0", optional = true }
 time = { version = "0.3", features = ["parsing", "local-offset", "formatting", "macros"] }
 serde = "1"
 serde_json = "1"
@@ -22,6 +21,5 @@ bindgen = "0.72"
 cc = "1.2"
 
 [features]
-default = ["mysql"]
-mysql = ["dep:mysql"]
+default = []
 sqlite = ["dep:rusqlite"]

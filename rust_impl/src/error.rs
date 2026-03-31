@@ -19,10 +19,6 @@ use std::{error, fmt::Display};
 #[derive(Debug)]
 pub enum Error {
     Generic(String),
-    #[cfg(feature = "mysql")]
-    MySQL(mysql::Error),
-    #[cfg(feature = "mysql")]
-    MySQLURL(mysql::UrlError),
     #[cfg(feature = "sqlite")]
     Sqlite(rusqlite::Error),
     IO(std::io::Error),
@@ -42,10 +38,6 @@ impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Error::Generic(_) => None,
-            #[cfg(feature = "mysql")]
-            Error::MySQL(error) => error.source(),
-            #[cfg(feature = "mysql")]
-            Error::MySQLURL(error) => error.source(),
             #[cfg(feature = "sqlite")]
             Error::Sqlite(error) => error.source(),
             Error::IO(error) => error.source(),
@@ -67,10 +59,6 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Generic(s) => f.write_str(s),
-            #[cfg(feature = "mysql")]
-            Error::MySQL(error) => error.fmt(f),
-            #[cfg(feature = "mysql")]
-            Error::MySQLURL(error) => error.fmt(f),
             #[cfg(feature = "sqlite")]
             Error::Sqlite(error) => error.fmt(f),
             Error::IO(error) => error.fmt(f),
@@ -97,20 +85,6 @@ impl From<String> for Error {
 impl From<&str> for Error {
     fn from(value: &str) -> Self {
         Error::Generic(value.to_owned())
-    }
-}
-
-#[cfg(feature = "mysql")]
-impl From<mysql::Error> for Error {
-    fn from(value: mysql::Error) -> Self {
-        Error::MySQL(value)
-    }
-}
-
-#[cfg(feature = "mysql")]
-impl From<mysql::UrlError> for Error {
-    fn from(value: mysql::UrlError) -> Self {
-        Error::MySQLURL(value)
     }
 }
 

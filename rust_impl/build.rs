@@ -8,21 +8,21 @@ fn main() {
     cc::Build::new()
         .cpp(true)
         .cpp_link_stdlib_static(true)
-        .file(&format!(
+        .file(format!(
             "{cargo_manifest_dir}/../challenge_impl/src/work2.cc"
         ))
-        .include(&format!(
+        .include(format!(
             "{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src"
         ))
         .compile("cpp_work");
 
     cc::Build::new()
-        .file(&format!("{cargo_manifest_dir}/../challenge_impl/src/work.c"))
-        .file(&format!("{cargo_manifest_dir}/../challenge_impl/src/base64.c"))
-        .file(&format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c"))
-        .file(&format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c"))
-        .file(&format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c"))
-        .include(&format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src"))
+        .file(format!("{cargo_manifest_dir}/../challenge_impl/src/work.c"))
+        .file(format!("{cargo_manifest_dir}/../challenge_impl/src/base64.c"))
+        .file(format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c"))
+        .file(format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c"))
+        .file(format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c"))
+        .include(format!("{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src"))
         .compile("c_work");
 
     let jobs: usize;
@@ -58,14 +58,16 @@ fn main() {
     }
 
     println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl");
+    println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl/bundled/out/lib");
     println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl/bundled/out/ssl/usr/lib");
     println!("cargo::rustc-link-lib=db_msql_capi");
+    println!("cargo::rustc-link-lib=blake3");
     println!("cargo::rustc-link-lib=crypto");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let msql_bindings = bindgen::Builder::default()
-        .header(&format!(
+        .header(format!(
             "{cargo_manifest_dir}/../cxx_impl/src/db_msql_capi.h"
         ))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
@@ -78,9 +80,7 @@ fn main() {
 
     let bindings = bindgen::Builder::default()
         .clang_arg("-I../challenge_impl/third_party/SimpleArchiver/src")
-        .header(&format!(
-            "{cargo_manifest_dir}/../challenge_impl/src/work.h"
-        ))
+        .header(format!("{cargo_manifest_dir}/../challenge_impl/src/work.h"))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings for \"work.h\"");
