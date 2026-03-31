@@ -382,9 +382,9 @@ impl MSQLWrapper {
                     }
                     rows_ret.as_mut().unwrap().push(row_vec);
                 }
-            } else {
-                MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
             }
+
+            MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
 
             MSQL_cleanup_params(&mut params as *mut MSQL_Params);
         }
@@ -418,9 +418,9 @@ impl MSQLWrapper {
                     }
                     rows_ret.as_mut().unwrap().push(row_vec);
                 }
-            } else {
-                MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
             }
+
+            MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
         }
 
         if let Some(v) = rows_ret {
