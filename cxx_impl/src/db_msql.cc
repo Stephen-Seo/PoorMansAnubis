@@ -3129,8 +3129,8 @@ MSQL_Connection MSQL_new(const char *addr, uint16_t port, const char *user,
     return nullptr;
   }
 
-  void *conn = std::malloc(sizeof(PMA_MSQL::Connection));
-  new (conn) PMA_MSQL::Connection(std::move(conn_opt.value()));
+  PMA_MSQL::Connection *conn =
+      new PMA_MSQL::Connection(std::move(conn_opt.value()));
 
   return conn;
 }
@@ -3141,8 +3141,7 @@ void MSQL_cleanup(MSQL_Connection *conn) {
   }
   PMA_MSQL::Connection *actual =
       reinterpret_cast<PMA_MSQL::Connection *>(*conn);
-  actual->~Connection();
-  std::free(*conn);
+  delete actual;
   *conn = nullptr;
 }
 
@@ -3164,8 +3163,7 @@ int MSQL_ping(MSQL_Connection conn) {
 }
 
 MSQL_Params MSQL_create_params() {
-  void *params = std::malloc(sizeof(std::vector<PMA_MSQL::Value>));
-  new (params) std::vector<PMA_MSQL::Value>();
+  std::vector<PMA_MSQL::Value> *params = new std::vector<PMA_MSQL::Value>();
 
   return params;
 }
@@ -3227,8 +3225,7 @@ void MSQL_cleanup_params(MSQL_Params *params) {
 
   std::vector<PMA_MSQL::Value> *values =
       reinterpret_cast<std::vector<PMA_MSQL::Value> *>(*params);
-  values->~vector();
-  std::free(*params);
+  delete values;
   *params = nullptr;
 }
 
@@ -3247,9 +3244,9 @@ MSQL_Rows MSQL_query(MSQL_Connection conn, const char *stmt,
     return nullptr;
   }
 
-  void *rows = std::malloc(sizeof(std::vector<std::vector<PMA_MSQL::Value> >));
-  new (rows) std::vector<std::vector<PMA_MSQL::Value> >(
-      std::move(stmt_ret_opt.value()));
+  std::vector<std::vector<PMA_MSQL::Value> > *rows =
+      new std::vector<std::vector<PMA_MSQL::Value> >(
+          std::move(stmt_ret_opt.value()));
 
   return rows;
 }
@@ -3294,8 +3291,7 @@ MSQL_Value MSQL_fetch(MSQL_Rows rows, size_t row_idx, size_t col_idx) {
     return nullptr;
   }
 
-  void *val = std::malloc(sizeof(PMA_MSQL::Value));
-  new (val) PMA_MSQL::Value(v->at(row_idx).at(col_idx));
+  PMA_MSQL::Value *val = new PMA_MSQL::Value(v->at(row_idx).at(col_idx));
 
   return val;
 }
@@ -3308,8 +3304,7 @@ void MSQL_cleanup_rows(MSQL_Rows *rows) {
   std::vector<std::vector<PMA_MSQL::Value> > *v =
       reinterpret_cast<std::vector<std::vector<PMA_MSQL::Value> > *>(*rows);
 
-  v->~vector();
-  std::free(*rows);
+  delete v;
   *rows = nullptr;
 }
 
@@ -3402,7 +3397,7 @@ void MSQL_cleanup_value(MSQL_Value *value) {
   }
 
   PMA_MSQL::Value *v = reinterpret_cast<PMA_MSQL::Value *>(*value);
-  v->~Value();
-  std::free(*value);
+
+  delete v;
   *value = nullptr;
 }
