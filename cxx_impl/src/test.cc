@@ -1244,6 +1244,12 @@ int main() {
   //  }
   //}
 
+  // TEST PMA_HELPER::vec_to_hexadecimal
+  {
+    std::vector<uint8_t> data{0x12, 0x3, 0x45, 0xAB, 0xC3, 0x4D, 0, 0xF0, 0xF};
+    CHECK_TRUE(PMA_HELPER::vec_to_hexadecimal(data) == "120345ABC34D00F00F");
+  }
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;

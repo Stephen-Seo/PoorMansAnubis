@@ -50,6 +50,8 @@ namespace PMA_HELPER {
 template <unsigned long long SIZE>
 extern std::string raw_to_hexadecimal(const std::array<uint8_t, SIZE> &data);
 
+extern std::string vec_to_hexadecimal(const std::vector<uint8_t> &data);
+
 bool constexpr is_big_endian() {
   struct {
     union {
@@ -146,6 +148,13 @@ class MimeTypes {
   std::unordered_map<std::string, std::string> ext_to_mime_type;
 };
 
+uint64_t rand_uint64_t();
+
+uint64_t rng_next_id(uint64_t value);
+
+std::string next_hash(uint64_t value,
+                      std::vector<uint8_t> (*hasher_fn)(void *data,
+                                                        size_t size));
 }  // namespace PMA_HELPER
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -97,7 +97,7 @@ debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/
 debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
 	${CXX} -o debug_client ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o ${OBJDIR_ABS}/src/db.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${CHALL_IMPL_OBJECTS}
+libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${CHALL_IMPL_OBJECTS}
 	${AR} rcs libdb_msql_capi.a $^
 
 debug_test_capi: ${OBJDIR}/src/db_msql_capi_test.c.o libdb_msql_capi.a

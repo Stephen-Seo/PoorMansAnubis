@@ -58,38 +58,6 @@ internal_exec_sqlite_statement(const PMA_SQL::SQLITECtx &ctx,
   return std::nullopt;
 }
 
-uint64_t PMA_SQL::rand_uint64_t() {
-  std::random_device rd{};
-  static std::default_random_engine re(rd());
-  static std::uniform_int_distribution<uint64_t> int_dist;
-  return int_dist(re);
-}
-
-uint64_t PMA_SQL::rng_next_id(uint64_t value) {
-  constexpr uint64_t a = 9;
-  constexpr uint64_t c = 31;
-
-  std::default_random_engine default_re(value * a + c);
-
-  return std::uniform_int_distribution<uint64_t>()(default_re);
-}
-
-std::string PMA_SQL::next_hash(uint64_t value) {
-  uint64_t next_id = rng_next_id(value);
-  uint64_t random_val = rand_uint64_t();
-
-  blake3_hasher hasher;
-  std::memset(&hasher, 0, sizeof(blake3_hasher));
-  blake3_hasher_init(&hasher);
-  blake3_hasher_update(&hasher, &next_id, 8);
-  blake3_hasher_update(&hasher, &random_val, 8);
-
-  std::array<unsigned char, 32> hash;
-  blake3_hasher_finalize(&hasher, reinterpret_cast<uint8_t *>(hash.data()),
-                         hash.size());
-  return PMA_HELPER::raw_to_hexadecimal<32>(hash);
-}
-
 std::tuple<std::optional<uint64_t>, PMA_SQL::ErrorT, std::string>
 internal_increment_seq_id(const PMA_SQL::SQLITECtx &ctx) {
   std::optional<uint64_t> optv = std::nullopt;
@@ -371,7 +339,8 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
-    SQLITECtx &ctx, uint16_t port) {
+    SQLITECtx &ctx, uint16_t port,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
   bool exists_with_id = true;
   std::string id_hashed;
   while (exists_with_id) {
@@ -386,10 +355,10 @@ std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
                 {}};
       }
 
-      unique_id = rng_next_id(optv.value());
+      unique_id = PMA_HELPER::rng_next_id(optv.value());
     }
 
-    id_hashed = next_hash(unique_id);
+    id_hashed = PMA_HELPER::next_hash(unique_id, hasher_fn);
 
     const auto [err_type, err_msg, opt_vec] =
         SqliteStmtRow<uint64_t>::exec_sqlite_stmt_with_rows<0, std::string>(
@@ -417,7 +386,9 @@ std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string, std::string>
 PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
-                            std::string client_ip, std::string hashed_id) {
+                            std::string client_ip, std::string hashed_id,
+                            std::vector<uint8_t> (*hasher_fn)(void *data,
+                                                              size_t size)) {
   uint16_t port = 0;
   {
     const auto [err_enum, err_msg, opt_vec] =
@@ -467,7 +438,7 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
               {}};
     }
 
-    hash_id = next_hash(optv.value());
+    hash_id = PMA_HELPER::next_hash(optv.value(), hasher_fn);
 
     const auto [err_enum, err_msg, opt_vec] =
         SqliteStmtRow<std::string>::exec_sqlite_stmt_with_rows<0, std::string>(

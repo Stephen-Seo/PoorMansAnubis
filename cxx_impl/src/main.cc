@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 // Third party includes
+#include <blake3.h>
 #include <curl/curl.h>
 
 // Local includes.
@@ -78,6 +79,22 @@ AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
   info.flags.set(0, is_ipv4);
 
   return info;
+}
+
+std::vector<uint8_t> internal_blake3_hash_fn(void *data, size_t size) {
+  std::vector<uint8_t> hash;
+
+  blake3_hasher hasher;
+  std::memset(&hasher, 0, sizeof(blake3_hasher));
+  blake3_hasher_init(&hasher);
+
+  blake3_hasher_update(&hasher, data, size);
+
+  hash.resize(BLAKE3_OUT_LEN);
+
+  blake3_hasher_finalize(&hasher, hash.data(), BLAKE3_OUT_LEN);
+
+  return hash;
 }
 
 size_t pma_curl_data_callback(void *buf, size_t size, size_t nmemb, void *ud) {
@@ -1287,7 +1304,7 @@ void thread_handle_connection_fn(void *ud) {
                   msql_conn_opt.value(), data->args->challenge_timeout,
                   json_keyvals.find("id")->second,
                   json_keyvals.find("factors")->second,
-                  data->addr_port_info.client_addr);
+                  data->addr_port_info.client_addr, internal_blake3_hash_fn);
               if (err == PMA_MSQL::Error::SUCCESS) {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
@@ -1384,7 +1401,8 @@ void thread_handle_connection_fn(void *ud) {
                       PMA_MSQL::set_challenge_factor(
                           msql_conn_opt.value(),
                           data->addr_port_info.client_addr, port,
-                          data->args->factors, data->args->challenge_timeout);
+                          data->args->factors, data->args->challenge_timeout,
+                          internal_blake3_hash_fn);
                   if (cf_err == PMA_MSQL::Error::SUCCESS) {
                     PMA_Println("Requested challenge from {}:{} -> {}",
                                 data->addr_port_info.client_addr,
@@ -1440,7 +1458,8 @@ void thread_handle_connection_fn(void *ud) {
               const auto [err, msg_or_chal, answ, id] =
                   PMA_SQL::generate_challenge(sqliteCtx, data->args->factors,
                                               data->addr_port_info.client_addr,
-                                              id_iter->second);
+                                              id_iter->second,
+                                              internal_blake3_hash_fn);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
                     "ERROR: Failed to prepare challenge for client {}: {}, "
@@ -1541,7 +1560,7 @@ void thread_handle_connection_fn(void *ud) {
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
               const auto [err, id] = PMA_MSQL::init_id_to_port(
                   msql_conn_opt.value(), data->addr_port_info.local_port,
-                  data->args->challenge_timeout);
+                  data->args->challenge_timeout, internal_blake3_hash_fn);
               if (err == PMA_MSQL::Error::SUCCESS) {
                 body = HTML_BODY_FACTORS;
                 PMA_HELPER::str_replace_all(
@@ -1614,7 +1633,8 @@ void thread_handle_connection_fn(void *ud) {
             PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
                                                data->args->challenge_timeout);
             const auto [err, msg, id] = PMA_SQL::init_id_to_port(
-                sqliteCtx, data->addr_port_info.local_port);
+                sqliteCtx, data->addr_port_info.local_port,
+                internal_blake3_hash_fn);
             body = HTML_BODY_FACTORS;
             PMA_HELPER::str_replace_all(
                 body, "{JS_FACTORS_URL}",
