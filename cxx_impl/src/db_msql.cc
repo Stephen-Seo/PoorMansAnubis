@@ -31,9 +31,6 @@
 #include <string>
 #include <thread>
 
-// Third party includes.
-#include <blake3.h>
-
 // Local includes.
 #include "constants.h"
 #include "db.h"
@@ -2756,8 +2753,9 @@ std::optional<bool> PMA_MSQL::has_challenge_factor_id(Connection &c,
 
 std::tuple<PMA_MSQL::Error, std::string, std::string>
 PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
-                               uint64_t f_quads,
-                               uint64_t chall_factors_timeout) {
+                               uint64_t f_quads, uint64_t chall_factors_timeout,
+                               std::vector<uint8_t> (*hasher_fn)(void *data,
+                                                                 size_t size)) {
   if (!c.is_valid()) {
     return {Error::INVALID_MSQL_CONNECTION, {}, {}};
   }
@@ -2778,15 +2776,10 @@ PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
     std::string answer_str = answer;
     std::free(answer);
 
-    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
+    std::vector<uint8_t> hash_data(
+        hasher_fn(answer_str.data(), answer_str.size()));
 
-    blake3_hasher_update(&hasher, answer_str.c_str(), answer_str.size());
-
-    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
-
-    factors_hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
+    factors_hash = PMA_HELPER::vec_to_hexadecimal(hash_data);
   }
 
   std::string id_hashed;
@@ -2795,7 +2788,7 @@ PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
     if (!seq_id_opt.has_value()) {
       return {Error::FAILED_GET_NEXT_SEQ, {}, {}};
     }
-    id_hashed = PMA_SQL::next_hash(seq_id_opt.value());
+    id_hashed = PMA_HELPER::next_hash(seq_id_opt.value(), hasher_fn);
     auto vec_opt = c.execute_stmt(DB_SEL_CHAL_FACT_BY_ID, {id_hashed});
     if (!vec_opt.has_value()) {
       return {Error::EMPTY_QUERY_RESULT, {}, {}};
@@ -2858,7 +2851,8 @@ std::tuple<PMA_MSQL::Error, uint16_t> PMA_MSQL::get_id_to_port_port(
 
 std::tuple<PMA_MSQL::Error, uint16_t> PMA_MSQL::validate_client(
     Connection &c, uint64_t chall_factors_timeout, std::string id,
-    std::string factors, std::string client_ip) {
+    std::string factors, std::string client_ip,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
   if (!c.is_valid()) {
     return {Error::INVALID_MSQL_CONNECTION, 0};
   }
@@ -2866,15 +2860,8 @@ std::tuple<PMA_MSQL::Error, uint16_t> PMA_MSQL::validate_client(
   std::string factors_hash;
   // get hash
   {
-    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-
-    blake3_hasher_update(&hasher, factors.c_str(), factors.size());
-
-    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
-
-    factors_hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
+    std::vector<uint8_t> hash_data(hasher_fn(factors.data(), factors.size()));
+    factors_hash = PMA_HELPER::vec_to_hexadecimal(hash_data);
   }
 
   if (!c.execute_stmt("LOCK TABLE CXX_CHALLENGE_FACTORS WRITE", {})
@@ -2956,7 +2943,8 @@ PMA_MSQL::Error PMA_MSQL::client_is_allowed(Connection &c, std::string ip,
 }
 
 std::tuple<PMA_MSQL::Error, std::string> PMA_MSQL::init_id_to_port(
-    Connection &c, uint16_t port, uint64_t id_to_port_timeout) {
+    Connection &c, uint16_t port, uint64_t id_to_port_timeout,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
   if (!c.is_valid()) {
     return {Error::INVALID_MSQL_CONNECTION, {}};
   }
@@ -2975,7 +2963,7 @@ std::tuple<PMA_MSQL::Error, std::string> PMA_MSQL::init_id_to_port(
   bool same_id_exists = true;
   std::string id_hashed;
   do {
-    id_hashed = PMA_SQL::next_hash(seq_next_opt.value());
+    id_hashed = PMA_HELPER::next_hash(seq_next_opt.value(), hasher_fn);
     auto vec_opt = c.execute_stmt(DB_GET_PORT_ID_TO_PORT, {id_hashed});
     if (!vec_opt.has_value()) {
       c.execute_stmt("UNLOCK TABLES", {});
@@ -3129,8 +3117,8 @@ MSQL_Connection MSQL_new(const char *addr, uint16_t port, const char *user,
     return nullptr;
   }
 
-  void *conn = std::malloc(sizeof(PMA_MSQL::Connection));
-  new (conn) PMA_MSQL::Connection(std::move(conn_opt.value()));
+  PMA_MSQL::Connection *conn =
+      new PMA_MSQL::Connection(std::move(conn_opt.value()));
 
   return conn;
 }
@@ -3141,8 +3129,7 @@ void MSQL_cleanup(MSQL_Connection *conn) {
   }
   PMA_MSQL::Connection *actual =
       reinterpret_cast<PMA_MSQL::Connection *>(*conn);
-  actual->~Connection();
-  std::free(*conn);
+  delete actual;
   *conn = nullptr;
 }
 
@@ -3164,8 +3151,7 @@ int MSQL_ping(MSQL_Connection conn) {
 }
 
 MSQL_Params MSQL_create_params() {
-  void *params = std::malloc(sizeof(std::vector<PMA_MSQL::Value>));
-  new (params) std::vector<PMA_MSQL::Value>();
+  std::vector<PMA_MSQL::Value> *params = new std::vector<PMA_MSQL::Value>();
 
   return params;
 }
@@ -3227,8 +3213,7 @@ void MSQL_cleanup_params(MSQL_Params *params) {
 
   std::vector<PMA_MSQL::Value> *values =
       reinterpret_cast<std::vector<PMA_MSQL::Value> *>(*params);
-  values->~vector();
-  std::free(*params);
+  delete values;
   *params = nullptr;
 }
 
@@ -3247,9 +3232,9 @@ MSQL_Rows MSQL_query(MSQL_Connection conn, const char *stmt,
     return nullptr;
   }
 
-  void *rows = std::malloc(sizeof(std::vector<std::vector<PMA_MSQL::Value> >));
-  new (rows) std::vector<std::vector<PMA_MSQL::Value> >(
-      std::move(stmt_ret_opt.value()));
+  std::vector<std::vector<PMA_MSQL::Value> > *rows =
+      new std::vector<std::vector<PMA_MSQL::Value> >(
+          std::move(stmt_ret_opt.value()));
 
   return rows;
 }
@@ -3263,6 +3248,21 @@ size_t MSQL_row_count(MSQL_Rows rows) {
       reinterpret_cast<std::vector<std::vector<PMA_MSQL::Value> > *>(rows);
 
   return v->size();
+}
+
+size_t MSQL_col_count(MSQL_Rows rows) {
+  if (!rows) {
+    return 0;
+  }
+
+  std::vector<std::vector<PMA_MSQL::Value> > *v =
+      reinterpret_cast<std::vector<std::vector<PMA_MSQL::Value> > *>(rows);
+
+  if (v->empty()) {
+    return 0;
+  }
+
+  return v->at(0).size();
 }
 
 MSQL_Value MSQL_fetch(MSQL_Rows rows, size_t row_idx, size_t col_idx) {
@@ -3279,8 +3279,7 @@ MSQL_Value MSQL_fetch(MSQL_Rows rows, size_t row_idx, size_t col_idx) {
     return nullptr;
   }
 
-  void *val = std::malloc(sizeof(PMA_MSQL::Value));
-  new (val) PMA_MSQL::Value(v->at(row_idx).at(col_idx));
+  PMA_MSQL::Value *val = new PMA_MSQL::Value(v->at(row_idx).at(col_idx));
 
   return val;
 }
@@ -3293,8 +3292,7 @@ void MSQL_cleanup_rows(MSQL_Rows *rows) {
   std::vector<std::vector<PMA_MSQL::Value> > *v =
       reinterpret_cast<std::vector<std::vector<PMA_MSQL::Value> > *>(*rows);
 
-  v->~vector();
-  std::free(*rows);
+  delete v;
   *rows = nullptr;
 }
 
@@ -3387,7 +3385,7 @@ void MSQL_cleanup_value(MSQL_Value *value) {
   }
 
   PMA_MSQL::Value *v = reinterpret_cast<PMA_MSQL::Value *>(*value);
-  v->~Value();
-  std::free(*value);
+
+  delete v;
   *value = nullptr;
 }

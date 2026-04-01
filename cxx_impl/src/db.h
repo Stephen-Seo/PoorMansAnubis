@@ -134,14 +134,16 @@ std::tuple<ErrorT, std::string> cleanup_stale_entries(SQLITECtx &ctx,
                                                       uint32_t timeout);
 
 // last string is id.
-std::tuple<ErrorT, std::string, std::string> init_id_to_port(SQLITECtx &ctx,
-                                                             uint16_t port);
+std::tuple<ErrorT, std::string, std::string> init_id_to_port(
+    SQLITECtx &ctx, uint16_t port,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // On error, first string is err message. On SUCCESS, first string is challenge
 // in base64 and second string is hashed answer.
 // Last string is id.
 std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
-    SQLITECtx &ctx, uint64_t quads, std::string client_ip, std::string id);
+    SQLITECtx &ctx, uint64_t quads, std::string client_ip, std::string id,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.
@@ -157,12 +159,6 @@ get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
 std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
                                                          std::string ipaddr,
                                                          uint16_t port);
-
-uint64_t rand_uint64_t();
-
-uint64_t rng_next_id(uint64_t value);
-
-std::string next_hash(uint64_t value);
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////

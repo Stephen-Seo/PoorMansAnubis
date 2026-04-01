@@ -224,21 +224,23 @@ std::optional<bool> has_challenge_factor_id(Connection &c, std::string hash);
 // First str is challenge, second is hashed-id.
 std::tuple<Error, std::string, std::string> set_challenge_factor(
     Connection &c, std::string ip, uint16_t port, uint64_t f_quads,
-    uint64_t chall_factors_timeout);
+    uint64_t chall_factors_timeout,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 /// First value is SUCCESS on not error. Second value is port.
 std::tuple<Error, uint16_t> get_id_to_port_port(Connection &c, std::string id);
 
-std::tuple<Error, uint16_t> validate_client(Connection &c,
-                                            uint64_t chall_factors_timeout,
-                                            std::string id, std::string factors,
-                                            std::string client_ip);
+std::tuple<Error, uint16_t> validate_client(
+    Connection &c, uint64_t chall_factors_timeout, std::string id,
+    std::string factors, std::string client_ip,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 Error client_is_allowed(Connection &c, std::string ip, uint16_t port,
                         uint64_t allowed_ips_timeout);
 
-std::tuple<Error, std::string> init_id_to_port(Connection &c, uint16_t port,
-                                               uint64_t id_to_port_timeout);
+std::tuple<Error, std::string> init_id_to_port(
+    Connection &c, uint16_t port, uint64_t id_to_port_timeout,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 struct Conf {
   std::string addr;

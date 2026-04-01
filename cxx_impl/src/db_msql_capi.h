@@ -54,6 +54,8 @@ extern MSQL_Rows MSQL_query(MSQL_Connection conn, const char *stmt,
 
 extern size_t MSQL_row_count(MSQL_Rows rows);
 
+extern size_t MSQL_col_count(MSQL_Rows rows);
+
 /// Returns NULL on error. Returned MSQL_Value must be cleaned up with
 /// MSQL_cleanup_value().
 extern MSQL_Value MSQL_fetch(MSQL_Rows rows, size_t row_idx, size_t col_idx);

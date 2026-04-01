@@ -21,12 +21,36 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <random>
 
 // Posix includes
 #include <signal.h>
 
 // Third party includes
 #include <openssl/evp.h>
+
+std::string PMA_HELPER::vec_to_hexadecimal(const std::vector<uint8_t> &data) {
+  std::string hex;
+
+  for (uint8_t value : data) {
+    uint8_t upper = (value >> 4) & 0xF;
+    uint8_t lower = value & 0xF;
+
+    if (upper < 0xA) {
+      hex.push_back(static_cast<char>('0' + upper));
+    } else {
+      hex.push_back(static_cast<char>('A' + upper - 10));
+    }
+
+    if (lower < 0xA) {
+      hex.push_back(static_cast<char>('0' + lower));
+    } else {
+      hex.push_back(static_cast<char>('A' + lower - 10));
+    }
+  }
+
+  return hex;
+}
 
 uint16_t PMA_HELPER::endian_swap_u16(uint16_t u16) {
   uint8_t *u16_ptr = reinterpret_cast<uint8_t *>(&u16);
@@ -382,4 +406,35 @@ std::string PMA_HELPER::MimeTypes::get_mimetype_from_ext(
     return iter->second;
   }
   return {};
+}
+
+uint64_t PMA_HELPER::rand_uint64_t() {
+  std::random_device rd{};
+  static std::default_random_engine re(rd());
+  static std::uniform_int_distribution<uint64_t> int_dist;
+  return int_dist(re);
+}
+
+uint64_t PMA_HELPER::rng_next_id(uint64_t value) {
+  constexpr uint64_t a = 9;
+  constexpr uint64_t c = 31;
+
+  std::default_random_engine default_re(value * a + c);
+
+  return std::uniform_int_distribution<uint64_t>()(default_re);
+}
+
+std::string PMA_HELPER::next_hash(
+    uint64_t value,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
+  uint64_t next_id = rng_next_id(value);
+  uint64_t random_val = rand_uint64_t();
+
+  std::array<uint8_t, 16> data;
+  std::memcpy(data.data(), &next_id, 8);
+  std::memcpy(data.data() + 8, &random_val, 8);
+
+  std::vector<uint8_t> hash(hasher_fn(data.data(), data.size()));
+
+  return PMA_HELPER::vec_to_hexadecimal(hash);
 }
