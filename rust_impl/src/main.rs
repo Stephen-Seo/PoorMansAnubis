@@ -32,6 +32,7 @@ use std::time::{Duration, Instant};
 use std::{path::Path, sync::atomic::AtomicBool};
 
 use rusqlite::Connection;
+use salvo::http::Mime;
 use salvo::{http::ResBody, prelude::*};
 use tokio::{
     fs::File,
@@ -284,6 +285,7 @@ async fn req_to_url(
     real_ip: Option<&str>,
     body: Option<Vec<u8>>,
     method: &str,
+    content_type: Option<Mime>,
 ) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
     let client = reqwest::Client::new();
     let req_builder = match method {
@@ -297,14 +299,27 @@ async fn req_to_url(
         "TRACE" => client.request(reqwest::Method::TRACE, url),
         _ => return Err(Error::Generic(format!("Invalid HTML method {}!", method))),
     };
+
+    let content_type_str: Option<String> = content_type.map(|m| m.to_string());
+
     let req: reqwest::Response = if let Some(ip) = real_ip {
         if let Some(body) = body {
-            req_builder
-                .body(body)
-                .header("x-real-ip", ip)
-                .header("accept", "text/html,application/xhtml+xml,*/*")
-                .send()
-                .await?
+            if let Some(content_type_str) = content_type_str {
+                req_builder
+                    .body(body)
+                    .header("x-real-ip", ip)
+                    .header("accept", "text/html,application/xhtml+xml,*/*")
+                    .header("content-type", content_type_str)
+                    .send()
+                    .await?
+            } else {
+                req_builder
+                    .body(body)
+                    .header("x-real-ip", ip)
+                    .header("accept", "text/html,application/xhtml+xml,*/*")
+                    .send()
+                    .await?
+            }
         } else {
             req_builder
                 .header("x-real-ip", ip)
@@ -313,11 +328,20 @@ async fn req_to_url(
                 .await?
         }
     } else if let Some(body) = body {
-        req_builder
-            .body(body)
-            .header("accept", "text/html,application/xhtml+xml,*/*")
-            .send()
-            .await?
+        if let Some(content_type_str) = content_type_str {
+            req_builder
+                .body(body)
+                .header("accept", "text/html,application/xhtml+xml,*/*")
+                .header("content-type", content_type_str)
+                .send()
+                .await?
+        } else {
+            req_builder
+                .body(body)
+                .header("accept", "text/html,application/xhtml+xml,*/*")
+                .send()
+                .await?
+        }
     } else {
         req_builder
             .header("accept", "text/html,application/xhtml+xml,*/*")
@@ -1340,6 +1364,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 Some(&client_info_ret.addr),
                 None,
                 method.as_str(),
+                req.content_type(),
             )
             .await
         } else {
@@ -1348,6 +1373,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 Some(&client_info_ret.addr),
                 Some(payload),
                 method.as_str(),
+                req.content_type(),
             )
             .await
         };
