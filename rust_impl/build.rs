@@ -78,7 +78,7 @@ fn main() {
         .expect("Couldn't write bindings for \"msql\"!");
 
     let bindings = bindgen::Builder::default()
-        .clang_arg("-I../challenge_impl/third_party/SimpleArchiver/src")
+        .clang_arg(format!("-I{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src"))
         .header(format!("{cargo_manifest_dir}/../challenge_impl/src/work.h"))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
