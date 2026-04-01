@@ -21,9 +21,26 @@ the "rust_impl". It is more lightweight and there are some differences:
 - cxx_impl uses `libcurl` while rust_impl uses `reqwest`
 - cxx_impl uses Unix-style ipv4/ipv6 socket handling while rust_impl uses
   `salvo`
-- cxx_impl uses `sqlite` while rust_impl uses `mariadb` (or `mysql`) by default
-    (it is possible to use `sqlite` with the rust_impl)
 - cxx_impl uses `blake3` primarly for hashing and the rust_impl also does so
+
+================================================================================
+
+COMPILING
+
+================================================================================
+
+cxx_impl/ contains a Makefile that builds a Debug build and expects dependencies
+already installed on the system. Use "RELEASE=1 make ..." to build a Release
+build.
+
+cxx_impl/bundled/ contains a Makefile that builds all dependencies and links
+them statically to the executable which is also placed in cxx_impl/ .
+
+
+rust_impl/ contains a Rust project which will call `make` on cxx_impl/bundled/
+as it uses the cxx_impl's msql code and at least 1 library built in the bundled
+build. Note that because of this, compilling the Rust project will be slow as it
+builds all of cxx_impl/bundled/ as well as its own dependencies.
 
 
 ================================================================================
@@ -44,20 +61,12 @@ the rust_impl/mysql.conf config. Note that it may be insecure to connect to
 MySQL/MariaDB outside of the local network, so it would be better to use a VPN
 if your DB is hosted non-locally.
 
-The Rust impl by default requires a MySQL server with a database and user with
-password with access to said database. If using MySQL, then it is recommended to
-use MariaDB.
-
-Sqlite usage is also possible with the Rust impl, by compiling with the
-following options:
-
-Enable only sqlite:
-cargo build --no-default-features --features sqlite
-
-or
-
-Enable both mysql and sqlite:
-cargo build --all-features
+The Rust impl provides support for both sqlite and MySQL. Using MySQL requires
+a MySQL server with a database and user with password with access to said
+database. If using MySQL, then it is recommended to use MariaDB. Note that just
+like the C++ implementation, it is insecure to access a MySQL server over the
+internet, so a VPN or locally-hosted instance is necessary to keep things
+secure.
 
 Check "rust_impl/src/args.rs" for flags you can pass to the Rust impl. Also
 check "rust_impl/mysql.conf" for how the config file should be set up for MySQL
