@@ -47,6 +47,30 @@ fn main() {
             &format!("{cargo_manifest_dir}/../cxx_impl/bundled"),
             "-j",
             &format!("{jobs}"),
+            "out/ssl/usr/lib/libssl.a",
+            "out/include/sqlite3.h",
+        ])
+        .output()
+        .expect("\"make\" on cxx_impl should have completed successfully!");
+
+    if !command_output.status.success() {
+        let err = String::from_utf8(command_output.stderr)
+            .expect("Should be able to get string from command output!");
+        panic!("{err}");
+    }
+
+    let mut command = Command::new("make");
+
+    let command_output = command
+        .env("RELEASE", "1")
+        .env("PMA_PRE_COMMON_FLAGS", format!("-I{cargo_manifest_dir}/../cxx_impl/bundled/out/ssl/usr/include -I{cargo_manifest_dir}/../cxx_impl/bundled/out/include"))
+        .env("PMA_PRE_COMMON_CFLAGS", format!("-I{cargo_manifest_dir}/../cxx_impl/bundled/out/ssl/usr/include -I{cargo_manifest_dir}/../cxx_impl/bundled/out/include"))
+        .args([
+            "-C",
+            &format!("{cargo_manifest_dir}/../cxx_impl"),
+            "-j",
+            &format!("{jobs}"),
+            "libdb_msql_capi.a",
         ])
         .output()
         .expect("\"make\" on cxx_impl should have completed successfully!");
