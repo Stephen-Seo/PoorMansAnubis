@@ -316,9 +316,9 @@ impl MSQLWrapper {
         let mut is_ok = true;
 
         unsafe {
-            let mut params = ffi::MSQL_create_params();
-
             let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
+
+            let mut params = ffi::MSQL_create_params();
 
             let mut rows = ffi::MSQL_query(self.connection, stmt_c.as_ptr(), params);
 
@@ -367,9 +367,9 @@ impl MSQLWrapper {
     pub fn query_rows(&mut self, stmt: &str) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, &str> {
         let mut rows_ret: Option<Vec<Vec<MSQLValueEnum>>> = None;
         unsafe {
-            let mut params = ffi::MSQL_create_params();
-
             let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
+
+            let mut params = ffi::MSQL_create_params();
 
             let mut rows = ffi::MSQL_query(self.connection, stmt_c.as_ptr(), params);
 
