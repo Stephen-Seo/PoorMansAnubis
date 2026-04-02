@@ -15,6 +15,7 @@ serde_json = "1"
 blake3 = "1.8"
 rusqlite = { version = "0.38", features = ["bundled"]}
 getrandom = "0.4"
+msql_ffi = { path = "msql_ffi" }
 
 [build-dependencies]
 bindgen = "0.72"

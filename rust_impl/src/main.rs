@@ -18,7 +18,6 @@ mod args;
 mod constants;
 mod error;
 mod ffi;
-mod ffi_msql;
 mod helpers;
 mod json_types;
 mod salvo_compat;
@@ -42,7 +41,7 @@ use tokio::{
 
 use error::Error;
 
-use crate::ffi_msql::{MSQLParamsWrapper, MSQLValueEnum, MSQLWrapper};
+use msql_ffi::{MSQLParamsWrapper, MSQLValueEnum, MSQLWrapper};
 
 const GETRANDOM_BUF_SIZE: usize = 64;
 const CACHED_TIMEOUT: Duration = Duration::from_secs(120);

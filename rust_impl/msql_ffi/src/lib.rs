@@ -14,26 +14,28 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-#![allow(dead_code)]
+mod ffi {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    #![allow(dead_code)]
+
+    include!(concat!(env!("OUT_DIR"), "/msql_bindings.rs"));
+}
 
 use std::{
     ffi::{CStr, CString},
     str::FromStr,
 };
 
-include!(concat!(env!("OUT_DIR"), "/msql_bindings.rs"));
-
 pub struct MSQLParamsWrapper {
-    params: MSQL_Params,
+    params: ffi::MSQL_Params,
 }
 
 impl Drop for MSQLParamsWrapper {
     fn drop(&mut self) {
         unsafe {
-            MSQL_cleanup_params(&mut self.params as *mut MSQL_Params);
+            ffi::MSQL_cleanup_params(&mut self.params as *mut ffi::MSQL_Params);
         }
     }
 }
@@ -42,26 +44,26 @@ impl MSQLParamsWrapper {
     pub fn new() -> Self {
         unsafe {
             Self {
-                params: MSQL_create_params(),
+                params: ffi::MSQL_create_params(),
             }
         }
     }
 
     pub fn append_null(&mut self) {
         unsafe {
-            MSQL_append_param_null(self.params);
+            ffi::MSQL_append_param_null(self.params);
         }
     }
 
     pub fn append_int64(&mut self, value: i64) {
         unsafe {
-            MSQL_append_param_int64(self.params, value);
+            ffi::MSQL_append_param_int64(self.params, value);
         }
     }
 
     pub fn append_uint64(&mut self, value: u64) {
         unsafe {
-            MSQL_append_param_uint64(self.params, value);
+            ffi::MSQL_append_param_uint64(self.params, value);
         }
     }
 
@@ -69,7 +71,7 @@ impl MSQLParamsWrapper {
         let c_string: CString =
             CString::from_str(string).map_err(|_| "Failed to CString a String param")?;
         unsafe {
-            MSQL_append_param_str(self.params, c_string.as_ptr());
+            ffi::MSQL_append_param_str(self.params, c_string.as_ptr());
         }
 
         Ok(())
@@ -77,11 +79,11 @@ impl MSQLParamsWrapper {
 
     pub fn append_double(&mut self, value: f64) {
         unsafe {
-            MSQL_append_param_double(self.params, value);
+            ffi::MSQL_append_param_double(self.params, value);
         }
     }
 
-    pub fn get_params(&self) -> MSQL_Params {
+    pub fn get_params(&self) -> ffi::MSQL_Params {
         self.params
     }
 }
@@ -93,17 +95,17 @@ pub enum MSQLValueEnum {
     Int64(i64),
     UInt64(u64),
     String(String),
-    Double_f64(f64),
+    DoubleF64(f64),
 }
 
 pub struct MSQLValueWrapper {
-    value: MSQL_Value,
+    value: ffi::MSQL_Value,
 }
 
 impl Drop for MSQLValueWrapper {
     fn drop(&mut self) {
         unsafe {
-            MSQL_cleanup_value(&mut self.value as *mut MSQL_Value);
+            ffi::MSQL_cleanup_value(&mut self.value as *mut ffi::MSQL_Value);
         }
     }
 }
@@ -111,7 +113,7 @@ impl Drop for MSQLValueWrapper {
 impl MSQLValueWrapper {
     pub fn get(&self) -> MSQLValueEnum {
         unsafe {
-            match MSQL_get_type(self.value) {
+            match ffi::MSQL_get_type(self.value) {
                 1 => MSQLValueEnum::Null,
                 2 => {
                     if let Some(i) = self.get_i64() {
@@ -136,7 +138,7 @@ impl MSQLValueWrapper {
                 }
                 5 => {
                     if let Some(d) = self.get_f64() {
-                        MSQLValueEnum::Double_f64(d)
+                        MSQLValueEnum::DoubleF64(d)
                     } else {
                         MSQLValueEnum::Error
                     }
@@ -149,7 +151,7 @@ impl MSQLValueWrapper {
     pub fn get_i64(&self) -> Option<i64> {
         let ret: i64;
         unsafe {
-            let ptr = MSQL_get_int64(self.value);
+            let ptr = ffi::MSQL_get_int64(self.value);
             if ptr.is_null() {
                 return None;
             }
@@ -163,7 +165,7 @@ impl MSQLValueWrapper {
         let ret: u64;
 
         unsafe {
-            let ptr = MSQL_get_uint64(self.value);
+            let ptr = ffi::MSQL_get_uint64(self.value);
             if ptr.is_null() {
                 return None;
             }
@@ -177,7 +179,7 @@ impl MSQLValueWrapper {
         let ret: f64;
 
         unsafe {
-            let ptr = MSQL_get_double(self.value);
+            let ptr = ffi::MSQL_get_double(self.value);
             if ptr.is_null() {
                 return None;
             }
@@ -191,7 +193,7 @@ impl MSQLValueWrapper {
         let ret: String;
 
         unsafe {
-            let ptr = MSQL_get_str(self.value);
+            let ptr = ffi::MSQL_get_str(self.value);
             if ptr.is_null() {
                 return None;
             }
@@ -209,30 +211,30 @@ impl MSQLValueWrapper {
 }
 
 pub struct MSQLRowsWrapper {
-    rows: MSQL_Rows,
+    rows: ffi::MSQL_Rows,
 }
 
 impl Drop for MSQLRowsWrapper {
     fn drop(&mut self) {
         unsafe {
-            MSQL_cleanup_rows(&mut self.rows as *mut MSQL_Rows);
+            ffi::MSQL_cleanup_rows(&mut self.rows as *mut ffi::MSQL_Rows);
         }
     }
 }
 
 impl MSQLRowsWrapper {
     pub fn get_row_count(&self) -> usize {
-        unsafe { MSQL_row_count(self.rows) }
+        unsafe { ffi::MSQL_row_count(self.rows) }
     }
 
     pub fn get_col_count(&self) -> usize {
-        unsafe { MSQL_col_count(self.rows) }
+        unsafe { ffi::MSQL_col_count(self.rows) }
     }
 
     pub fn fetch(&self, row: usize, col: usize) -> Option<MSQLValueWrapper> {
         let ret: Option<MSQLValueWrapper>;
         unsafe {
-            let raw_value: MSQL_Value = MSQL_fetch(self.rows, row, col);
+            let raw_value: ffi::MSQL_Value = ffi::MSQL_fetch(self.rows, row, col);
             if raw_value.is_null() {
                 return None;
             }
@@ -245,7 +247,7 @@ impl MSQLRowsWrapper {
 }
 
 pub struct MSQLWrapper {
-    connection: MSQL_Connection,
+    connection: ffi::MSQL_Connection,
 }
 
 // Pointer remains in the instance that cannot be cloned, should be safe to Send/Sync
@@ -255,7 +257,7 @@ unsafe impl Sync for MSQLWrapper {}
 impl Drop for MSQLWrapper {
     fn drop(&mut self) {
         unsafe {
-            MSQL_cleanup(&mut self.connection as *mut MSQL_Connection);
+            ffi::MSQL_cleanup(&mut self.connection as *mut ffi::MSQL_Connection);
         }
     }
 }
@@ -275,14 +277,14 @@ impl MSQLWrapper {
 
         let connection;
         unsafe {
-            connection = MSQL_new(
+            connection = ffi::MSQL_new(
                 addr_c.as_ptr(),
                 port,
                 user_c.as_ptr(),
                 pass_c.as_ptr(),
                 dbname_c.as_ptr(),
             );
-            if MSQL_is_valid(connection) != 0 {
+            if ffi::MSQL_is_valid(connection) != 0 {
                 return Err(());
             }
         }
@@ -292,7 +294,7 @@ impl MSQLWrapper {
 
     pub fn is_valid(&mut self) -> Result<(), ()> {
         unsafe {
-            if MSQL_is_valid(self.connection) == 0 {
+            if ffi::MSQL_is_valid(self.connection) == 0 {
                 Ok(())
             } else {
                 Err(())
@@ -302,7 +304,7 @@ impl MSQLWrapper {
 
     pub fn ping(&mut self) -> Result<(), ()> {
         unsafe {
-            if MSQL_ping(self.connection) == 0 {
+            if ffi::MSQL_ping(self.connection) == 0 {
                 Ok(())
             } else {
                 Err(())
@@ -314,19 +316,19 @@ impl MSQLWrapper {
         let mut is_ok = true;
 
         unsafe {
-            let mut params = MSQL_create_params();
+            let mut params = ffi::MSQL_create_params();
 
             let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
-            let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params);
+            let mut rows = ffi::MSQL_query(self.connection, stmt_c.as_ptr(), params);
 
             if rows.is_null() {
                 is_ok = false;
             }
 
-            MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
+            ffi::MSQL_cleanup_rows(&mut rows as *mut ffi::MSQL_Rows);
 
-            MSQL_cleanup_params(&mut params as *mut MSQL_Params);
+            ffi::MSQL_cleanup_params(&mut params as *mut ffi::MSQL_Params);
         }
 
         if is_ok {
@@ -346,13 +348,13 @@ impl MSQLWrapper {
         unsafe {
             let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
-            let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params.get_params());
+            let mut rows = ffi::MSQL_query(self.connection, stmt_c.as_ptr(), params.get_params());
 
             if rows.is_null() {
                 is_ok = false;
             }
 
-            MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
+            ffi::MSQL_cleanup_rows(&mut rows as *mut ffi::MSQL_Rows);
         }
 
         if is_ok {
@@ -365,18 +367,18 @@ impl MSQLWrapper {
     pub fn query_rows(&mut self, stmt: &str) -> Result<Option<Vec<Vec<MSQLValueEnum>>>, &str> {
         let mut rows_ret: Option<Vec<Vec<MSQLValueEnum>>> = None;
         unsafe {
-            let mut params = MSQL_create_params();
+            let mut params = ffi::MSQL_create_params();
 
             let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
-            let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params);
+            let mut rows = ffi::MSQL_query(self.connection, stmt_c.as_ptr(), params);
 
-            if !rows.is_null() && MSQL_row_count(rows) != 0 {
+            if !rows.is_null() && ffi::MSQL_row_count(rows) != 0 {
                 rows_ret = Some(Vec::new());
-                for row_idx in 0..MSQL_row_count(rows) {
+                for row_idx in 0..ffi::MSQL_row_count(rows) {
                     let mut row_vec: Vec<MSQLValueEnum> = Vec::new();
-                    for col_idx in 0..MSQL_col_count(rows) {
-                        let msql_val = MSQL_fetch(rows, row_idx, col_idx);
+                    for col_idx in 0..ffi::MSQL_col_count(rows) {
+                        let msql_val = ffi::MSQL_fetch(rows, row_idx, col_idx);
                         let wrapped_val = MSQLValueWrapper { value: msql_val };
                         row_vec.push(wrapped_val.get());
                     }
@@ -384,9 +386,9 @@ impl MSQLWrapper {
                 }
             }
 
-            MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
+            ffi::MSQL_cleanup_rows(&mut rows as *mut ffi::MSQL_Rows);
 
-            MSQL_cleanup_params(&mut params as *mut MSQL_Params);
+            ffi::MSQL_cleanup_params(&mut params as *mut ffi::MSQL_Params);
         }
 
         if let Some(v) = rows_ret {
@@ -405,14 +407,14 @@ impl MSQLWrapper {
         unsafe {
             let stmt_c = CString::from_str(stmt).map_err(|_| "Failed to CString stmt")?;
 
-            let mut rows = MSQL_query(self.connection, stmt_c.as_ptr(), params.get_params());
+            let mut rows = ffi::MSQL_query(self.connection, stmt_c.as_ptr(), params.get_params());
 
-            if !rows.is_null() && MSQL_row_count(rows) != 0 {
+            if !rows.is_null() && ffi::MSQL_row_count(rows) != 0 {
                 rows_ret = Some(Vec::new());
-                for row_idx in 0..MSQL_row_count(rows) {
+                for row_idx in 0..ffi::MSQL_row_count(rows) {
                     let mut row_vec: Vec<MSQLValueEnum> = Vec::new();
-                    for col_idx in 0..MSQL_col_count(rows) {
-                        let msql_val = MSQL_fetch(rows, row_idx, col_idx);
+                    for col_idx in 0..ffi::MSQL_col_count(rows) {
+                        let msql_val = ffi::MSQL_fetch(rows, row_idx, col_idx);
                         let wrapped_val = MSQLValueWrapper { value: msql_val };
                         row_vec.push(wrapped_val.get());
                     }
@@ -420,7 +422,7 @@ impl MSQLWrapper {
                 }
             }
 
-            MSQL_cleanup_rows(&mut rows as *mut MSQL_Rows);
+            ffi::MSQL_cleanup_rows(&mut rows as *mut ffi::MSQL_Rows);
         }
 
         if let Some(v) = rows_ret {

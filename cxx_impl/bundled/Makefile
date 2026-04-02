@@ -21,7 +21,7 @@ PWD != pwd
 all: ../cxx_backend_impl
 
 ../cxx_backend_impl: sqlite3_TARGET out/lib/libblake3.a out/lib/libcurl.a
-	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -llz4 -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include -I${PWD}/out/ssl/usr/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include -I${PWD}/out/ssl/usr/include" RELEASE=1 ${MAKE} -C ..
+	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -llz4 -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" RELEASE=1 ${MAKE} -C ..
 
 sqlite_build/: download_cache/sqlite-autoconf-3510300.tar.gz
 	@mkdir -p sqlite_build
