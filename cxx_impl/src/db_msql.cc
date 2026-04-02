@@ -2602,6 +2602,146 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           }
           break;
         }
+        case 10: {
+          // DATE
+          if (buf[idx] == 0) {
+            out->emplace_back("0000-00-00");
+          } else if (buf[idx] == 4) {
+            ++idx;
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATE out of bounds!\n");
+              return 1;
+            }
+
+            uint16_t year;
+            std::memcpy(&year, buf + idx, 2);
+            idx += 2;
+            if (PMA_HELPER::is_big_endian()) {
+              year = PMA_HELPER::endian_swap_u16(year);
+            }
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATE out of bounds!\n");
+              return 1;
+            }
+
+            uint8_t month = buf[idx++];
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATE out of bounds!\n");
+              return 1;
+            }
+
+            uint8_t day = buf[idx++];
+
+            if (idx > size) {
+              std::fprintf(stderr, "ERROR: Parse DATE out of bounds!\n");
+              return 1;
+            }
+
+            out->emplace_back(
+                std::format("{:04}-{:02}-{:02}", year, month, day));
+          } else {
+            std::fprintf(stderr, "ERROR: Failed to parse DATE!\n");
+            return 1;
+          }
+          break;
+        }
+        case 12: {
+          // DATETIME
+          if (buf[idx] == 0) {
+            out->emplace_back("0000-00-00T00:00:00");
+          } else if (buf[idx] >= 4) {
+            ++idx;
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            uint16_t year;
+            std::memcpy(&year, buf + idx, 2);
+            idx += 2;
+            if (PMA_HELPER::is_big_endian()) {
+              year = PMA_HELPER::endian_swap_u16(year);
+            }
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            uint8_t month = buf[idx++];
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            uint8_t day = buf[idx++];
+
+            if (buf[idx] <= 4) {
+              out->emplace_back(
+                  std::format("{:04}-{:02}-{:02}T00:00:00", year, month, day));
+              break;
+            }
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            uint8_t hour = buf[idx++];
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            uint8_t minutes = buf[idx++];
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            uint8_t seconds = buf[idx++];
+
+            if (buf[idx] <= 7) {
+              out->emplace_back(
+                  std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", year,
+                              month, day, hour, minutes, seconds));
+              break;
+            }
+
+            if (idx >= size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            uint32_t microseconds;
+            std::memcpy(&microseconds, buf + idx, 4);
+            idx += 4;
+
+            if (idx > size) {
+              std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
+              return 1;
+            }
+
+            if (PMA_HELPER::is_big_endian()) {
+              microseconds = PMA_HELPER::endian_swap_u32(microseconds);
+            }
+
+            out->emplace_back(
+                std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}", year,
+                            month, day, hour, minutes, seconds, microseconds));
+          } else {
+            std::fprintf(stderr, "ERROR: Failed to parse DATETIME!\n");
+            return 1;
+          }
+          break;
+        }
         case 252: {
           const auto [value, b_read] = parse_len_enc_int(buf + idx);
           idx += b_read;

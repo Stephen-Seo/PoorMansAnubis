@@ -97,8 +97,19 @@ debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/
 debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
 	${CXX} -o debug_client ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
+bundled/out/ssl/usr/lib/libssl.a:
+	${MAKE} -C bundled out/ssl/usr/lib/libssl.a
+
+bundled/out/include/sqlite3.h:
+	${MAKE} -C bundled out/include/sqlite3.h
+
+${OBJDIR_ABS}/src/db_msql.cc.o: bundled/out/include/sqlite3.h
+
+${OBJDIR_ABS}/src/helpers.cc.o: bundled/out/ssl/usr/lib/libssl.a
+
 libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${CHALL_IMPL_OBJECTS}
-	${AR} rcs libdb_msql_capi.a $^
+	cd bundled/out/ssl/usr/lib && mkdir -p crypto_out && ${AR} --output crypto_out x libcrypto.a
+	${AR} rcs libdb_msql_capi.a $^ bundled/out/ssl/usr/lib/crypto_out/*
 
 debug_test_capi: ${OBJDIR}/src/db_msql_capi_test.c.o libdb_msql_capi.a
 	${CXX} -o debug_test_capi ${FINAL_COMMON_FLAGS} $< -L. -ldb_msql_capi ${LINKER_FLAGS}
@@ -133,6 +144,19 @@ clean:
 	rm -f debug_client
 	rm -f libdb_msql_capi.a
 	rm -f debug_test_capi
+	rm -rf bundled/out
+	rm -rf bundled/sqlite_build
+	rm -rf bundled/blake3_build
+	rm -rf bundled/curl_build
+	rm -rf bundled/nghttp2_build
+	rm -rf bundled/idn2_build
+	rm -rf bundled/libunistring_build
+	rm -rf bundled/zstd_build
+	rm -rf bundled/brotli_build
+	rm -rf bundled/zlib_build
+	rm -rf bundled/openssl_build
+	rm -rf bundled/xz_utils_build
+	rm -rf bundled/lz4_build
 
 clang-format:
 	test -x /usr/bin/clang-format && /usr/bin/clang-format -i --style=file ${SOURCES} ${HEADERS} src/db_msql_capi_test.c src/test.cc || true

@@ -20,15 +20,21 @@ PWD != pwd
 
 all: ../cxx_backend_impl
 
-../cxx_backend_impl: out/lib/libsqlite3.a out/lib/libblake3.a out/lib/libcurl.a
+../cxx_backend_impl: sqlite3_TARGET out/lib/libblake3.a out/lib/libcurl.a
 	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -llz4 -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" PMA_PRE_COMMON_FLAGS="-I${PWD}/out/include -I${PWD}/out/ssl/usr/include" PMA_PRE_COMMON_CFLAGS="-I${PWD}/out/include -I${PWD}/out/ssl/usr/include" RELEASE=1 ${MAKE} -C ..
 
-out/lib/libsqlite3.a out/include/sqlite3.h: download_cache/sqlite-autoconf-3510300.tar.gz
+sqlite_build/: download_cache/sqlite-autoconf-3510300.tar.gz
 	@mkdir -p sqlite_build
-	tar -xf download_cache/sqlite-autoconf-3510300.tar.gz -C sqlite_build
+	(test -e out/include/sqlite3.h && test -e out/lib/libsqlite3.a) || tar -xf download_cache/sqlite-autoconf-3510300.tar.gz -C sqlite_build
+
+out/include/sqlite3.h: | sqlite_build/
+	install -D -m444 sqlite_build/sqlite-autoconf-3510300/sqlite3.h out/include/sqlite3.h
+
+out/lib/libsqlite3.a: | sqlite_build/
 	cd sqlite_build/sqlite-autoconf-3510300 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --disable-shared && ${MAKE} libsqlite3.a
 	install -D -m444 sqlite_build/sqlite-autoconf-3510300/libsqlite3.a out/lib/libsqlite3.a
-	install -D -m444 sqlite_build/sqlite-autoconf-3510300/sqlite3.h out/include/sqlite3.h
+
+sqlite3_TARGET: out/include/sqlite3.h out/lib/libsqlite3.a
 	rm -rf sqlite_build
 
 download_cache/sqlite-autoconf-3510300.tar.gz:
@@ -182,7 +188,7 @@ download_cache/lz4_v1.10.0.tar.gz:
 	cd download_cache && curl -o lz4_v1.10.0.tar.gz -L https://github.com/lz4/lz4/archive/refs/tags/v1.10.0.tar.gz
 	sha256sum -c SHA256SUM_lz4_v1.10.0.tar.gz.txt || (rm -f download_cache/lz4_v1.10.0.tar.gz && false)
 
-.PHONY: clean
+.PHONY: clean sqlite3_TARGET
 
 clean:
 	rm -rf out
