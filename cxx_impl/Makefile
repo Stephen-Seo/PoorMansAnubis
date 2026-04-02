@@ -2,6 +2,7 @@ CWD != pwd
 
 LINKER_FLAGS := ${PMA_PRE_LINKER_FLAGS} -lsqlite3 -lblake3 -lcurl -lcrypto ${PMA_POST_LINKER_FLAGS}
 COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
+	-Ibundled/out/include -Ibundled/out/ssl/usr/include \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
@@ -15,6 +16,7 @@ COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../challenge_impl/src -I../
 	-Wbidi-chars=any \
 	-fPIE -pie
 COMMON_CFLAGS := ${PMA_PRE_COMMON_CFLAGS} -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
+	-Ibundled/out/include -Ibundled/out/ssl/usr/include \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \

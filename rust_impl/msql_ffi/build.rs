@@ -24,8 +24,6 @@ fn main() {
 
     let command_output = command
         .env("RELEASE", "1")
-        .env("PMA_PRE_COMMON_FLAGS", format!("-I{cargo_manifest_dir}/../../cxx_impl/bundled/out/ssl/usr/include -I{cargo_manifest_dir}/../../cxx_impl/bundled/out/include"))
-        .env("PMA_PRE_COMMON_CFLAGS", format!("-I{cargo_manifest_dir}/../../cxx_impl/bundled/out/ssl/usr/include -I{cargo_manifest_dir}/../../cxx_impl/bundled/out/include"))
         .args([
             "-C",
             &format!("{cargo_manifest_dir}/../../cxx_impl"),
