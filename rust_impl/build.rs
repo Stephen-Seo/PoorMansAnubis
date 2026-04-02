@@ -42,26 +42,6 @@ fn main() {
     let mut command = Command::new("make");
 
     let command_output = command
-        .args([
-            "-C",
-            &format!("{cargo_manifest_dir}/../cxx_impl/bundled"),
-            "-j",
-            &format!("{jobs}"),
-            "out/ssl/usr/lib/libssl.a",
-            "out/include/sqlite3.h",
-        ])
-        .output()
-        .expect("\"make\" on cxx_impl should have completed successfully!");
-
-    if !command_output.status.success() {
-        let err = String::from_utf8(command_output.stderr)
-            .expect("Should be able to get string from command output!");
-        panic!("{err}");
-    }
-
-    let mut command = Command::new("make");
-
-    let command_output = command
         .env("RELEASE", "1")
         .env("PMA_PRE_COMMON_FLAGS", format!("-I{cargo_manifest_dir}/../cxx_impl/bundled/out/ssl/usr/include -I{cargo_manifest_dir}/../cxx_impl/bundled/out/include"))
         .env("PMA_PRE_COMMON_CFLAGS", format!("-I{cargo_manifest_dir}/../cxx_impl/bundled/out/ssl/usr/include -I{cargo_manifest_dir}/../cxx_impl/bundled/out/include"))
@@ -69,6 +49,8 @@ fn main() {
             "-C",
             &format!("{cargo_manifest_dir}/../cxx_impl"),
             "-j",
+            &format!("{jobs}"),
+            "-l",
             &format!("{jobs}"),
             "libdb_msql_capi.a",
         ])
@@ -82,9 +64,7 @@ fn main() {
     }
 
     println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl");
-    println!("cargo::rustc-link-search={cargo_manifest_dir}/../cxx_impl/bundled/out/ssl/usr/lib");
     println!("cargo::rustc-link-lib=db_msql_capi");
-    println!("cargo::rustc-link-lib=crypto");
     println!("cargo::rustc-link-lib=stdc++");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
