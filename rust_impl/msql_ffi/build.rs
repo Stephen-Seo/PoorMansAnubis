@@ -23,6 +23,23 @@ fn main() {
     let mut command = Command::new("make");
 
     let command_output = command
+        .args([
+            "-C",
+            &format!("{cargo_manifest_dir}/../../cxx_impl"),
+            "clean",
+        ])
+        .output()
+        .expect("\"make\" clean on cxx_impl failed");
+
+    if !command_output.status.success() {
+        let err = String::from_utf8(command_output.stderr)
+            .expect("Should be able to get string from command output!");
+        panic!("{err}");
+    }
+
+    let mut command = Command::new("make");
+
+    let command_output = command
         .env("RELEASE", "1")
         .args([
             "-C",
