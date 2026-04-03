@@ -40,7 +40,7 @@ them statically to the executable which is also placed in cxx_impl/ .
 rust_impl/ contains a Rust project which will call `make` on cxx_impl/bundled/
 as it uses the cxx_impl's msql code and at least 1 library built in the bundled
 build. Note that because of this, compilling the Rust project will be slow as it
-builds all of cxx_impl/bundled/ as well as its own dependencies.
+builds some of cxx_impl/bundled/ as well as its own dependencies.
 
 
 ================================================================================
