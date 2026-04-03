@@ -2604,9 +2604,10 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
         }
         case 10: {
           // DATE
-          if (buf[idx] == 0) {
+          const uint8_t byte_count = buf[idx];
+          if (byte_count == 0) {
             out->emplace_back("0000-00-00");
-          } else if (buf[idx] == 4) {
+          } else if (byte_count == 4) {
             ++idx;
 
             if (idx >= size) {
@@ -2650,9 +2651,10 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
         }
         case 12: {
           // DATETIME
-          if (buf[idx] == 0) {
+          const uint8_t byte_count = buf[idx];
+          if (byte_count == 0) {
             out->emplace_back("0000-00-00T00:00:00");
-          } else if (buf[idx] >= 4) {
+          } else if (byte_count >= 4) {
             ++idx;
 
             if (idx >= size) {
@@ -2681,7 +2683,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
 
             uint8_t day = buf[idx++];
 
-            if (buf[idx] <= 4) {
+            if (byte_count <= 4) {
               out->emplace_back(
                   std::format("{:04}-{:02}-{:02}T00:00:00", year, month, day));
               break;
@@ -2708,7 +2710,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
 
             uint8_t seconds = buf[idx++];
 
-            if (buf[idx] <= 7) {
+            if (byte_count <= 7) {
               out->emplace_back(
                   std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", year,
                               month, day, hour, minutes, seconds));
