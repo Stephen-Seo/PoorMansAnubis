@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 libc = "0.2"
-salvo = { version = "0.89", features = ["affix-state"] }
+salvo = { version = "0.91", features = ["affix-state"] }
 tokio = { version = "1", features = ["fs", "io-util", "sync", "rt-multi-thread"] }
 futures = "0.3"
 reqwest = { version = "0.13", features = ["native-tls-vendored"] }
@@ -13,7 +13,7 @@ time = { version = "0.3", features = ["parsing", "local-offset", "formatting", "
 serde = "1"
 serde_json = "1"
 blake3 = "1.8"
-rusqlite = { version = "0.38", features = ["bundled"]}
+rusqlite = { version = "0.39", features = ["bundled"]}
 getrandom = "0.4"
 msql_ffi = { path = "msql_ffi" }
 
