@@ -94,7 +94,7 @@ else()
     message(STATUS "CMAKE_BUILD_TYPE is set to \"${CMAKE_BUILD_TYPE}\".")
 endif()
 
-set(poor_mans_anubis_SOURCES
+set(poor_mans_anubis_bundled_SOURCES
 	"${CMAKE_CURRENT_SOURCE_DIR}/../src/db.cc"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../src/constants.cc"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../src/http.cc"
@@ -303,38 +303,38 @@ add_dependencies(LIBZSTD_LIB
     LIBLZ4_LIB
 )
 
-add_executable(poor_mans_anubis
+add_executable(poor_mans_anubis_bundled
 	"${CMAKE_CURRENT_SOURCE_DIR}/../src/main.cc"
-    ${poor_mans_anubis_SOURCES} ${challenge_impl_SOURCES}
+    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
-target_compile_features(poor_mans_anubis PUBLIC cxx_std_23)
-target_include_directories(poor_mans_anubis PUBLIC
+target_compile_features(poor_mans_anubis_bundled PUBLIC cxx_std_23)
+target_include_directories(poor_mans_anubis_bundled PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src"
 )
-add_dependencies(poor_mans_anubis SQLITE3_LIB)
-add_dependencies(poor_mans_anubis SQLITE3_HEADER)
-add_dependencies(poor_mans_anubis BLAKE3_LIB)
-target_link_libraries(poor_mans_anubis sqlite3)
-target_link_libraries(poor_mans_anubis blake3)
+add_dependencies(poor_mans_anubis_bundled SQLITE3_LIB)
+add_dependencies(poor_mans_anubis_bundled SQLITE3_HEADER)
+add_dependencies(poor_mans_anubis_bundled BLAKE3_LIB)
+target_link_libraries(poor_mans_anubis_bundled sqlite3)
+target_link_libraries(poor_mans_anubis_bundled blake3)
 
-add_executable(unittest
+add_executable(unittest_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/test.cc"
-    ${poor_mans_anubis_SOURCES} ${challenge_impl_SOURCES}
+    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
-target_compile_features(unittest PUBLIC cxx_std_23)
+target_compile_features(unittest_bundled PUBLIC cxx_std_23)
 
-add_executable(debug_serve
+add_executable(debug_serve_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../debug/test_serve.cc"
-    ${poor_mans_anubis_SOURCES} ${challenge_impl_SOURCES}
+    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
-target_compile_features(debug_serve PUBLIC cxx_std_23)
+target_compile_features(debug_serve_bundled PUBLIC cxx_std_23)
 
-add_executable(debug_client
+add_executable(debug_client_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../debug/test_client.cc"
-    ${poor_mans_anubis_SOURCES} ${challenge_impl_SOURCES}
+    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
-target_compile_features(debug_client PUBLIC cxx_std_23)
+target_compile_features(debug_client_bundled PUBLIC cxx_std_23)
 
 add_library(db_msql_api STATIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/db_msql.cc"
