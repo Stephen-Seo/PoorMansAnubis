@@ -113,23 +113,23 @@ else()
 endif()
 
 set(poor_mans_anubis_bundled_SOURCES
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/db.cc"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/constants.cc"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/http.cc"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/helpers.cc"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/poor_mans_print.cc"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/args.cc"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/db_msql.cc"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/thread_pool.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/db.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/constants.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/http.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/helpers.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/poor_mans_print.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/args.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/db_msql.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/thread_pool.cc"
 )
 
 set(challenge_impl_SOURCES
-	"${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/work.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/base64.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/work2.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/work.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/base64.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/work2.cc"
 )
 
 add_compile_options(
@@ -387,7 +387,7 @@ add_dependencies(LIBCURL_LIB
 )
 
 add_executable(poor_mans_anubis_bundled
-	"${CMAKE_CURRENT_SOURCE_DIR}/../src/main.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/main.cc"
     ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(poor_mans_anubis_bundled PUBLIC cxx_std_23)
