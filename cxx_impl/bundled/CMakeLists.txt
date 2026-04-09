@@ -498,13 +498,13 @@ add_dependencies(db_msql_api_pre
     LIBOPENSSL_LIB
 )
 
-add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libdb_msql_api.a"
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libdb_msql_capi.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/db_msql_api_OBJECTS"
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/db_msql_api_OBJECTS" && ${BUILD_AR} x "${CMAKE_CURRENT_BINARY_DIR}/libdb_msql_api_pre.a" && ${BUILD_AR} x "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcrypto.a"
-    COMMAND sh -c "${BUILD_AR} rcs \"${CMAKE_CURRENT_BINARY_DIR}/libdb_msql_api.a\" $(find \"${CMAKE_CURRENT_BINARY_DIR}/db_msql_api_OBJECTS\" -type f)"
+    COMMAND sh -c "${BUILD_AR} rcs \"${CMAKE_CURRENT_BINARY_DIR}/libdb_msql_capi.a\" $(find \"${CMAKE_CURRENT_BINARY_DIR}/db_msql_api_OBJECTS\" -type f)"
     VERBATIM
 )
-add_custom_target(LIBDB_MSQL_API_FINALIZED DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/libdb_msql_api.a")
+add_custom_target(LIBDB_MSQL_API_FINALIZED DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/libdb_msql_capi.a")
 add_dependencies(LIBDB_MSQL_API_FINALIZED
     db_msql_api_pre
 )
