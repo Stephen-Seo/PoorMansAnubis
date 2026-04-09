@@ -4,6 +4,7 @@ use std::process::Command;
 
 fn main() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_path_display = out_path.display();
     let cargo_manifest_dir: String = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     let jobs: usize;
@@ -20,17 +21,17 @@ fn main() {
             .expect("Should be able to convert \"nproc\" output to integer!");
     }
 
-    let mut command = Command::new("make");
-
+    let mut command = Command::new("cmake");
     let command_output = command
         .args([
-            "-C",
-            &format!("{cargo_manifest_dir}/../../cxx_impl"),
-            "clean",
+            "-S",
+            &format!("{cargo_manifest_dir}/../../cxx_impl/bundled"),
+            "-B",
+            &format!("{out_path_display}/MSQL_API_BUILD"),
+            "-DCMAKE_BUILD_TYPE=Release",
         ])
         .output()
-        .expect("\"make\" clean on cxx_impl failed");
-
+        .expect("\"cmake\" should have set up build for msql C api");
     if !command_output.status.success() {
         let err = String::from_utf8(command_output.stderr)
             .expect("Should be able to get string from command output!");
@@ -43,12 +44,12 @@ fn main() {
         .env("RELEASE", "1")
         .args([
             "-C",
-            &format!("{cargo_manifest_dir}/../../cxx_impl"),
+            &format!("{out_path_display}/MSQL_API_BUILD"),
             "-j",
             &format!("{jobs}"),
             "-l",
             &format!("{jobs}"),
-            "libdb_msql_capi.a",
+            "LIBDB_MSQL_API_FINALIZED",
         ])
         .output()
         .expect("\"make\" on cxx_impl should have completed successfully!");
@@ -59,7 +60,7 @@ fn main() {
         panic!("{err}");
     }
 
-    println!("cargo::rustc-link-search={cargo_manifest_dir}/../../cxx_impl");
+    println!("cargo::rustc-link-search={out_path_display}/MSQL_API_BUILD");
     println!("cargo::rustc-link-lib=db_msql_capi");
     println!("cargo::rustc-link-lib=stdc++");
 
