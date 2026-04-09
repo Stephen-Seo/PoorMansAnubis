@@ -41,7 +41,6 @@ fn main() {
     let mut command = Command::new("make");
 
     let command_output = command
-        .env("RELEASE", "1")
         .args([
             "-C",
             &format!("{out_path_display}/MSQL_API_BUILD"),
