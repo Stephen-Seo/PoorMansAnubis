@@ -23,24 +23,24 @@ all: ../cxx_backend_impl
 ../cxx_backend_impl: sqlite3_TARGET out/lib/libblake3.a out/lib/libcurl.a
 	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -llz4 -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" RELEASE=1 ${MAKE} -C ..
 
-sqlite_build/: download_cache/sqlite-autoconf-3510300.tar.gz
+sqlite_build/: download_cache/sqlite-autoconf-3530000.tar.gz
 	@mkdir -p sqlite_build
-	(test -e out/include/sqlite3.h && test -e out/lib/libsqlite3.a) || tar -xf download_cache/sqlite-autoconf-3510300.tar.gz -C sqlite_build
+	(test -e out/include/sqlite3.h && test -e out/lib/libsqlite3.a) || tar -xf download_cache/sqlite-autoconf-3530000.tar.gz -C sqlite_build
 
 out/include/sqlite3.h: | sqlite_build/
-	install -D -m444 sqlite_build/sqlite-autoconf-3510300/sqlite3.h out/include/sqlite3.h
+	install -D -m444 sqlite_build/sqlite-autoconf-3530000/sqlite3.h out/include/sqlite3.h
 
 out/lib/libsqlite3.a: | sqlite_build/
-	cd sqlite_build/sqlite-autoconf-3510300 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --disable-shared && ${MAKE} libsqlite3.a
-	install -D -m444 sqlite_build/sqlite-autoconf-3510300/libsqlite3.a out/lib/libsqlite3.a
+	cd sqlite_build/sqlite-autoconf-3530000 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --disable-shared && ${MAKE} libsqlite3.a
+	install -D -m444 sqlite_build/sqlite-autoconf-3530000/libsqlite3.a out/lib/libsqlite3.a
 
 sqlite3_TARGET: out/include/sqlite3.h out/lib/libsqlite3.a
 	rm -rf sqlite_build
 
-download_cache/sqlite-autoconf-3510300.tar.gz:
+download_cache/sqlite-autoconf-3530000.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://sqlite.org/2026/sqlite-autoconf-3510300.tar.gz
-	sha256sum -c SHA256SUM_sqlite-3.51.3.txt || (rm -f download_cache/sqlite-autoconf-3510300.tar.gz && false)
+	cd download_cache && curl -OL https://sqlite.org/2026/sqlite-autoconf-3530000.tar.gz
+	sha256sum -c SHA256SUM_sqlite-3.53.0.txt || (rm -f download_cache/sqlite-autoconf-3530000.tar.gz && false)
 
 out/lib/libblake3.a out/include/blake3.h: download_cache/blake3_1.8.4.tar.gz
 	@mkdir -p blake3_build
