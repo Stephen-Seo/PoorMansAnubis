@@ -140,3 +140,11 @@ target_include_directories(debug_client PUBLIC
 )
 target_link_directories(debug_client PUBLIC ${SQLITE3_LIBRARY_DIRS})
 target_link_libraries(debug_client BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
+
+if(INCLUDE_BUNDLED_DB_MSQL_CAPI)
+    set(DISABLE_BUNDLED_NOTICE ON)
+    set(DISABLE_BUILD_VAR_SET_MSG ON)
+    add_subdirectory(bundled EXCLUDE_FROM_ALL)
+else()
+    message(STATUS "To enable building libdb_msql_capi.a from this CMakeLists.txt, set \"INCLUDE_BUNDLED_DB_MSQL_CAPI\"")
+endif()
