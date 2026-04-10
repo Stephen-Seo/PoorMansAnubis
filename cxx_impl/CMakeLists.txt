@@ -123,6 +123,7 @@ target_compile_features(debug_serve PUBLIC cxx_std_23)
 target_include_directories(debug_serve PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/src"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/third_party/SimpleArchiver/src"
+	${SQLITE3_INCLUDE_DIRS}
 )
 target_link_directories(debug_serve PUBLIC ${SQLITE3_LIBRARY_DIRS})
 target_link_libraries(debug_serve BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
@@ -135,6 +136,7 @@ target_compile_features(debug_client PUBLIC cxx_std_23)
 target_include_directories(debug_client PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/src"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/third_party/SimpleArchiver/src"
+	${SQLITE3_INCLUDE_DIRS}
 )
 target_link_directories(debug_client PUBLIC ${SQLITE3_LIBRARY_DIRS})
 target_link_libraries(debug_client BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
