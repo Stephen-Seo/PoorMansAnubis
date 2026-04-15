@@ -367,13 +367,13 @@ add_custom_target(LIBBROTLI_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libssl.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-3.6.2.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-3.6.2.tar.gz" -L "https://github.com/openssl/openssl/releases/download/openssl-3.6.2/openssl-3.6.2.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_openssl-3.6.2.tar.gz.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-4.0.0.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-4.0.0.tar.gz" -L "https://github.com/openssl/openssl/releases/download/openssl-4.0.0/openssl-4.0.0.tar.gz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_openssl-4.0.0.tar.gz.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-3.6.2.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-3.6.2" && sed -i -e s|./demoCA|/etc/ssl| apps/CA.pl.in apps/openssl.cnf && env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 disable-tests linux-${TARGET_ARCH}
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-3.6.2"
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-3.6.2" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT install
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-4.0.0.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-4.0.0" && sed -i -e s|./demoCA|/etc/ssl| apps/CA.pl.in apps/openssl.cnf && env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 disable-tests linux-${TARGET_ARCH}
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-4.0.0"
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-4.0.0" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT install
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT/usr/lib/libssl.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libssl.a"
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT/usr/lib/libcrypto.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcrypto.a"
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT/usr/include" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
