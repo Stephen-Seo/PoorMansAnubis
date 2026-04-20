@@ -243,15 +243,15 @@ add_custom_target(BLAKE3_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/li
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.68.1.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.68.1.tar.xz" -L "https://github.com/nghttp2/nghttp2/releases/download/v1.68.1/nghttp2-1.68.1.tar.xz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_nghttp2-1.68.1.tar.xz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.69.0.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.69.0.tar.xz" -L "https://github.com/nghttp2/nghttp2/releases/download/v1.69.0/nghttp2-1.69.0.tar.xz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_nghttp2-1.69.0.tar.xz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.68.1.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.68.1" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.68.1"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.68.1/lib/.libs/libnghttp2.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.69.0.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.69.0" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.69.0"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.69.0/lib/.libs/libnghttp2.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/nghttp2"
-    COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.68.1/lib/includes/nghttp2" -regex .*\.h$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/nghttp2/{}" ";"
+    COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.69.0/lib/includes/nghttp2" -regex .*\.h$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/nghttp2/{}" ";"
     VERBATIM
 )
 add_custom_target(NGHTTP2_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a")

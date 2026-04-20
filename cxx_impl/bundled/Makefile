@@ -70,18 +70,18 @@ download_cache/curl-8.19.0.tar.xz:
 	cd download_cache && curl -OL https://github.com/curl/curl/releases/download/curl-8_19_0/curl-8.19.0.tar.xz
 	sha256sum -c SHA256SUM_curl-8.19.0.txt || (rm -f download_cache/curl-8.19.0.tar.xz && false)
 
-out/lib/libnghttp2.a: download_cache/nghttp2-1.68.1.tar.xz
+out/lib/libnghttp2.a: download_cache/nghttp2-1.69.0.tar.xz
 	@mkdir -p nghttp2_build
-	tar -xf download_cache/nghttp2-1.68.1.tar.xz -C nghttp2_build
-	cd nghttp2_build/nghttp2-1.68.1 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only && ${MAKE}
-	install -D -m444 nghttp2_build/nghttp2-1.68.1/lib/.libs/libnghttp2.a out/lib/libnghttp2.a
-	find nghttp2_build/nghttp2-1.68.1/lib/includes/nghttp2 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/nghttp2/{}" ';'
+	tar -xf download_cache/nghttp2-1.69.0.tar.xz -C nghttp2_build
+	cd nghttp2_build/nghttp2-1.69.0 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only && ${MAKE}
+	install -D -m444 nghttp2_build/nghttp2-1.69.0/lib/.libs/libnghttp2.a out/lib/libnghttp2.a
+	find nghttp2_build/nghttp2-1.69.0/lib/includes/nghttp2 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${PWD}/out/include/nghttp2/{}" ';'
 	rm -rf nghttp2_build
 
-download_cache/nghttp2-1.68.1.tar.xz:
+download_cache/nghttp2-1.69.0.tar.xz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://github.com/nghttp2/nghttp2/releases/download/v1.68.1/nghttp2-1.68.1.tar.xz
-	sha256sum -c SHA256SUM_nghttp2-1.68.1.tar.xz.txt || (rm -f download_cache/nghttp2-1.68.1.tar.xz && false)
+	cd download_cache && curl -OL https://github.com/nghttp2/nghttp2/releases/download/v1.69.0/nghttp2-1.69.0.tar.xz
+	sha256sum -c SHA256SUM_nghttp2-1.69.0.tar.xz.txt || (rm -f download_cache/nghttp2-1.69.0.tar.xz && false)
 
 out/lib/libidn2.a: download_cache/libidn2-2.3.8.tar.gz out/lib/libunistring.a
 	@mkdir -p idn2_build
