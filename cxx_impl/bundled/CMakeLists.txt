@@ -229,14 +229,14 @@ add_dependencies(SQLITE3_LIB SQLITE3_BINARY_DIR)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libblake3.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.4.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.4.tar.gz" -L "https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.4.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_blake3_1.8.4.tar.gz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.5.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.5.tar.gz" -L "https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.5.tar.gz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_blake3_1.8.5.tar.gz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.4.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-1.8.4/c" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_PROCESSOR=${TARGET_ARCH} -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} "$<$<STREQUAL:aarch64,${TARGET_ARCH}>:-DBLAKE3_SIMD_TYPE=neon-intrinsics>"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.5.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-1.8.5/c" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_PROCESSOR=${TARGET_ARCH} -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} "$<$<STREQUAL:aarch64,${TARGET_ARCH}>:-DBLAKE3_SIMD_TYPE=neon-intrinsics>"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build"
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build/libblake3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libblake3.a"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-1.8.4/c/blake3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/blake3.h"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-1.8.5/c/blake3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/blake3.h"
     VERBATIM
 )
 add_custom_target(BLAKE3_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libblake3.a")
