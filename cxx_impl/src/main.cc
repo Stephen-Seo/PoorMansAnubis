@@ -900,7 +900,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       to_write.append("\r\n");
     }
 
-    if (auto iter_pair = req.headers.equal_range("cookie"); iter_pair.first != iter_pair.second) {
+    if (auto iter_pair = req.headers.equal_range("cookie");
+        iter_pair.first != iter_pair.second) {
       for (auto iter = iter_pair.first; iter != iter_pair.second; ++iter) {
         to_write.append("cookie: ");
         to_write.append(iter->second);
