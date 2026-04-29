@@ -1239,7 +1239,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
     }
   }
 
-  std::unordered_map<std::string, std::string> headers;
+  std::unordered_multimap<std::string, std::string> headers;
 
   decltype(req)::size_type idx = req.find("\r\n");
   if (idx == std::string::npos) {
