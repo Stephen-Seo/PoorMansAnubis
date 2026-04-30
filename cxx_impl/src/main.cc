@@ -153,7 +153,8 @@ size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
 void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
                         std::string &body, std::string &status,
                         std::string &content_type, const PMA_HTTP::Request &req,
-                        const PMA_ARGS::Args &args) {
+                        const PMA_ARGS::Args &args,
+                        std::bitset<32> &forward_flags) {
   CURLcode pma_curl_ret;
   CURL *curl_handle = curl_easy_init();
   GenericCleanup<CURL *> pma_curl_cleanup(
@@ -276,27 +277,14 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
       [](struct curl_slist ***list) { curl_slist_free_all(**list); });
   headers_list = curl_slist_append(
       headers_list, "accept: text/html,application/xhtml+xml,*/*");
-  if (auto ip_iter = req.headers.find("x-real-ip");
-      ip_iter != req.headers.end() && args.flags.test(0)) {
+  for (const auto &pair : req.headers) {
+    if (pair.first == "host" || pair.first == "override-dest-url" ||
+        pair.first == "accept") {
+      continue;
+    }
     headers_list = curl_slist_append(
-        headers_list, std::format("x-real-ip: {}", ip_iter->second).c_str());
+        headers_list, std::format("{}: {}", pair.first, pair.second).c_str());
   }
-  if (auto type_iter = req.headers.find("content-type");
-      type_iter != req.headers.end()) {
-    headers_list = curl_slist_append(
-        headers_list,
-        std::format("content-type: {}", type_iter->second).c_str());
-  }
-  // for (const auto &pair : req.headers) {
-  //   if (pair.first == "host" || pair.first ==
-  //   "override-dest-url") {
-  //     continue;
-  //   }
-  //   headers_list = curl_slist_append(
-  //       headers_list,
-  //       std::format("{}: {}", pair.first,
-  //       pair.second).c_str());
-  // }
   pma_curl_ret =
       curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers_list);
   if (pma_curl_ret != CURLE_OK) {
@@ -714,6 +702,12 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
   content_type.clear();
   for (auto header_iter = resp_headers.begin();
        header_iter != resp_headers.end(); ++header_iter) {
+    if (header_iter->first == "transfer-encoding" &&
+        PMA_HELPER::ascii_str_to_lower(
+            PMA_HELPER::trim_whitespace(header_iter->second)) == "chunked") {
+      forward_flags.set(0);
+      continue;
+    }
     if (header_iter->first == "content-length" ||
         header_iter->first == "transfer-encoding") {
       continue;
@@ -726,12 +720,13 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
   content_type.resize(content_type.size() - 2);
 }
 
-void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
-                               std::string &body, std::string &status,
-                               std::string &content_type,
-                               std::bitset<32> &forward_flags,
-                               const PMA_HTTP::Request &req,
-                               const PMA_ARGS::Args &args) {
+// Returns fd to destination.
+int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
+                              std::string &body, std::string &status,
+                              std::string &content_type,
+                              std::bitset<32> &forward_flags,
+                              const PMA_HTTP::Request &req,
+                              const PMA_ARGS::Args &args, int dest_conn_fd) {
   std::string addr;
   uint32_t port = 80;
 
@@ -769,7 +764,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
             body =
                 "<html><p>500 Internal Server Error</p><p>Invalid "
                 "settings</p></html>";
-            return;
+            return -1;
           }
           ++decimal_count;
           has_number = 0;
@@ -781,7 +776,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
             body =
                 "<html><p>500 Internal Server Error</p><p>Invalid "
                 "settings</p></html>";
-            return;
+            return -1;
           }
         } else if (decimal_count == 3) {
           if (full_addr.at(end_idx) < '0' || full_addr.at(end_idx) > '9') {
@@ -800,7 +795,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         body =
             "<html><p>500 Internal Server Error</p><p>Invalid "
             "settings</p></html>";
-        return;
+        return -1;
       }
 
       if (end_idx < full_addr.size() && full_addr.at(end_idx) == ':') {
@@ -818,7 +813,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
               body =
                   "<html><p>500 Internal Server Error</p><p>Invalid "
                   "settings</p></html>";
-              return;
+              return -1;
             }
           } else {
             PMA_EPrintln(
@@ -828,7 +823,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
             body =
                 "<html><p>500 Internal Server Error</p><p>Invalid "
                 "settings</p></html>";
-            return;
+            return -1;
           }
         }
       }
@@ -840,7 +835,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       body =
           "<html><p>500 Internal Server Error</p><p>Invalid "
           "settings</p></html>";
-      return;
+      return -1;
     }
   }
 
@@ -849,22 +844,15 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     status = "HTTP/1.0 500 Internal Server Error";
     body =
         "<html><p>500 Internal Server Error</p><p>Invalid settings</p></html>";
-    return;
+    return -1;
   }
 
   // PMA_EPrintln("DEBUG: Got addr: {}, port {}", addr, port);
 
-  const auto [err, err_msg, socket_fd] = PMA_HTTP::connect_ipv4_socket_client(
-      addr, "0.0.0.0", static_cast<uint16_t>(port));
-  if (err != PMA_HTTP::ErrorT::SUCCESS) {
-    PMA_EPrintln("ERROR: Failed to get socket (invalid addr/port?): {}",
-                 err_msg);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to forward "
-        "connect</p></html>";
-    return;
-  }
+  PMA_HTTP::ErrorT err = PMA_HTTP::ErrorT::SUCCESS;
+  std::string err_msg{};
+  int socket_fd = dest_conn_fd;
+  int_fast8_t using_dest_conn_fd = 1;
 
   GenericCleanup<int> cleanup_socket(socket_fd, [](int *fd) {
     if (fd && *fd && *fd > 0) {
@@ -888,16 +876,20 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     to_write.append(
         "Accept: text/html,application/xhtml+xml,application/xml,*/*\r\n");
     to_write.append("User-Agent: PoorMansAnubis\r\n");
-    to_write.append("Connection: close\r\n");
+    to_write.append("Connection: keep-alive\r\n");
     to_write.append("x-real-ip: ");
     to_write.append(cli_addr);
     to_write.append("\r\n");
 
-    if (auto iter = req.headers.find("content-type");
-        iter != req.headers.end()) {
-      to_write.append("Content-Type: ");
-      to_write.append(iter->second);
-      to_write.append("\r\n");
+    for (auto iter = req.headers.cbegin(); iter != req.headers.cend(); ++iter) {
+      if (iter->first != "user-agent" && iter->first != "connection" &&
+          iter->first != "host" && iter->first != "accept" &&
+          iter->first != "x-real-ip") {
+        to_write.append(iter->first);
+        to_write.append(": ");
+        to_write.append(iter->second);
+        to_write.append("\r\n");
+      }
     }
 
     // End of headers
@@ -929,7 +921,22 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
             body =
                 "<html><p>500 Internal Server Error</p><p>Failed to "
                 "fetch, timed out write</p></html>";
-            return;
+            return -1;
+          }
+          continue;
+        } else if (using_dest_conn_fd) {
+          using_dest_conn_fd = 0;
+          std::tie(err, err_msg, socket_fd) =
+              PMA_HTTP::connect_ipv4_socket_client(addr, "0.0.0.0",
+                                                   static_cast<uint16_t>(port));
+          if (err != PMA_HTTP::ErrorT::SUCCESS) {
+            PMA_EPrintln("ERROR: Failed to get socket (invalid addr/port?): {}",
+                         err_msg);
+            status = "HTTP/1.0 500 Internal Server Error";
+            body =
+                "<html><p>500 Internal Server Error</p><p>Failed to forward "
+                "connect</p></html>";
+            return -1;
           }
           continue;
         } else {
@@ -939,11 +946,12 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
           body =
               "<html><p>500 Internal Server Error</p><p>Failed to "
               "fetch</p></html>";
-          return;
+          return -1;
         }
       } else {
         remaining -= static_cast<size_t>(write_ret);
         if (remaining == 0) {
+          // PMA_EPrintln("Wrote {} for url {}", to_write.size(), req.full_url);
           break;
         }
         wait_ticks = 0;
@@ -954,6 +962,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
   std::array<char, REQ_READ_BUF_SIZE> buf;
   int_fast8_t before_first_line = 1;
   int_fast8_t before_content = 1;
+  int_fast8_t force_break = 0;
   std::string temp;
   std::string header_name;
   std::string header_value;
@@ -995,7 +1004,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     header_value.clear();
   };
 
-  while (wait_ticks < args.req_timeout_ticks) {
+  while (wait_ticks < args.req_timeout_ticks && !force_break) {
     skip_before_idx = 0;
     ssize_t read_ret = read(socket_fd, buf.data(), buf.size());
     if (read_ret == -1) {
@@ -1012,7 +1021,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         body =
             "<html><p>500 Internal Server Error</p><p>Failed to "
             "forward</p></html>";
-        return;
+        return -1;
       }
     } else if (read_ret == 0) {
       if (body.empty() || status.empty() || content_type.empty()) {
@@ -1021,7 +1030,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         body =
             "<html><p>500 Internal Server Error</p><p>Failed to "
             "forward</p></html>";
-        return;
+        return -1;
       }
       break;
     } else {
@@ -1040,7 +1049,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
             body =
                 "<html><p>500 Internal Server Error</p><p>Failed to "
                 "forward</p></html>";
-            return;
+            return -1;
           }
         } else if (before_content) {
           if (idx < skip_before_idx) {
@@ -1070,7 +1079,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
               body =
                   "<html><p>500 Internal Server Error</p><p>Failed to "
                   "forward</p></html>";
-              return;
+              return -1;
             }
             before_content = 0;
             skip_before_idx = idx + 4;
@@ -1087,7 +1096,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
               body =
                   "<html><p>500 Internal Server Error</p><p>Failed to "
                   "forward</p></html>";
-              return;
+              return -1;
             }
           } else {
             PMA_EPrintln("ERROR: Invalid forwarded headers");
@@ -1096,7 +1105,7 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
             body =
                 "<html><p>500 Internal Server Error</p><p>Failed to "
                 "forward</p></html>";
-            return;
+            return -1;
           }
         } else if (idx < skip_before_idx) {
           continue;
@@ -1114,18 +1123,25 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
               body =
                   "<html><p>500 Internal Server Error</p><p>Failed to "
                   "forward</p></html>";
-              return;
+              return -1;
             } else {
               recv_content_size.value() -= read_size - idx;
               // PMA_EPrintln("DEBUG: recv_content_size now {}",
               //              recv_content_size.value());
             }
+          } else if (forward_flags.test(0) && body.ends_with("0\r\n\r\n")) {
+            force_break = 1;
+            break;
           }
           break;
         }
       }  // for idx < read_size
-    }
+    }  // read_ret == -1  else
   }  // while
+
+  // if (wait_ticks >= args.req_timeout_ticks) {
+  //   PMA_EPrintln("TIMED OUT read from dest for url {}", req.full_url);
+  // }
 
   if (status.empty()) {
     status = "HTTP/1.0 500 Internal Server Error";
@@ -1137,6 +1153,11 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     // Append "Connection: close" without ending "\r\n" as it is added later.
     content_type.append("Connection: close");
   }
+
+  dest_conn_fd = socket_fd;
+  socket_fd = -1;
+
+  return dest_conn_fd;
 }
 
 struct ThreadData {
@@ -1148,6 +1169,7 @@ struct ThreadData {
                      std::chrono::time_point<std::chrono::steady_clock> >
       *cached_allowed;
   int conn_fd;
+  int dest_conn_fd;
 };
 
 void thread_handle_connection_fn(void *ud) {
@@ -1503,12 +1525,14 @@ void thread_handle_connection_fn(void *ud) {
                 if (data->args->flags.test(5)) {
                   do_curl_forwarding(data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
-                                     status, content_type, req, *data->args);
+                                     status, content_type, req, *data->args,
+                                     forward_flags);
                 } else {
-                  do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
-                                            data->addr_port_info.local_port,
-                                            body, status, content_type,
-                                            forward_flags, req, *data->args);
+                  data->dest_conn_fd = do_ipv4_socket_forwarding(
+                      data->addr_port_info.client_addr,
+                      data->addr_port_info.local_port, body, status,
+                      content_type, forward_flags, req, *data->args,
+                      data->dest_conn_fd);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1549,12 +1573,13 @@ void thread_handle_connection_fn(void *ud) {
               if (data->args->flags.test(5)) {
                 do_curl_forwarding(data->addr_port_info.client_addr,
                                    data->addr_port_info.local_port, body,
-                                   status, content_type, req, *data->args);
+                                   status, content_type, req, *data->args,
+                                   forward_flags);
               } else {
-                do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
-                                          data->addr_port_info.local_port, body,
-                                          status, content_type, forward_flags,
-                                          req, *data->args);
+                data->dest_conn_fd = do_ipv4_socket_forwarding(
+                    data->addr_port_info.client_addr,
+                    data->addr_port_info.local_port, body, status, content_type,
+                    forward_flags, req, *data->args, data->dest_conn_fd);
               }
               goto PMA_RESPONSE_SEND_LOCATION;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
@@ -1611,12 +1636,14 @@ void thread_handle_connection_fn(void *ud) {
                 if (data->args->flags.test(5)) {
                   do_curl_forwarding(data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
-                                     status, content_type, req, *data->args);
+                                     status, content_type, req, *data->args,
+                                     forward_flags);
                 } else {
-                  do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
-                                            data->addr_port_info.local_port,
-                                            body, status, content_type,
-                                            forward_flags, req, *data->args);
+                  data->dest_conn_fd = do_ipv4_socket_forwarding(
+                      data->addr_port_info.client_addr,
+                      data->addr_port_info.local_port, body, status,
+                      content_type, forward_flags, req, *data->args,
+                      data->dest_conn_fd);
                 }
                 goto PMA_RESPONSE_SEND_LOCATION;
               }
@@ -1650,12 +1677,12 @@ void thread_handle_connection_fn(void *ud) {
             if (data->args->flags.test(5)) {
               do_curl_forwarding(data->addr_port_info.client_addr,
                                  data->addr_port_info.local_port, body, status,
-                                 content_type, req, *data->args);
+                                 content_type, req, *data->args, forward_flags);
             } else {
-              do_ipv4_socket_forwarding(data->addr_port_info.client_addr,
-                                        data->addr_port_info.local_port, body,
-                                        status, content_type, forward_flags,
-                                        req, *data->args);
+              data->dest_conn_fd = do_ipv4_socket_forwarding(
+                  data->addr_port_info.client_addr,
+                  data->addr_port_info.local_port, body, status, content_type,
+                  forward_flags, req, *data->args, data->dest_conn_fd);
             }
             goto PMA_RESPONSE_SEND_LOCATION;
           }
@@ -1685,7 +1712,10 @@ void thread_handle_connection_fn(void *ud) {
                        data->addr_port_info.client_addr, errno);
           break;
         } else {
-          // Success, intentionally left blank.
+          // Success, "break" to close the connection.
+          // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
+          //             data->dest_conn_fd, req.full_url);
+          break;
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
@@ -1717,6 +1747,9 @@ void thread_cleanup_fn(void *ud) {
   ThreadData *data = reinterpret_cast<ThreadData *>(ud);
   if (data->conn_fd > 0) {
     close(data->conn_fd);
+  }
+  if (data->dest_conn_fd > 0) {
+    close(data->dest_conn_fd);
   }
   delete data;
 }
@@ -1907,6 +1940,7 @@ int main(int argc, char **argv) {
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;
           new_data->conn_fd = ret;
+          new_data->dest_conn_fd = -1;
 
           thread_pool.add_func(thread_handle_connection_fn, new_data,
                                thread_cleanup_fn);
@@ -1941,6 +1975,7 @@ int main(int argc, char **argv) {
           new_data->cached_allowed_mutex = &cached_allowed_mutex;
           new_data->cached_allowed = &cached_allowed;
           new_data->conn_fd = ret;
+          new_data->dest_conn_fd = -1;
 
           thread_pool.add_func(thread_handle_connection_fn, new_data,
                                thread_cleanup_fn);
