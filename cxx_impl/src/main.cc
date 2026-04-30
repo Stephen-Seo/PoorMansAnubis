@@ -153,7 +153,8 @@ size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
 void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
                         std::string &body, std::string &status,
                         std::string &content_type, const PMA_HTTP::Request &req,
-                        const PMA_ARGS::Args &args) {
+                        const PMA_ARGS::Args &args,
+                        std::bitset<32> &forward_flags) {
   CURLcode pma_curl_ret;
   CURL *curl_handle = curl_easy_init();
   GenericCleanup<CURL *> pma_curl_cleanup(
@@ -276,27 +277,14 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
       [](struct curl_slist ***list) { curl_slist_free_all(**list); });
   headers_list = curl_slist_append(
       headers_list, "accept: text/html,application/xhtml+xml,*/*");
-  if (auto ip_iter = req.headers.find("x-real-ip");
-      ip_iter != req.headers.end() && args.flags.test(0)) {
+  for (const auto &pair : req.headers) {
+    if (pair.first == "host" || pair.first == "override-dest-url" ||
+        pair.first == "accept") {
+      continue;
+    }
     headers_list = curl_slist_append(
-        headers_list, std::format("x-real-ip: {}", ip_iter->second).c_str());
+        headers_list, std::format("{}: {}", pair.first, pair.second).c_str());
   }
-  if (auto type_iter = req.headers.find("content-type");
-      type_iter != req.headers.end()) {
-    headers_list = curl_slist_append(
-        headers_list,
-        std::format("content-type: {}", type_iter->second).c_str());
-  }
-  // for (const auto &pair : req.headers) {
-  //   if (pair.first == "host" || pair.first ==
-  //   "override-dest-url") {
-  //     continue;
-  //   }
-  //   headers_list = curl_slist_append(
-  //       headers_list,
-  //       std::format("{}: {}", pair.first,
-  //       pair.second).c_str());
-  // }
   pma_curl_ret =
       curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers_list);
   if (pma_curl_ret != CURLE_OK) {
@@ -714,6 +702,12 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
   content_type.clear();
   for (auto header_iter = resp_headers.begin();
        header_iter != resp_headers.end(); ++header_iter) {
+    if (header_iter->first == "transfer-encoding" &&
+        PMA_HELPER::ascii_str_to_lower(
+            PMA_HELPER::trim_whitespace(header_iter->second)) == "chunked") {
+      forward_flags.set(0);
+      continue;
+    }
     if (header_iter->first == "content-length" ||
         header_iter->first == "transfer-encoding") {
       continue;
@@ -1147,9 +1141,8 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         "<html><p>500 Internal Server Error</p><p>Failed to "
         "forward, no response</p></html>";
   } else {
-    // Append "Connection: keep-alive" without ending "\r\n" as it is added
-    // later.
-    content_type.append("Connection: keep-alive");
+    // Append "Connection: close" without ending "\r\n" as it is added later.
+    content_type.append("Connection: close");
   }
 
   dest_conn_fd = socket_fd;
@@ -1523,7 +1516,8 @@ void thread_handle_connection_fn(void *ud) {
                 if (data->args->flags.test(5)) {
                   do_curl_forwarding(data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
-                                     status, content_type, req, *data->args);
+                                     status, content_type, req, *data->args,
+                                     forward_flags);
                 } else {
                   data->dest_conn_fd = do_ipv4_socket_forwarding(
                       data->addr_port_info.client_addr,
@@ -1570,7 +1564,8 @@ void thread_handle_connection_fn(void *ud) {
               if (data->args->flags.test(5)) {
                 do_curl_forwarding(data->addr_port_info.client_addr,
                                    data->addr_port_info.local_port, body,
-                                   status, content_type, req, *data->args);
+                                   status, content_type, req, *data->args,
+                                   forward_flags);
               } else {
                 data->dest_conn_fd = do_ipv4_socket_forwarding(
                     data->addr_port_info.client_addr,
@@ -1632,7 +1627,8 @@ void thread_handle_connection_fn(void *ud) {
                 if (data->args->flags.test(5)) {
                   do_curl_forwarding(data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
-                                     status, content_type, req, *data->args);
+                                     status, content_type, req, *data->args,
+                                     forward_flags);
                 } else {
                   data->dest_conn_fd = do_ipv4_socket_forwarding(
                       data->addr_port_info.client_addr,
@@ -1672,7 +1668,7 @@ void thread_handle_connection_fn(void *ud) {
             if (data->args->flags.test(5)) {
               do_curl_forwarding(data->addr_port_info.client_addr,
                                  data->addr_port_info.local_port, body, status,
-                                 content_type, req, *data->args);
+                                 content_type, req, *data->args, forward_flags);
             } else {
               data->dest_conn_fd = do_ipv4_socket_forwarding(
                   data->addr_port_info.client_addr,
