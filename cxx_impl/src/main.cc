@@ -909,6 +909,13 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       }
     }
 
+    if (auto iter = req.headers.find("authorization");
+        iter != req.headers.end()) {
+      to_write.append("authorization: ");
+      to_write.append(iter->second);
+      to_write.append("\r\n");
+    }
+
     // End of headers
     to_write.append("\r\n");
 
