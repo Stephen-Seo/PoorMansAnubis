@@ -1150,8 +1150,8 @@ void do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         "<html><p>500 Internal Server Error</p><p>Failed to "
         "forward, no response</p></html>";
   } else {
-    // Append "Connection: close" without ending "\r\n" as it is added later.
-    content_type.append("Connection: close");
+    // Append "Connection: keep-alive" without ending "\r\n" as it is added later.
+    content_type.append("Connection: keep-alive");
   }
 }
 
