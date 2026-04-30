@@ -951,6 +951,7 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
       } else {
         remaining -= static_cast<size_t>(write_ret);
         if (remaining == 0) {
+          // PMA_EPrintln("Wrote {} for url {}", to_write.size(), req.full_url);
           break;
         }
         wait_ticks = 0;
@@ -961,6 +962,7 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
   std::array<char, REQ_READ_BUF_SIZE> buf;
   int_fast8_t before_first_line = 1;
   int_fast8_t before_content = 1;
+  int_fast8_t force_break = 0;
   std::string temp;
   std::string header_name;
   std::string header_value;
@@ -1002,7 +1004,7 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     header_value.clear();
   };
 
-  while (wait_ticks < args.req_timeout_ticks) {
+  while (wait_ticks < args.req_timeout_ticks && !force_break) {
     skip_before_idx = 0;
     ssize_t read_ret = read(socket_fd, buf.data(), buf.size());
     if (read_ret == -1) {
@@ -1127,12 +1129,19 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
               // PMA_EPrintln("DEBUG: recv_content_size now {}",
               //              recv_content_size.value());
             }
+          } else if (forward_flags.test(0) && body.ends_with("0\r\n\r\n")) {
+            force_break = 1;
+            break;
           }
           break;
         }
       }  // for idx < read_size
     }  // read_ret == -1  else
   }  // while
+
+  // if (wait_ticks >= args.req_timeout_ticks) {
+  //   PMA_EPrintln("TIMED OUT read from dest for url {}", req.full_url);
+  // }
 
   if (status.empty()) {
     status = "HTTP/1.0 500 Internal Server Error";
@@ -1703,7 +1712,10 @@ void thread_handle_connection_fn(void *ud) {
                        data->addr_port_info.client_addr, errno);
           break;
         } else {
-          // Success, intentionally left blank.
+          // Success, "break" to close the connection.
+          // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
+          //             data->dest_conn_fd, req.full_url);
+          break;
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
