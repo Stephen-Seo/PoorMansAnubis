@@ -926,6 +926,9 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
           continue;
         } else if (using_dest_conn_fd) {
           using_dest_conn_fd = 0;
+          if (socket_fd > 0) {
+            close(socket_fd);
+          }
           std::tie(err, err_msg, socket_fd) =
               PMA_HTTP::connect_ipv4_socket_client(addr, "0.0.0.0",
                                                    static_cast<uint16_t>(port));
