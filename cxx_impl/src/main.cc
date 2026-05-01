@@ -60,6 +60,7 @@ struct AddrPortInfo {
   std::optional<std::string> remaining_buffer;
   std::string host_addr;
   std::string client_addr;
+  std::string immediate_client_addr;
   // 0 - is ipv4
   std::bitset<16> flags;
   uint16_t remote_port;
@@ -68,13 +69,10 @@ struct AddrPortInfo {
 };
 
 AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
-  AddrPortInfo info = {std::nullopt,
-                       std::get<0>(addr_port),
-                       std::string{},
-                       std::bitset<16>{},
-                       0,
-                       std::get<1>(addr_port),
-                       0};
+  AddrPortInfo info = {std::nullopt,           std::get<0>(addr_port),
+                       std::string{},          std::string{},
+                       std::bitset<16>{},      0,
+                       std::get<1>(addr_port), 0};
 
   info.flags.set(0, is_ipv4);
 
@@ -721,9 +719,9 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
 }
 
 // Returns fd to destination.
-int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
-                              std::string &body, std::string &status,
-                              std::string &content_type,
+int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
+                              uint16_t cli_port, std::string &body,
+                              std::string &status, std::string &content_type,
                               std::bitset<32> &forward_flags,
                               const PMA_HTTP::Request &req,
                               const PMA_ARGS::Args &args, int dest_conn_fd) {
@@ -882,13 +880,20 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     to_write.append("\r\n");
 
     for (auto iter = req.headers.cbegin(); iter != req.headers.cend(); ++iter) {
-      if (iter->first != "user-agent" && iter->first != "connection" &&
-          iter->first != "host" && iter->first != "accept" &&
-          iter->first != "x-real-ip") {
+      if (iter->first == "x-forwarded-for") {
+        to_write.append("x-forwarded-for: ");
+        to_write.append(iter->second);
+        to_write.append(", ");
+        to_write.append(imm_cli_addr);
+      } else if (iter->first != "user-agent" && iter->first != "connection" &&
+                 iter->first != "host" && iter->first != "accept" &&
+                 iter->first != "x-real-ip") {
         to_write.append(iter->first);
         to_write.append(": ");
         to_write.append(iter->second);
         to_write.append("\r\n");
+        // PMA_EPrintln("  DEBUG Sending headers: {} -> {}", iter->first,
+        // iter->second);
       }
     }
 
@@ -988,7 +993,7 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
     if (header_name_lower != "content-length" &&
         header_name_lower != "connection" &&
         header_name_lower != "accept-ranges") {
-      // PMA_EPrintln("  recv header: {}: {}", header_name, header_value);
+      // PMA_EPrintln("  DEBUG recv header: {}: {}", header_name, header_value);
       content_type.append(header_name);
       content_type.append(": ");
       content_type.append(header_value);
@@ -1533,6 +1538,7 @@ void thread_handle_connection_fn(void *ud) {
                                      forward_flags);
                 } else {
                   data->dest_conn_fd = do_ipv4_socket_forwarding(
+                      data->addr_port_info.immediate_client_addr,
                       data->addr_port_info.client_addr,
                       data->addr_port_info.local_port, body, status,
                       content_type, forward_flags, req, *data->args,
@@ -1581,6 +1587,7 @@ void thread_handle_connection_fn(void *ud) {
                                    forward_flags);
               } else {
                 data->dest_conn_fd = do_ipv4_socket_forwarding(
+                    data->addr_port_info.immediate_client_addr,
                     data->addr_port_info.client_addr,
                     data->addr_port_info.local_port, body, status, content_type,
                     forward_flags, req, *data->args, data->dest_conn_fd);
@@ -1644,6 +1651,7 @@ void thread_handle_connection_fn(void *ud) {
                                      forward_flags);
                 } else {
                   data->dest_conn_fd = do_ipv4_socket_forwarding(
+                      data->addr_port_info.immediate_client_addr,
                       data->addr_port_info.client_addr,
                       data->addr_port_info.local_port, body, status,
                       content_type, forward_flags, req, *data->args,
@@ -1684,6 +1692,7 @@ void thread_handle_connection_fn(void *ud) {
                                  content_type, req, *data->args, forward_flags);
             } else {
               data->dest_conn_fd = do_ipv4_socket_forwarding(
+                  data->addr_port_info.immediate_client_addr,
                   data->addr_port_info.client_addr,
                   data->addr_port_info.local_port, body, status, content_type,
                   forward_flags, req, *data->args, data->dest_conn_fd);
@@ -1936,6 +1945,8 @@ int main(int argc, char **argv) {
           ThreadData *new_data = new ThreadData;
           new_data->addr_port_info = iter->second;
           new_data->addr_port_info.client_addr = std::move(client_ipv4);
+          new_data->addr_port_info.immediate_client_addr =
+              std::move(client_ipv4);
           new_data->addr_port_info.remote_port =
               PMA_HELPER::be_swap_u16(sain4.sin_port);
           new_data->args = &args;
@@ -1971,6 +1982,8 @@ int main(int argc, char **argv) {
           ThreadData *new_data = new ThreadData;
           new_data->addr_port_info = iter->second;
           new_data->addr_port_info.client_addr = std::move(client_ipv6);
+          new_data->addr_port_info.immediate_client_addr =
+              std::move(client_ipv6);
           new_data->addr_port_info.remote_port =
               PMA_HELPER::be_swap_u16(sain4.sin_port);
           new_data->args = &args;
