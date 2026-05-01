@@ -30,9 +30,11 @@ use std::time::{Duration, Instant};
 
 use std::{path::Path, sync::atomic::AtomicBool};
 
+use reqwest::Client;
+use reqwest::redirect::Policy;
 use rusqlite::Connection;
-use salvo::http::Mime;
 use salvo::{http::ResBody, prelude::*};
+use tokio::sync::RwLock;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -160,6 +162,43 @@ impl CachedAllow {
     }
 }
 
+#[derive(Clone)]
+struct ClientWrapper {
+    clients: Arc<RwLock<HashMap<String, RwLock<Client>>>>,
+}
+
+impl ClientWrapper {
+    pub fn new() -> Self {
+        Self {
+            clients: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn register(&mut self, dest: String) -> Result<(), Error> {
+        let client = reqwest::ClientBuilder::new()
+            .redirect(Policy::none())
+            .build()?;
+
+        self.clients.write().await.insert(dest, RwLock::new(client));
+
+        Ok(())
+    }
+
+    pub async fn get_client(&self, dest: &str) -> Result<Client, error::Error> {
+        Ok(self
+            .clients
+            .read()
+            .await
+            .get(dest)
+            .ok_or(Into::<error::Error>::into(
+                "ClientWrapper::get_client failed: no matching dest!",
+            ))?
+            .read()
+            .await
+            .clone())
+    }
+}
+
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut map: HashMap<String, String> = HashMap::new();
 
@@ -280,13 +319,13 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
 }
 
 async fn req_to_url(
+    req: &mut Request,
     url: String,
     real_ip: Option<&str>,
     body: Option<Vec<u8>>,
     method: &str,
-    content_type: Option<Mime>,
+    client: Client,
 ) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
-    let client = reqwest::Client::new();
     let req_builder = match method {
         "GET" => client.get(url),
         "POST" => client.post(url),
@@ -299,57 +338,55 @@ async fn req_to_url(
         _ => return Err(Error::Generic(format!("Invalid HTML method {}!", method))),
     };
 
-    let content_type_str: Option<String> = content_type.map(|m| m.to_string());
-
-    let req: reqwest::Response = if let Some(ip) = real_ip {
-        if let Some(body) = body {
-            if let Some(content_type_str) = content_type_str {
-                req_builder
-                    .body(body)
-                    .header("x-real-ip", ip)
-                    .header("accept", "text/html,application/xhtml+xml,*/*")
-                    .header("content-type", content_type_str)
-                    .send()
-                    .await?
-            } else {
-                req_builder
-                    .body(body)
-                    .header("x-real-ip", ip)
-                    .header("accept", "text/html,application/xhtml+xml,*/*")
-                    .send()
-                    .await?
-            }
-        } else {
-            req_builder
-                .header("x-real-ip", ip)
-                .header("accept", "text/html,application/xhtml+xml,*/*")
-                .send()
-                .await?
-        }
-    } else if let Some(body) = body {
-        if let Some(content_type_str) = content_type_str {
-            req_builder
-                .body(body)
-                .header("accept", "text/html,application/xhtml+xml,*/*")
-                .header("content-type", content_type_str)
-                .send()
-                .await?
-        } else {
-            req_builder
-                .body(body)
-                .header("accept", "text/html,application/xhtml+xml,*/*")
-                .send()
-                .await?
-        }
+    let req_builder = if let Some(ip) = real_ip {
+        req_builder.header("x-real-ip", ip)
     } else {
         req_builder
-            .header("accept", "text/html,application/xhtml+xml,*/*")
-            .send()
-            .await?
     };
-    let status = req.status().as_u16();
-    let headers = req.headers().to_owned();
-    Ok((ResBody::Once(req.bytes().await?), status, headers))
+
+    let req_builder = req_builder.header(
+        "accept",
+        "text/html,application/xhtml+xml,application/xml,*/*",
+    );
+    let req_builder = req_builder.header("user-agent", "PoorMansAnubis");
+    let req_builder = req_builder.header("connection", "keep-alive");
+
+    let mut req_builder = if let Some(body) = body {
+        //eprintln!("Body of size {}", body.len());
+        req_builder.body(body)
+    } else {
+        req_builder
+    };
+
+    for (k, v) in req.headers().iter() {
+        if k.as_str().to_lowercase() == "x-forwarded-for" {
+            let mut value: String = v.to_str()?.to_owned();
+            value += ", ";
+            value += &req
+                .remote_addr()
+                .ip()
+                .ok_or(Error::from("Failed to get connected-client addr!"))?
+                .to_string();
+            //eprintln!("x-forwarded-for Header {:?} -> {:?}", k, &value);
+            req_builder = req_builder.header(k, value);
+        } else if k.as_str().to_lowercase() != "x-real-ip"
+            && k.as_str().to_lowercase() != "user-agent"
+            && k.as_str().to_lowercase() != "host"
+            && k.as_str().to_lowercase() != "connection"
+            && k.as_str().to_lowercase() != "accept"
+            && k.as_str().to_lowercase() != "content-length"
+            && k.as_str().to_lowercase() != "transfer-encoding"
+        {
+            //eprintln!("Header {:?} -> {:?}", k, v);
+            req_builder = req_builder.header(k, v);
+        }
+    }
+
+    let resp = req_builder.send().await?;
+
+    let status = resp.status().as_u16();
+    let headers = resp.headers().to_owned();
+    Ok((ResBody::Once(resp.bytes().await?), status, headers))
 }
 
 pub struct ClientIPAddrRet {
@@ -1314,6 +1351,20 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     let args = depot.obtain::<args::Args>().unwrap();
     let cached_allow: &CachedAllow = depot.obtain::<CachedAllow>().unwrap();
     cached_allow.check_cleanup()?;
+    let client_wrapper: &ClientWrapper = depot.obtain().unwrap();
+    let client: Client =
+        client_wrapper
+            .get_client(
+                args.port_to_dest_urls
+                    .get(&req.local_addr().port().ok_or(Into::<salvo::Error>::into(
+                        Error::from("Failed to get local port"),
+                    ))?)
+                    .or_else(|| Some(&args.dest_url))
+                    .ok_or(Into::<salvo::Error>::into(Error::from(
+                        "Failed to get default dest url",
+                    )))?,
+            )
+            .await?;
 
     let client_info_ret = get_client_ip_addr(depot, req).await?;
 
@@ -1356,32 +1407,36 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         };
 
         let payload: Vec<u8> = req.payload().await?.to_vec();
-        let method = req.method();
+        let method_str: String = req.method().as_str().to_owned();
         let res_body_res = if payload.is_empty() {
             req_to_url(
+                req,
                 format!("{}{}", url, &path_str),
                 Some(&client_info_ret.addr),
                 None,
-                method.as_str(),
-                req.content_type(),
+                &method_str,
+                client,
             )
             .await
         } else {
             req_to_url(
+                req,
                 format!("{}{}", url, &path_str),
                 Some(&client_info_ret.addr),
                 Some(payload),
-                method.as_str(),
-                req.content_type(),
+                &method_str,
+                client,
             )
             .await
         };
 
         if let Ok((res_body, status, headers)) = res_body_res {
             res.replace_body(res_body);
+            //eprintln!("Returned status code is {}", status);
             res.status_code = Some(StatusCode::from_u16(status).unwrap());
             for (k_opt, v) in headers {
                 if let Some(k) = k_opt {
+                    //eprintln!("Received Header: {:?} -> {:?}", k, v);
                     res.headers.append(k, v);
                 }
             }
@@ -1442,12 +1497,23 @@ async fn main() {
         );
     }
 
+    let mut client_wrapper = ClientWrapper::new();
+
+    client_wrapper
+        .register(parsed_args.dest_url.clone())
+        .await
+        .ok();
+    for addr in parsed_args.port_to_dest_urls.values() {
+        client_wrapper.register(addr.to_owned()).await.ok();
+    }
+
     let router = if parsed_args.mysql_has_priority {
         let locked_bool = Arc::new(AtomicBool::new(false));
         Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
             .hoop(affix_state::inject(locked_bool))
+            .hoop(affix_state::inject(client_wrapper))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
                 Router::new()
@@ -1459,6 +1525,7 @@ async fn main() {
         Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
+            .hoop(affix_state::inject(client_wrapper))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
                 Router::new()

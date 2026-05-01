@@ -68,7 +68,7 @@ void pma_print_usage() {
       "  --allowed-timeout=<minutes> : Set how long a client is allowed to "
       "access before requiring challenge again");
   PMA_Println(
-      "  --threads=<integer> : Defaults to 4. Setting it to 2x of your maximum "
+      "  --threads=<integer> : Defaults to 4. Setting it to 3x of your maximum "
       "thread count is a sane value");
   PMA_Println(
       "  --enable-libcurl : Enables fetching dest urls by using libcurl");
