@@ -32,7 +32,6 @@ use std::{path::Path, sync::atomic::AtomicBool};
 
 use reqwest::Client;
 use rusqlite::Connection;
-use salvo::http::Mime;
 use salvo::{http::ResBody, prelude::*};
 use tokio::sync::RwLock;
 use tokio::{
@@ -316,11 +315,11 @@ async fn init_db(args: &args::Args) -> Result<(), Error> {
 }
 
 async fn req_to_url(
+    req: &mut Request,
     url: String,
     real_ip: Option<&str>,
     body: Option<Vec<u8>>,
     method: &str,
-    content_type: Option<Mime>,
     client: Client,
 ) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
     let req_builder = match method {
@@ -335,57 +334,34 @@ async fn req_to_url(
         _ => return Err(Error::Generic(format!("Invalid HTML method {}!", method))),
     };
 
-    let content_type_str: Option<String> = content_type.map(|m| m.to_string());
-
-    let req: reqwest::Response = if let Some(ip) = real_ip {
-        if let Some(body) = body {
-            if let Some(content_type_str) = content_type_str {
-                req_builder
-                    .body(body)
-                    .header("x-real-ip", ip)
-                    .header("accept", "text/html,application/xhtml+xml,*/*")
-                    .header("content-type", content_type_str)
-                    .send()
-                    .await?
-            } else {
-                req_builder
-                    .body(body)
-                    .header("x-real-ip", ip)
-                    .header("accept", "text/html,application/xhtml+xml,*/*")
-                    .send()
-                    .await?
-            }
-        } else {
-            req_builder
-                .header("x-real-ip", ip)
-                .header("accept", "text/html,application/xhtml+xml,*/*")
-                .send()
-                .await?
-        }
-    } else if let Some(body) = body {
-        if let Some(content_type_str) = content_type_str {
-            req_builder
-                .body(body)
-                .header("accept", "text/html,application/xhtml+xml,*/*")
-                .header("content-type", content_type_str)
-                .send()
-                .await?
-        } else {
-            req_builder
-                .body(body)
-                .header("accept", "text/html,application/xhtml+xml,*/*")
-                .send()
-                .await?
-        }
+    let req_builder = if let Some(ip) = real_ip {
+        req_builder.header("x-real-ip", ip)
     } else {
         req_builder
-            .header("accept", "text/html,application/xhtml+xml,*/*")
-            .send()
-            .await?
     };
-    let status = req.status().as_u16();
-    let headers = req.headers().to_owned();
-    Ok((ResBody::Once(req.bytes().await?), status, headers))
+
+    let req_builder = req_builder.header("user-agent", "PoorMansAnubis");
+
+    let mut req_builder = if let Some(body) = body {
+        req_builder.body(body)
+    } else {
+        req_builder
+    };
+
+    for (k, v) in req.headers().iter() {
+        if k.as_str().to_lowercase() != "x-real-ip"
+            && k.as_str().to_lowercase() != "user-agent"
+            && k.as_str().to_lowercase() != "host"
+        {
+            req_builder = req_builder.header(k, v);
+        }
+    }
+
+    let resp = req_builder.send().await?;
+
+    let status = resp.status().as_u16();
+    let headers = resp.headers().to_owned();
+    Ok((ResBody::Once(resp.bytes().await?), status, headers))
 }
 
 pub struct ClientIPAddrRet {
@@ -1406,24 +1382,24 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         };
 
         let payload: Vec<u8> = req.payload().await?.to_vec();
-        let method = req.method();
+        let method_str: String = req.method().as_str().to_owned();
         let res_body_res = if payload.is_empty() {
             req_to_url(
+                req,
                 format!("{}{}", url, &path_str),
                 Some(&client_info_ret.addr),
                 None,
-                method.as_str(),
-                req.content_type(),
+                &method_str,
                 client,
             )
             .await
         } else {
             req_to_url(
+                req,
                 format!("{}{}", url, &path_str),
                 Some(&client_info_ret.addr),
                 Some(payload),
-                method.as_str(),
-                req.content_type(),
+                &method_str,
                 client,
             )
             .await
