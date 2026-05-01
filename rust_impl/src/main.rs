@@ -30,9 +30,11 @@ use std::time::{Duration, Instant};
 
 use std::{path::Path, sync::atomic::AtomicBool};
 
+use reqwest::Client;
 use rusqlite::Connection;
 use salvo::http::Mime;
 use salvo::{http::ResBody, prelude::*};
+use tokio::sync::RwLock;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -157,6 +159,40 @@ impl CachedAllow {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct ClientWrapper {
+    clients: Arc<RwLock<HashMap<String, RwLock<Client>>>>,
+}
+
+impl ClientWrapper {
+    pub fn new() -> Self {
+        Self {
+            clients: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn register(&mut self, dest: String) {
+        self.clients
+            .write()
+            .await
+            .insert(dest, RwLock::new(Client::new()));
+    }
+
+    pub async fn get_client(&self, dest: &str) -> Result<Client, error::Error> {
+        Ok(self
+            .clients
+            .read()
+            .await
+            .get(dest)
+            .ok_or(Into::<error::Error>::into(
+                "ClientWrapper::get_client failed: no matching dest!",
+            ))?
+            .read()
+            .await
+            .clone())
     }
 }
 
@@ -285,8 +321,8 @@ async fn req_to_url(
     body: Option<Vec<u8>>,
     method: &str,
     content_type: Option<Mime>,
+    client: Client,
 ) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
-    let client = reqwest::Client::new();
     let req_builder = match method {
         "GET" => client.get(url),
         "POST" => client.post(url),
@@ -1314,6 +1350,20 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
     let args = depot.obtain::<args::Args>().unwrap();
     let cached_allow: &CachedAllow = depot.obtain::<CachedAllow>().unwrap();
     cached_allow.check_cleanup()?;
+    let client_wrapper: &ClientWrapper = depot.obtain().unwrap();
+    let client: Client =
+        client_wrapper
+            .get_client(
+                args.port_to_dest_urls
+                    .get(&req.local_addr().port().ok_or(Into::<salvo::Error>::into(
+                        Error::from("Failed to get local port"),
+                    ))?)
+                    .or_else(|| Some(&args.dest_url))
+                    .ok_or(Into::<salvo::Error>::into(Error::from(
+                        "Failed to get default dest url",
+                    )))?,
+            )
+            .await?;
 
     let client_info_ret = get_client_ip_addr(depot, req).await?;
 
@@ -1364,6 +1414,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 None,
                 method.as_str(),
                 req.content_type(),
+                client,
             )
             .await
         } else {
@@ -1373,6 +1424,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 Some(payload),
                 method.as_str(),
                 req.content_type(),
+                client,
             )
             .await
         };
@@ -1442,12 +1494,20 @@ async fn main() {
         );
     }
 
+    let mut client_wrapper = ClientWrapper::new();
+
+    client_wrapper.register(parsed_args.dest_url.clone()).await;
+    for addr in parsed_args.port_to_dest_urls.values() {
+        client_wrapper.register(addr.to_owned()).await;
+    }
+
     let router = if parsed_args.mysql_has_priority {
         let locked_bool = Arc::new(AtomicBool::new(false));
         Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
             .hoop(affix_state::inject(locked_bool))
+            .hoop(affix_state::inject(client_wrapper))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
                 Router::new()
@@ -1459,6 +1519,7 @@ async fn main() {
         Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
+            .hoop(affix_state::inject(client_wrapper))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
                 Router::new()
