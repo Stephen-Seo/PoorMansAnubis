@@ -1153,8 +1153,9 @@ int do_ipv4_socket_forwarding(std::string cli_addr, uint16_t cli_port,
         "<html><p>500 Internal Server Error</p><p>Failed to "
         "forward, no response</p></html>";
   } else {
-    // Append "Connection: close" without ending "\r\n" as it is added later.
-    content_type.append("Connection: close");
+    // Append "Connection: keep-alive" without ending "\r\n" as it is added
+    // later.
+    content_type.append("Connection: keep-alive");
   }
 
   dest_conn_fd = socket_fd;
@@ -1715,10 +1716,9 @@ void thread_handle_connection_fn(void *ud) {
                        data->addr_port_info.client_addr, errno);
           break;
         } else {
-          // Success, "break" to close the connection.
+          // Success, intentionally left blank.
           // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
           //             data->dest_conn_fd, req.full_url);
-          break;
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
