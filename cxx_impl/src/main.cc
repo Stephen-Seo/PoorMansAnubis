@@ -1944,7 +1944,7 @@ int main(int argc, char **argv) {
 
           ThreadData *new_data = new ThreadData;
           new_data->addr_port_info = iter->second;
-          new_data->addr_port_info.client_addr = std::move(client_ipv4);
+          new_data->addr_port_info.client_addr = client_ipv4;
           new_data->addr_port_info.immediate_client_addr =
               std::move(client_ipv4);
           new_data->addr_port_info.remote_port =
@@ -1981,7 +1981,7 @@ int main(int argc, char **argv) {
 
           ThreadData *new_data = new ThreadData;
           new_data->addr_port_info = iter->second;
-          new_data->addr_port_info.client_addr = std::move(client_ipv6);
+          new_data->addr_port_info.client_addr = client_ipv6;
           new_data->addr_port_info.immediate_client_addr =
               std::move(client_ipv6);
           new_data->addr_port_info.remote_port =
