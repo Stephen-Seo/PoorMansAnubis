@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 use std::{path::Path, sync::atomic::AtomicBool};
 
 use reqwest::Client;
+use reqwest::redirect::Policy;
 use rusqlite::Connection;
 use salvo::{http::ResBody, prelude::*};
 use tokio::sync::RwLock;
@@ -173,11 +174,14 @@ impl ClientWrapper {
         }
     }
 
-    pub async fn register(&mut self, dest: String) {
-        self.clients
-            .write()
-            .await
-            .insert(dest, RwLock::new(Client::new()));
+    pub async fn register(&mut self, dest: String) -> Result<(), Error> {
+        let client = reqwest::ClientBuilder::new()
+            .redirect(Policy::none())
+            .build()?;
+
+        self.clients.write().await.insert(dest, RwLock::new(client));
+
+        Ok(())
     }
 
     pub async fn get_client(&self, dest: &str) -> Result<Client, error::Error> {
@@ -340,19 +344,40 @@ async fn req_to_url(
         req_builder
     };
 
+    let req_builder = req_builder.header(
+        "accept",
+        "text/html,application/xhtml+xml,application/xml,*/*",
+    );
     let req_builder = req_builder.header("user-agent", "PoorMansAnubis");
+    let req_builder = req_builder.header("connection", "keep-alive");
 
     let mut req_builder = if let Some(body) = body {
+        //eprintln!("Body of size {}", body.len());
         req_builder.body(body)
     } else {
         req_builder
     };
 
     for (k, v) in req.headers().iter() {
-        if k.as_str().to_lowercase() != "x-real-ip"
+        if k.as_str().to_lowercase() == "x-forwarded-for" {
+            let mut value: String = v.to_str()?.to_owned();
+            value += ", ";
+            value += &req
+                .remote_addr()
+                .ip()
+                .ok_or(Error::from("Failed to get connected-client addr!"))?
+                .to_string();
+            //eprintln!("x-forwarded-for Header {:?} -> {:?}", k, &value);
+            req_builder = req_builder.header(k, value);
+        } else if k.as_str().to_lowercase() != "x-real-ip"
             && k.as_str().to_lowercase() != "user-agent"
             && k.as_str().to_lowercase() != "host"
+            && k.as_str().to_lowercase() != "connection"
+            && k.as_str().to_lowercase() != "accept"
+            && k.as_str().to_lowercase() != "content-length"
+            && k.as_str().to_lowercase() != "transfer-encoding"
         {
+            //eprintln!("Header {:?} -> {:?}", k, v);
             req_builder = req_builder.header(k, v);
         }
     }
@@ -1407,9 +1432,11 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
         if let Ok((res_body, status, headers)) = res_body_res {
             res.replace_body(res_body);
+            //eprintln!("Returned status code is {}", status);
             res.status_code = Some(StatusCode::from_u16(status).unwrap());
             for (k_opt, v) in headers {
                 if let Some(k) = k_opt {
+                    //eprintln!("Received Header: {:?} -> {:?}", k, v);
                     res.headers.append(k, v);
                 }
             }
@@ -1472,9 +1499,12 @@ async fn main() {
 
     let mut client_wrapper = ClientWrapper::new();
 
-    client_wrapper.register(parsed_args.dest_url.clone()).await;
+    client_wrapper
+        .register(parsed_args.dest_url.clone())
+        .await
+        .ok();
     for addr in parsed_args.port_to_dest_urls.values() {
-        client_wrapper.register(addr.to_owned()).await;
+        client_wrapper.register(addr.to_owned()).await.ok();
     }
 
     let router = if parsed_args.mysql_has_priority {
