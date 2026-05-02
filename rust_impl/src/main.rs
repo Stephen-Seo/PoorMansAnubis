@@ -177,6 +177,7 @@ impl ClientWrapper {
     pub async fn register(&mut self, dest: String) -> Result<(), Error> {
         let client = reqwest::ClientBuilder::new()
             .redirect(Policy::none())
+            .no_proxy()
             .build()?;
 
         self.clients.write().await.insert(dest, RwLock::new(client));
@@ -1434,11 +1435,8 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             res.replace_body(res_body);
             //eprintln!("Returned status code is {}", status);
             res.status_code = Some(StatusCode::from_u16(status).unwrap());
-            for (k_opt, v) in headers {
-                if let Some(k) = k_opt {
-                    //eprintln!("Received Header: {:?} -> {:?}", k, v);
-                    res.headers.append(k, v);
-                }
+            for (k, v) in headers.iter() {
+                res.headers.append(k, v.clone());
             }
         } else {
             res.render("Failed to query");
