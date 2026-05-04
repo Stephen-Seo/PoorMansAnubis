@@ -902,6 +902,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
         to_write.append(iter->second);
         to_write.append(", ");
         to_write.append(imm_cli_addr);
+        to_write.append("\r\n");
       } else if (iter->first != "user-agent" && iter->first != "connection" &&
                  iter->first != "host" && iter->first != "accept" &&
                  iter->first != "x-real-ip") {
