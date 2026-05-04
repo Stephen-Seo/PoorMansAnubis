@@ -128,7 +128,8 @@ size_t pma_curl_header_callback(void *buf, size_t size, size_t nitems,
   }
 
   if (!key.empty() && !val.empty()) {
-    header_map->emplace(PMA_HELPER::ascii_str_to_lower(key), val);
+    header_map->emplace(
+        PMA_HELPER::trim_whitespace(PMA_HELPER::ascii_str_to_lower(key)), val);
   }
 
   return size * nitems;
@@ -148,9 +149,10 @@ size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
 }
 
 // Returns true if "goto PMA_RESPONSE_SEND_LOCATION" is required.
-void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
-                        std::string &body, std::string &status,
-                        std::string &content_type, const PMA_HTTP::Request &req,
+void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
+                        uint16_t cli_port, std::string &body,
+                        std::string &status, std::string &content_type,
+                        const PMA_HTTP::Request &req,
                         const PMA_ARGS::Args &args,
                         std::bitset<32> &forward_flags) {
   CURLcode pma_curl_ret;
@@ -253,21 +255,6 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     }
   }
 
-  // Set curl follow redirects
-  pma_curl_ret =
-      curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, CURLFOLLOW_ALL);
-  if (pma_curl_ret != CURLE_OK) {
-    PMA_EPrintln(
-        "ERROR: Failed to set curl follow redirects (client {}, "
-        "port {})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "curl follow redirects</p></html>";
-    return;
-  }
-
   // Set curl http headers
   struct curl_slist *headers_list = nullptr;
   GenericCleanup<struct curl_slist **> headers_cleanup(
@@ -275,9 +262,20 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
       [](struct curl_slist ***list) { curl_slist_free_all(**list); });
   headers_list = curl_slist_append(
       headers_list, "accept: text/html,application/xhtml+xml,*/*");
+  headers_list =
+      curl_slist_append(headers_list, "user-agent: PoorMansAnubis libcurl");
+  headers_list = curl_slist_append(
+      headers_list, std::format("x-real-ip: {}", cli_addr).c_str());
   for (const auto &pair : req.headers) {
-    if (pair.first == "host" || pair.first == "override-dest-url" ||
-        pair.first == "accept") {
+    if (pair.first == "x-forwarded-for") {
+      std::string forwarded_for("x-forwarded-for: ");
+      forwarded_for.append(pair.second);
+      forwarded_for.append(", ");
+      forwarded_for.append(imm_cli_addr);
+      headers_list = curl_slist_append(headers_list, forwarded_for.c_str());
+    } else if (pair.first == "host" || pair.first == "override-dest-url" ||
+               pair.first == "accept" || pair.first == "user-agent" ||
+               pair.first == "connection" || pair.first == "x-real-ip") {
       continue;
     }
     headers_list = curl_slist_append(
@@ -658,6 +656,24 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     case 200:
       status = "HTTP/1.0 200 OK";
       break;
+    case 301:
+      status = "HTTP/1.0 301 Moved Permanently";
+      break;
+    case 302:
+      status = "HTTP/1.0 302 Found";
+      break;
+    case 303:
+      status = "HTTP/1.0 303 See Other";
+      break;
+    case 304:
+      status = "HTTP/1.0 304 Not Modified";
+      break;
+    case 307:
+      status = "HTTP/1.0 307 Temporary Redirect";
+      break;
+    case 308:
+      status = "HTTP/1.0 308 Permanent Redirect";
+      break;
     case 400:
       status = "HTTP/1.0 400 Bad Request";
       break;
@@ -707,7 +723,8 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
       continue;
     }
     if (header_iter->first == "content-length" ||
-        header_iter->first == "transfer-encoding") {
+        header_iter->first == "connection" ||
+        header_iter->first == "accept-ranges") {
       continue;
     }
     content_type.append(header_iter->first);
@@ -715,7 +732,7 @@ void do_curl_forwarding(std::string cli_addr, uint16_t cli_port,
     content_type.append(header_iter->second);
     content_type.append("\r\n");
   }
-  content_type.resize(content_type.size() - 2);
+  content_type.append("Connection: close");
 }
 
 // Returns fd to destination.
@@ -1532,7 +1549,8 @@ void thread_handle_connection_fn(void *ud) {
               } else {
                 cached_allowed_lock.unlock();
                 if (data->args->flags.test(5)) {
-                  do_curl_forwarding(data->addr_port_info.client_addr,
+                  do_curl_forwarding(data->addr_port_info.immediate_client_addr,
+                                     data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
                                      status, content_type, req, *data->args,
                                      forward_flags);
@@ -1581,7 +1599,8 @@ void thread_handle_connection_fn(void *ud) {
                   time_now));
               cached_allowed_lock.unlock();
               if (data->args->flags.test(5)) {
-                do_curl_forwarding(data->addr_port_info.client_addr,
+                do_curl_forwarding(data->addr_port_info.immediate_client_addr,
+                                   data->addr_port_info.client_addr,
                                    data->addr_port_info.local_port, body,
                                    status, content_type, req, *data->args,
                                    forward_flags);
@@ -1645,7 +1664,8 @@ void thread_handle_connection_fn(void *ud) {
               } else {
                 cached_allowed_lock.unlock();
                 if (data->args->flags.test(5)) {
-                  do_curl_forwarding(data->addr_port_info.client_addr,
+                  do_curl_forwarding(data->addr_port_info.immediate_client_addr,
+                                     data->addr_port_info.client_addr,
                                      data->addr_port_info.local_port, body,
                                      status, content_type, req, *data->args,
                                      forward_flags);
@@ -1687,7 +1707,8 @@ void thread_handle_connection_fn(void *ud) {
                 time_now));
             cached_allowed_lock.unlock();
             if (data->args->flags.test(5)) {
-              do_curl_forwarding(data->addr_port_info.client_addr,
+              do_curl_forwarding(data->addr_port_info.immediate_client_addr,
+                                 data->addr_port_info.client_addr,
                                  data->addr_port_info.local_port, body, status,
                                  content_type, req, *data->args, forward_flags);
             } else {
@@ -1725,9 +1746,10 @@ void thread_handle_connection_fn(void *ud) {
                        data->addr_port_info.client_addr, errno);
           break;
         } else {
-          // Success, intentionally left blank.
+          // Success, break to close the connection.
           // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
           //             data->dest_conn_fd, req.full_url);
+          break;
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
