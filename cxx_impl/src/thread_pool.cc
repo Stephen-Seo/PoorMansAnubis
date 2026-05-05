@@ -21,6 +21,7 @@
 
 // Local includes
 #include "constants.h"
+#include "poor_mans_print.h"
 
 void ThreadPool::thread_function(
     std::shared_ptr<std::atomic_bool> stop,
@@ -52,8 +53,18 @@ void ThreadPool::thread_function(
     if (fn.has_value() && ud.has_value() && cleanup_fn.has_value()) {
       lock.unlock();
 
-      fn.value()(ud.value());
-      cleanup_fn.value()(ud.value());
+      try {
+        fn.value()(ud.value());
+      } catch (const std::exception &e) {
+        PMA_EPrintln("WARNING: Thread threw exception during execution: {}",
+                     e.what());
+      }
+      try {
+        cleanup_fn.value()(ud.value());
+      } catch (const std::exception &e) {
+        PMA_EPrintln("WARNING: Thread threw exception during cleanup: {}",
+                     e.what());
+      }
 
       fn = std::nullopt;
       ud = std::nullopt;
