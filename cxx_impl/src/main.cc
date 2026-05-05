@@ -1978,6 +1978,7 @@ int main(int argc, char **argv) {
                 "closing connection...",
                 errno);
             close(ret);
+            continue;
           }
 
           ThreadData *new_data = new ThreadData;
@@ -2020,6 +2021,7 @@ int main(int argc, char **argv) {
                 "closing connection...",
                 errno);
             close(ret);
+            continue;
           }
 
           ThreadData *new_data = new ThreadData;
