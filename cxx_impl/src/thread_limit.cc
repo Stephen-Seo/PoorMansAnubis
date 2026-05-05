@@ -75,9 +75,12 @@ ThreadLimit::ThreadLimit(uint64_t limit)
       data_mutex(std::make_shared<std::mutex>()),
       overflow_data(std::make_shared<std::list<ThreadLimit::ThreadData> >()),
       internal_manager_thread() {
-  internal_manager_thread =
-      std::make_shared<std::thread>(internal_manager_function, limit, counter,
-                                    cv, stop_flag, data_mutex, overflow_data);
+  if (this->limit == 0) {
+    this->limit = 1;
+  }
+  internal_manager_thread = std::make_shared<std::thread>(
+      internal_manager_function, this->limit, counter, cv, stop_flag,
+      data_mutex, overflow_data);
 }
 
 ThreadLimit::~ThreadLimit() {
@@ -133,6 +136,20 @@ ThreadLimit &ThreadLimit::operator=(ThreadLimit &&other) {
 
     while (counter->load() > 0) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+
+  if (overflow_data) {
+    for (auto iter = overflow_data->begin(); iter != overflow_data->end();
+         ++iter) {
+      try {
+        std::get<2> (*iter)(std::get<1>(*iter));
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "WARNING: cleanup during ThreadLimit::operator= threw exception: "
+            "{}",
+            e.what());
+      }
     }
   }
 
