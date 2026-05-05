@@ -1748,10 +1748,13 @@ void thread_handle_connection_fn(void *ud) {
                        data->addr_port_info.client_addr, errno);
           break;
         } else {
-          // Success, break to close the connection.
+          // Success
           // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
           //             data->dest_conn_fd, req.full_url);
-          break;
+          if (data->args->flags.test(5)) {
+            // `break` when using libcurl.
+            break;
+          }
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
