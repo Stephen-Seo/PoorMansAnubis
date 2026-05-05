@@ -133,6 +133,7 @@ Args for the C++ implementation are as follows:
       --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
       --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
       --threads=<integer> : Defaults to 4. Setting it to 3x of your maximum thread count is a sane value
+      --enable-thread-limit : Use alternative thread usage implementation; no thread pool, just up to a maximum of spawned threads
       --enable-libcurl : Enables fetching dest urls by using libcurl
       --req-timeout-millis=<milliseconds> : Sets the number of milliseconds until timeout during forwarding requests (default 5000)
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;

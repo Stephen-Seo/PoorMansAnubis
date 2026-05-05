@@ -71,6 +71,9 @@ void pma_print_usage() {
       "  --threads=<integer> : Defaults to 4. Setting it to 3x of your maximum "
       "thread count is a sane value");
   PMA_Println(
+      "  --enable-thread-limit : Use alternative thread usage implementation; "
+      "no thread pool, just up to a maximum of spawned threads");
+  PMA_Println(
       "  --enable-libcurl : Enables fetching dest urls by using libcurl");
   PMA_Println(
       "  --req-timeout-millis=<milliseconds> : Sets the number of milliseconds "
@@ -367,6 +370,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         flags.set(2);
         return;
       }
+    } else if (std::strcmp(argv[0], "--enable-thread-limit") == 0) {
+      flags.set(6);
     } else if (std::strcmp(argv[0], "--enable-libcurl") == 0) {
       flags.set(5);
     } else if (std::strncmp(argv[0], "--req-timeout-millis=", 21) == 0) {

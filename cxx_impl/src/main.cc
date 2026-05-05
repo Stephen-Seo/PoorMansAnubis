@@ -44,6 +44,7 @@
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
+#include "thread_limit.h"
 #include "thread_pool.h"
 
 volatile int interrupt_received = 0;
@@ -174,6 +175,20 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     return;
   }
 #endif
+
+  // Disable signal in libcurl
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set curl NOSIGNAL (client {}, port "
+        "{})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl NOSIGNAL</p></html>";
+    return;
+  }
 
   // Set curl connection timeout
   pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
@@ -869,7 +884,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
   int socket_fd = dest_conn_fd;
   int_fast8_t using_dest_conn_fd = 1;
 
-  GenericCleanup<int*> cleanup_socket(&socket_fd, [](int **fd) {
+  GenericCleanup<int *> cleanup_socket(&socket_fd, [](int **fd) {
     if (fd && *fd && **fd && **fd > 0) {
       close(**fd);
       **fd = -1;
@@ -1747,10 +1762,13 @@ void thread_handle_connection_fn(void *ud) {
                        data->addr_port_info.client_addr, errno);
           break;
         } else {
-          // Success, break to close the connection.
+          // Success
           // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
           //             data->dest_conn_fd, req.full_url);
-          break;
+          if (data->args->flags.test(5)) {
+            // `break` when using libcurl.
+            break;
+          }
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
@@ -1871,12 +1889,26 @@ int main(int argc, char **argv) {
     return 4;
   }
 
-  ThreadPool thread_pool;
-  if (args.thread_count.has_value()) {
-    thread_pool.set_thread_count(args.thread_count.value());
+  std::optional<ThreadPool> thread_pool;
+  std::optional<ThreadLimit> thread_limit;
+
+  if (args.flags.test(6)) {
+    if (args.thread_count.has_value()) {
+      thread_limit = ThreadLimit(args.thread_count.value());
+      PMA_Println("NOTE: Set thread limit to {}", args.thread_count.value());
+    } else {
+      thread_limit = ThreadLimit(DEFAULT_THREAD_COUNT);
+      PMA_Println("NOTE: Set thread limit to default {}", DEFAULT_THREAD_COUNT);
+    }
   } else {
-    thread_pool.set_thread_count(DEFAULT_THREAD_COUNT);
-    PMA_Println("NOTE: Set thread count to default {}", DEFAULT_THREAD_COUNT);
+    thread_pool = ThreadPool();
+    if (args.thread_count.has_value()) {
+      thread_pool->set_thread_count(args.thread_count.value());
+      PMA_Println("NOTE: Set thread count to {}", args.thread_count.value());
+    } else {
+      thread_pool->set_thread_count(DEFAULT_THREAD_COUNT);
+      PMA_Println("NOTE: Set thread count to default {}", DEFAULT_THREAD_COUNT);
+    }
   }
 
   PMA_HELPER::set_signal_handler(SIGINT, receive_signal);
@@ -1963,6 +1995,7 @@ int main(int argc, char **argv) {
                 "closing connection...",
                 errno);
             close(ret);
+            continue;
           }
 
           ThreadData *new_data = new ThreadData;
@@ -1979,8 +2012,13 @@ int main(int argc, char **argv) {
           new_data->conn_fd = ret;
           new_data->dest_conn_fd = -1;
 
-          thread_pool.add_func(thread_handle_connection_fn, new_data,
-                               thread_cleanup_fn);
+          if (args.flags.test(6)) {
+            thread_limit->add_thread(thread_handle_connection_fn, new_data,
+                                     thread_cleanup_fn);
+          } else {
+            thread_pool->add_func(thread_handle_connection_fn, new_data,
+                                  thread_cleanup_fn);
+          }
         } else {
           // IPV6 new connection
           std::string client_ipv6 = PMA_HTTP::ipv6_addr_to_str(
@@ -2000,6 +2038,7 @@ int main(int argc, char **argv) {
                 "closing connection...",
                 errno);
             close(ret);
+            continue;
           }
 
           ThreadData *new_data = new ThreadData;
@@ -2016,8 +2055,13 @@ int main(int argc, char **argv) {
           new_data->conn_fd = ret;
           new_data->dest_conn_fd = -1;
 
-          thread_pool.add_func(thread_handle_connection_fn, new_data,
-                               thread_cleanup_fn);
+          if (args.flags.test(6)) {
+            thread_limit->add_thread(thread_handle_connection_fn, new_data,
+                                     thread_cleanup_fn);
+          } else {
+            thread_pool->add_func(thread_handle_connection_fn, new_data,
+                                  thread_cleanup_fn);
+          }
         }
       }  // while (ret >= 0)
     }  // for (sockets ... )
