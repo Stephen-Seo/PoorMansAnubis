@@ -869,10 +869,10 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
   int socket_fd = dest_conn_fd;
   int_fast8_t using_dest_conn_fd = 1;
 
-  GenericCleanup<int> cleanup_socket(socket_fd, [](int *fd) {
-    if (fd && *fd && *fd > 0) {
-      close(*fd);
-      *fd = -1;
+  GenericCleanup<int*> cleanup_socket(&socket_fd, [](int **fd) {
+    if (fd && *fd && **fd && **fd > 0) {
+      close(**fd);
+      **fd = -1;
     }
   });
 
