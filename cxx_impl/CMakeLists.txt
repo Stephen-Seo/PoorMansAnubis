@@ -14,6 +14,7 @@ set(poor_mans_anubis_bundled_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/args.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/db_msql.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/thread_pool.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/thread_limit.cc"
 )
 
 set(challenge_impl_SOURCES

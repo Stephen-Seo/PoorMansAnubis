@@ -68,6 +68,9 @@ ThreadPool::ThreadPool()
       cond_var(std::make_shared<CondVarTuple>()) {}
 
 ThreadPool::~ThreadPool() {
+  if (!stop_var || !cond_var || !pending_fns) {
+    return;
+  }
   stop_var->store(true, std::memory_order_release);
   std::get<std::condition_variable>(*cond_var).notify_all();
 
@@ -89,24 +92,26 @@ ThreadPool::ThreadPool(ThreadPool &&other)
       cond_var(std::move(other.cond_var)) {}
 
 ThreadPool &ThreadPool::operator=(ThreadPool &&other) {
-  stop_var->store(true, std::memory_order_release);
-  std::get<std::condition_variable>(*cond_var).notify_all();
+  if (stop_var && cond_var && pending_fns) {
+    stop_var->store(true, std::memory_order_release);
+    std::get<std::condition_variable>(*cond_var).notify_all();
 
-  for (auto iter = thread_handles.begin(); iter != thread_handles.end();
-       ++iter) {
-    iter->join();
-  }
+    for (auto iter = thread_handles.begin(); iter != thread_handles.end();
+         ++iter) {
+      iter->join();
+    }
 
-  thread_handles.clear();
+    thread_handles.clear();
 
-  thread_handles = std::move(other.thread_handles);
-  {
-    std::unique_lock<std::mutex> lock(std::get<0>(*other.cond_var));
-    // thread_handles in "other" has a reference to "other.pending_fns".
-    // Populate "other.pending_fns" with still-not-executed fns.
-    while (!pending_fns->empty()) {
-      other.pending_fns->push_back(std::move(pending_fns->back()));
-      pending_fns->pop_back();
+    thread_handles = std::move(other.thread_handles);
+    {
+      std::unique_lock<std::mutex> lock(std::get<0>(*other.cond_var));
+      // thread_handles in "other" has a reference to "other.pending_fns".
+      // Populate "other.pending_fns" with still-not-executed fns.
+      while (!pending_fns->empty()) {
+        other.pending_fns->push_back(std::move(pending_fns->back()));
+        pending_fns->pop_back();
+      }
     }
   }
   pending_fns = std::move(other.pending_fns);
