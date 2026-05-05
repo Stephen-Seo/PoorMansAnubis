@@ -176,6 +176,20 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
   }
 #endif
 
+  // Disable signal in libcurl
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
+  if (pma_curl_ret != CURLE_OK) {
+    PMA_EPrintln(
+        "ERROR: Failed to set curl NOSIGNAL (client {}, port "
+        "{})!",
+        cli_addr, cli_port);
+    status = "HTTP/1.0 500 Internal Server Error";
+    body =
+        "<html><p>500 Internal Server Error</p><p>Failed to set "
+        "curl NOSIGNAL</p></html>";
+    return;
+  }
+
   // Set curl connection timeout
   pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
                                   args.req_timeout_milliseconds);
