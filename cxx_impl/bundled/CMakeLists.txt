@@ -203,26 +203,26 @@ link_directories("${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib")
 
 set_property(DIRECTORY PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/bundled_build;${CMAKE_CURRENT_BINARY_DIR}/bundled_out")
 
-add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530000/"
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530100/"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3530000.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3530000.tar.gz" -L "https://sqlite.org/2026/sqlite-autoconf-3530000.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_sqlite-3.53.0.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3530100.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3530100.tar.gz" -L "https://sqlite.org/2026/sqlite-autoconf-3530100.tar.gz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_sqlite-3.53.1.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3530000.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3530100.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
     VERBATIM
 )
-add_custom_target(SQLITE3_BINARY_DIR DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530000/")
+add_custom_target(SQLITE3_BINARY_DIR DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530100/")
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530000/sqlite3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530100/sqlite3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
     VERBATIM
 )
 add_custom_target(SQLITE3_HEADER DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h")
 add_dependencies(SQLITE3_HEADER SQLITE3_BINARY_DIR)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530000" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --disable-shared && make libsqlite3.a
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530000/libsqlite3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530100" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --disable-shared && make libsqlite3.a
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3530100/libsqlite3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
     VERBATIM
 )
 add_custom_target(SQLITE3_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a")
