@@ -15,7 +15,11 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 use crate::error::Error;
-use std::{collections::HashMap, env::args as args_fn, path::PathBuf};
+use std::{
+    collections::{HashMap, LinkedList},
+    env::args as args_fn,
+    path::PathBuf,
+};
 
 #[derive(Default, Clone, Debug)]
 pub struct Args {
@@ -36,6 +40,7 @@ pub struct Args {
 
 pub fn print_args() {
     println!("Args:");
+    println!("  --enable-unknown-arg-error : Exit with error if unknown argument is given");
     println!("  --factors=<quads> : Generate factors challenge with <quads> 24-bit-segments");
     println!(
         "  --dest-url=<url> : Destination URL for verified clients;\n    example: \"--dest-url=http://127.0.0.1:9999\""
@@ -99,6 +104,8 @@ pub fn parse_args() -> Result<Args, Error> {
 
     let mut is_default_addr_port_strs = true;
     let mut override_dest_url_warning_read = false;
+    let mut unknown_args: LinkedList<String> = LinkedList::new();
+    let mut unknown_arg_error = false;
 
     for mut arg in p_args.skip(1) {
         if arg == "-h" || arg == "--help" {
@@ -160,6 +167,10 @@ pub fn parse_args() -> Result<Args, Error> {
             args.enable_override_dest_url = true;
         } else if arg == "--important-warning-has-been-read" {
             override_dest_url_warning_read = true;
+        } else if arg == "--enable-unknown-arg-error" {
+            unknown_arg_error = true;
+        } else {
+            unknown_args.push_back(arg);
         }
     }
 
@@ -167,6 +178,37 @@ pub fn parse_args() -> Result<Args, Error> {
         return Err(
             "--enable-override-dest-url Requires --important-warning-has-been-read , it is highly recommended to have a firewall configured if you insist on using this feature! Maybe consider using \"--addr-port=\" and \"--port-to-dest-url=\" instead?".into(),
         );
+    }
+
+    if !unknown_args.is_empty() {
+        if unknown_arg_error {
+            print_args();
+            eprintln!();
+            if unknown_args.len() == 1 {
+                eprintln!(
+                    "ERROR Unknown arg: {}",
+                    unknown_args.into_iter().next().unwrap()
+                );
+            } else {
+                eprintln!("ERROR Unknown args:");
+                for arg in unknown_args.into_iter() {
+                    eprintln!("  {}", arg);
+                }
+            }
+            return Err("Unknown arg(s) was given".into());
+        } else {
+            if unknown_args.len() == 1 {
+                eprintln!(
+                    "WARNING Unknown arg: {}",
+                    unknown_args.into_iter().next().unwrap()
+                );
+            } else {
+                eprintln!("WARNING Unknown args:");
+                for arg in unknown_args.into_iter() {
+                    eprintln!("  {}", arg);
+                }
+            }
+        }
     }
 
     Ok(args)
