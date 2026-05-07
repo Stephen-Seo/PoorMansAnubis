@@ -82,6 +82,7 @@ ip address. (The "--enable-x-real-ip-header" flag enables this.)
 Args for the Rust-frontend are as follows:
 
 Args:
+  --enable-unknown-arg-error : Exit with error if unknown argument is given
   --factors=<quads> : Generate factors challenge with <quads> 24-bit-segments
   --dest-url=<url> : Destination URL for verified clients;
     example: "--dest-url=http://127.0.0.1:9999"
@@ -113,6 +114,7 @@ Args:
 Args for the C++ implementation are as follows:
 
     Args:
+      --enable-unknown-arg-error : Exit with error if an unknown argument is given
       --factors=<quads> : Generate factors challenge with <quads> 24-bit segments
       --dest-url=<url> : Destination URL for verified clients;
         example: "--dest-url=http://127.0.0.1:9999"
