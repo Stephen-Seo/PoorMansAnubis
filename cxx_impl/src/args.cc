@@ -20,6 +20,7 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <list>
 
 // local includes
 #include "constants.h"
@@ -27,6 +28,9 @@
 
 void pma_print_usage() {
   PMA_Println("Args:");
+  PMA_Println(
+      "  --enable-unknown-arg-error : Exit with error if an unknown argument "
+      "is given");
   PMA_Println(
       "  --factors=<quads> : Generate factors challenge with <quads> 24-bit "
       "segments");
@@ -122,6 +126,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     flags.set(2);
     return;
   }
+
+  std::list<std::string> unknown_args;
 
   while (argc > 0) {
     if (std::strcmp(argv[0], "-h") == 0 ||
@@ -424,14 +430,39 @@ PMA_ARGS::Args::Args(int argc, char **argv)
           "NOTICE: Enabling potentially dangerous options with "
           "--important-warning-has-been-read !");
       flags.set(3);
+    } else if (std::strcmp(argv[0], "--enable-unknown-arg-error") == 0) {
+      flags.set(7);
     } else {
-      PMA_EPrintln("ERROR Invalid argument: {}", argv[0]);
-      flags.set(2);
-      pma_print_usage();
-      return;
+      unknown_args.push_back(std::string(argv[0]));
     }
 
     --argc;
     ++argv;
+  }
+
+  if (!unknown_args.empty()) {
+    if (flags.test(7)) {
+      flags.set(2);
+      pma_print_usage();
+      PMA_EPrintln_e();
+      if (unknown_args.size() == 1) {
+        PMA_EPrintln("ERROR Invalid argument: {}", *unknown_args.begin());
+      } else {
+        PMA_EPrintln("ERROR Invalid arguments:");
+        for (const std::string &arg : unknown_args) {
+          PMA_EPrintln("  {}", arg);
+        }
+      }
+    } else {
+      if (unknown_args.size() == 1) {
+        PMA_EPrintln("WARNING Invalid argument: {}", *unknown_args.begin());
+      } else {
+        PMA_EPrintln("WARNING Invalid arguments:");
+        for (const std::string &arg : unknown_args) {
+          PMA_EPrintln("  {}", arg);
+        }
+      }
+    }
+    return;
   }
 }
