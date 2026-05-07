@@ -52,6 +52,7 @@ struct Args {
   // 4 - use msql
   // 5 - use libcurl
   // 6 - enable thread-limit
+  // 7 - error on unknown args
   std::bitset<32> flags;
   std::string api_url;
   std::string js_factors_url;
