@@ -2341,6 +2341,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
       uint_fast8_t bytes_read;
       switch (field_types.at(bidx)) {
         case 0: {
+          // DECIMAL
           uint64_t decimal_length;
           std::tie(decimal_length, bytes_read) = parse_len_enc_int(buf + idx);
           idx += bytes_read;
@@ -2359,6 +2360,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 1: {
+          // TINY
           if (field_details.at(bidx) & 0x20) {
             uint8_t tiny = buf[idx++];
             if (idx > size || idx >= 4096) {
@@ -2389,6 +2391,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 2: {
+          // SMALL
           if (field_details.at(bidx) & 0x20) {
             uint16_t small;
             uint8_t *small_bytes = reinterpret_cast<uint8_t *>(&small);
@@ -2425,6 +2428,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 3: {
+          // LONG
           if (field_details.at(bidx) & 0x20) {
             uint32_t long_int;
             uint8_t *long_bytes = reinterpret_cast<uint8_t *>(&long_int);
@@ -2465,6 +2469,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 4: {
+          // FLOAT
           float float_val;
           uint8_t *float_bytes = reinterpret_cast<uint8_t *>(&float_val);
           float_bytes[0] = buf[idx++];
@@ -2485,6 +2490,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 5: {
+          // DOUBLE
           double double_val;
           uint8_t *double_bytes = reinterpret_cast<uint8_t *>(&double_val);
           double_bytes[0] = buf[idx++];
@@ -2509,12 +2515,15 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 6:
+          // INVALID NULL, already checked for NULL via the bitmap
           PMA_EPrintln("ERROR: Invalid type NULL!");
           return 1;
         case 7:
+          // TIMESTAMP
           PMA_EPrintln("ERROR: Unimplemented handling of TIMESTAMP!");
           return 1;
         case 8: {
+          // LONGLONG
           if (field_details.at(bidx) & 0x20) {
             uint64_t long_long;
             uint8_t *bytes = reinterpret_cast<uint8_t *>(&long_long);
@@ -2563,6 +2572,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 9: {
+          // INT24
           if (field_details.at(bidx) & 0x20) {
             uint32_t int24;
             uint8_t *bytes = reinterpret_cast<uint8_t *>(&int24);
@@ -2745,6 +2755,7 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 252: {
+          // BLOB
           const auto [value, b_read] = parse_len_enc_int(buf + idx);
           idx += b_read;
           std::string str(reinterpret_cast<char *>(buf + idx), value);
@@ -2758,8 +2769,10 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
           break;
         }
         case 253:
+          // VAR_STRING
           [[fallthrough]];
         case 254: {
+          // STRING
           const auto [value, b_read] = parse_len_enc_int(buf + idx);
           idx += b_read;
           std::string str(reinterpret_cast<char *>(buf + idx), value);
