@@ -2614,12 +2614,10 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
         }
         case 10: {
           // DATE
-          const uint8_t byte_count = buf[idx];
+          const uint8_t byte_count = buf[idx++];
           if (byte_count == 0) {
             out->emplace_back("0000-00-00");
           } else if (byte_count == 4) {
-            ++idx;
-
             if (idx >= size) {
               std::fprintf(stderr, "ERROR: Parse DATE out of bounds!\n");
               return 1;
@@ -2661,12 +2659,10 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
         }
         case 12: {
           // DATETIME
-          const uint8_t byte_count = buf[idx];
+          const uint8_t byte_count = buf[idx++];
           if (byte_count == 0) {
             out->emplace_back("0000-00-00T00:00:00");
           } else if (byte_count >= 4) {
-            ++idx;
-
             if (idx >= size) {
               std::fprintf(stderr, "ERROR: Parse DATETIME out of bounds!\n");
               return 1;
