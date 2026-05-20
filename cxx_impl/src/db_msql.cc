@@ -26,6 +26,7 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
+#include <format>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -2655,6 +2656,64 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
             std::fprintf(stderr, "ERROR: Failed to parse DATE!\n");
             return 1;
           }
+          break;
+        }
+        case 11: {
+          // TIME
+          const uint8_t length = buf[idx++];
+          if (length == 0) {
+            out->emplace_back("00:00:00");
+            break;
+          }
+
+          if (idx + 1 > size) {
+            std::fprintf(stderr, "ERROR: Parse TIME out of bounds!\n");
+            return 1;
+          }
+
+          const int_fast8_t positive = buf[idx++] == 0 ? 1 : 0;
+
+          if (idx + 4 > size) {
+            std::fprintf(stderr, "ERROR: Parse TIME out of bounds!\n");
+            return 1;
+          }
+          uint32_t days;
+          std::memcpy(&days, buf + idx, 4);
+          idx += 4;
+
+          if (PMA_HELPER::is_big_endian()) {
+            days = PMA_HELPER::endian_swap_u32(days);
+          }
+
+          if (idx + 3 > size) {
+            std::fprintf(stderr, "ERROR: Parse TIME out of bounds!\n");
+            return 1;
+          }
+
+          uint32_t hours = static_cast<uint32_t>(buf[idx++]) + days * 24;
+          uint8_t minutes = buf[idx++];
+          uint8_t seconds = buf[idx++];
+
+          uint32_t microseconds = 0;
+
+          std::string time;
+
+          if (length > 8) {
+            if (idx + 4 > size) {
+              std::fprintf(stderr, "ERROR: Parse TIME out of bounds!\n");
+              return 1;
+            }
+            std::memcpy(&microseconds, buf + idx, 4);
+            idx += 4;
+            time = std::format("{}{}:{}:{}.{:06}", positive != 0 ? "" : "-",
+                               hours, minutes, seconds, microseconds);
+          } else {
+            time = std::format("{}{}:{}:{}", positive != 0 ? "" : "-", hours,
+                               minutes, seconds);
+          }
+
+          out->emplace_back(std::move(time));
+
           break;
         }
         case 12: {
