@@ -45,7 +45,7 @@ void internal_thread_function(std::function<void(void *)> fn, void *user_data,
 }
 
 void internal_manager_function(
-    uint64_t limit, std::shared_ptr<std::atomic_uint64_t> counter,
+    const uint64_t limit, std::shared_ptr<std::atomic_uint64_t> counter,
     std::shared_ptr<std::condition_variable> cv,
     std::shared_ptr<std::atomic_bool> stop_flag,
     std::shared_ptr<std::mutex> data_mutex,
