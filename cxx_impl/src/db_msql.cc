@@ -1134,7 +1134,6 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
                        "ERROR: Blocked on LOCK for %" PRIuFAST8
                        " tries, failed to execute stmt!\n",
                        CONNECTION_RETRY_COUNT_MAX);
-          execute_retry_count = 0;
           return std::nullopt;
         } else {
           std::this_thread::sleep_for(CONNECTION_RETRY_DELAY);
