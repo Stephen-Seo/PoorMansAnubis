@@ -443,7 +443,9 @@ PMA_MSQL::Value::U::U(double d) {
   this->d = std::make_shared<double>(d);
 }
 
-PMA_MSQL::Connection::Connection() : flags(), fd(-1) { flags.set(0); }
+PMA_MSQL::Connection::Connection() : flags(), fd(-1), execute_retry_count(0) {
+  flags.set(0);
+}
 
 PMA_MSQL::Connection::~Connection() {
   if (!flags.test(0)) {
@@ -483,14 +485,17 @@ PMA_MSQL::Connection::~Connection() {
 }
 
 PMA_MSQL::Connection::Connection(int fd, uint32_t connection_id)
-    : flags(), fd(fd), connection_id(connection_id) {
+    : flags(), fd(fd), connection_id(connection_id), execute_retry_count(0) {
   if (fd < 0) {
     flags.set(0);
   }
 }
 
 PMA_MSQL::Connection::Connection(Connection &&other)
-    : flags(other.flags), fd(other.fd), connection_id(other.connection_id) {
+    : flags(other.flags),
+      fd(other.fd),
+      connection_id(other.connection_id),
+      execute_retry_count(0) {
   other.fd = -1;
   other.flags.set(0);
 }
@@ -612,6 +617,7 @@ bool PMA_MSQL::Connection::ping_check() {
 PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     const std::string &stmt, std::vector<Value> bind_params) {
   if (!is_valid()) {
+    execute_retry_count = 0;
     return std::nullopt;
   }
 
@@ -648,6 +654,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
           continue;
         } else {
           std::fprintf(stderr, "ERROR: execute_stmt: Failed to send stmt!\n");
+          execute_retry_count = 0;
           return std::nullopt;
         }
       } else if (static_cast<size_t>(write_ret) < remaining) {
@@ -681,6 +688,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
       } else if (read_ret == 0) {
         std::fprintf(stderr,
                      "ERROR: execute_stmt: Recv EOF after sending stmt!\n");
+        execute_retry_count = 0;
         return std::nullopt;
       } else {
 #ifndef NDEBUG
@@ -702,6 +710,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
 
     if (idx >= static_cast<size_t>(read_ret) || idx >= 4096) {
       std::fprintf(stderr, "ERROR: execute_stmt: Recv idx out of bounds!\n");
+      execute_retry_count = 0;
       return std::nullopt;
     }
 
@@ -716,16 +725,19 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
       std::fprintf(stderr,
                    "ERROR: execute_stmt: Err pkt in response to stmt!\n");
       print_error_pkt(buf + idx, pkt_size);
+      execute_retry_count = 0;
       return std::nullopt;
     } else if (buf[idx] != 0) {
       std::fprintf(stderr, "ERROR: execute_stmt: Not OK pkt (%#hhx)!\n",
                    buf[idx]);
+      execute_retry_count = 0;
       return std::nullopt;
     }
 
     auto res_opt = parse_prepare_resp_pkt(buf + idx, pkt_size);
     if (!res_opt.has_value()) {
       PMA_EPrintln("ERROR: Failed to parse prepare response pkt!");
+      execute_retry_count = 0;
       return std::nullopt;
     }
     int ret;
@@ -733,6 +745,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     if (ret != 0) {
       PMA_EPrintln("ERROR: Failed to parse prepare response pkt!");
       close_stmt(stmt_id);
+      execute_retry_count = 0;
       return std::nullopt;
     }
   }
@@ -880,6 +893,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
             } else {
               PMA_EPrintln("ERROR: Failed to bind string parameter!");
               close_stmt(stmt_id);
+              execute_retry_count = 0;
               return std::nullopt;
             }
 
@@ -962,6 +976,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
         } else {
           std::fprintf(stderr, "Failed to send execute stmt pkt (errno %d)!\n",
                        errno);
+          execute_retry_count = 0;
           return std::nullopt;
         }
       } else if (static_cast<size_t>(write_ret) < remaining) {
@@ -998,6 +1013,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           if (attempt_fetch_more) {
             PMA_EPrintln("ERROR: No more bytes, but did not reach EOF!");
+            execute_retry_count = 0;
             return std::nullopt;
           }
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -1009,6 +1025,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
           std::fprintf(stderr,
                        "ERROR: Failed to recv after exec pkt (errno %d)!\n",
                        errno);
+          execute_retry_count = 0;
           return std::nullopt;
         }
       } else {
@@ -1023,6 +1040,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     if (size == 0) {
       std::fprintf(stderr,
                    "ERROR: Recv 0 bytes after sending exec stmt pkt!\n");
+      execute_retry_count = 0;
       return std::nullopt;
     }
 
@@ -1070,6 +1088,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
 
     if (idx >= recv_part.size) {
       std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+      execute_retry_count = 0;
       return std::nullopt;
     }
 
@@ -1102,13 +1121,31 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
 
     if (idx >= recv_part.size) {
       std::fprintf(stderr, "ERROR: Recv after exec parsing out of bounds!\n");
+      execute_retry_count = 0;
       return std::nullopt;
     }
 
     if (recv_part.data[idx] == 0xFF) {
-      std::fprintf(stderr, "ERROR: Recv Err pkt after exec pkt sent!\n");
-      print_error_pkt(recv_part.data + idx, pkt_size);
-      return std::nullopt;
+      if (err_pkt_error_code(recv_part.data + idx, pkt_size) == 1213) {
+        ++execute_retry_count;
+        if (execute_retry_count > CONNECTION_RETRY_COUNT_MAX) {
+          execute_retry_count = 0;
+          std::fprintf(stderr,
+                       "ERROR: Blocked on LOCK for %" PRIuFAST8
+                       " tries, failed to execute stmt!\n",
+                       CONNECTION_RETRY_COUNT_MAX);
+          execute_retry_count = 0;
+          return std::nullopt;
+        } else {
+          std::this_thread::sleep_for(CONNECTION_RETRY_DELAY);
+          return execute_stmt(stmt, std::move(bind_params));
+        }
+      } else {
+        std::fprintf(stderr, "ERROR: Recv Err pkt after exec pkt sent!\n");
+        print_error_pkt(recv_part.data + idx, pkt_size);
+        execute_retry_count = 0;
+        return std::nullopt;
+      }
     } else if (recv_part.data[idx] == 0xFE ||
                (recv_part.data[idx] == 0 &&
                 next_pkt_enum == NextPkt::COLUMN_COUNT)) {
@@ -1118,6 +1155,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
 
       reached_ok_eof_pkt = true;
       if (ret != 0) {
+        execute_retry_count = 0;
         return std::nullopt;
       }
       continue;
@@ -1130,6 +1168,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
         if (!col_count_opt.has_value()) {
           PMA_EPrintln("ERROR: Failed to parse column-count pkt!");
           close_stmt(stmt_id);
+          execute_retry_count = 0;
           return std::nullopt;
         }
         col_count = col_count_opt.value();
@@ -1151,6 +1190,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
           PMA_EPrintln("ERROR: Failed to parse column def {}!",
                        field_types.size());
           close_stmt(stmt_id);
+          execute_retry_count = 0;
           return std::nullopt;
         }
         idx += pkt_size;
@@ -1159,6 +1199,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
               "ERROR: Invalid count of field types! Have {}, must be {}",
               field_types.size(), col_count);
           close_stmt(stmt_id);
+          execute_retry_count = 0;
           return std::nullopt;
         } else if (field_types.size() == col_count) {
           next_pkt_enum = NextPkt::ROW;
@@ -1179,6 +1220,7 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
         if (ret != 0) {
           PMA_EPrintln("ERROR: Failed to parse row pkt!");
           close_stmt(stmt_id);
+          execute_retry_count = 0;
           return std::nullopt;
         }
         ++row_idx;
@@ -1192,10 +1234,12 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
       default:
         PMA_EPrintln("ERROR: Invalid next_pkt_enum value (internal error!)");
         close_stmt(stmt_id);
+        execute_retry_count = 0;
         return std::nullopt;
     }
   }
   close_stmt(stmt_id);
+  execute_retry_count = 0;
   return ret_vecs;
 }
 
@@ -1721,6 +1765,26 @@ std::tuple<int, size_t> PMA_MSQL::handle_ok_pkt(uint8_t *buf, size_t size) {
   // TODO Determine if this is necessary.
   // PMA_EPrintln("Info string: {}", str);
   return {0, idx + info_string_size};
+}
+
+uint16_t PMA_MSQL::err_pkt_error_code(uint8_t *data, size_t size) {
+  size_t idx = 0;
+
+  if (data[idx] != 0xFF) {
+    return 0;
+  }
+  ++idx;
+
+  if (idx + 2 >= size) {
+    return 0;
+  }
+
+  uint16_t u16;
+  uint8_t *u16_8 = reinterpret_cast<uint8_t *>(&u16);
+  u16_8[0] = data[idx++];
+  u16_8[1] = data[idx++];
+
+  return u16;
 }
 
 void PMA_MSQL::print_error_pkt(uint8_t *data, size_t size) {
