@@ -2867,25 +2867,25 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
     return std::nullopt;
   }
 
-  auto exec_ret = c.execute_stmt("START TRANSACTION", {});
+  auto exec_ret = c.execute_stmt("LOCK TABLE CXX_SEQ_ID_1 WRITE", {});
   if (!exec_ret.has_value()) {
-    PMA_EPrint("ERROR: Failed to START TRANSACTION; get next seq id");
+    PMA_EPrint("ERROR: Failed to LOCK TABLE CXX_SEQ_ID_1; get next seq id");
     return std::nullopt;
   }
 
   exec_ret = c.execute_stmt(DB_GET_SEQ_ID, {});
   if (!exec_ret.has_value()) {
-    c.execute_stmt("ROLLBACK", {});
+    c.execute_stmt("UNLOCK TABLES", {});
     PMA_EPrintln("ERROR: Failed to fetch seq id from msql db!");
     return std::nullopt;
   } else if (exec_ret->empty()) {
     uint64_t seq = 0;
     if (!c.execute_stmt(DB_ADD_SEQ_ID, {seq + 1}).has_value()) {
-      c.execute_stmt("ROLLBACK", {});
+      c.execute_stmt("UNLOCK TABLES", {});
       PMA_EPrintln("ERROR: Failed to add seq id to msql db!");
       return std::nullopt;
     }
-    c.execute_stmt("COMMIT", {});
+    c.execute_stmt("UNLOCK TABLES", {});
     return seq;
   } else if (exec_ret->size() > 1) {
     std::vector<Value> last = exec_ret->back();
@@ -2895,48 +2895,48 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
     }
     if (last.at(1).get_type() == Value::UNSIGNED_INT) {
       uint64_t seq = *last.at(1).get_unsigned_int().value();
-      if (seq + 1 >= 0xFFFFFFFFFFFFFFFF) {
+      if (seq >= 0xFFFFFFFFFFFFFFFF - 1) {
         if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {Value::new_uint(1)})
                  .has_value()) {
-          c.execute_stmt("ROLLBACK", {});
-          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          c.execute_stmt("UNLOCK TABLES", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID (mult rows, overflow)!");
           return std::nullopt;
         }
       } else {
         if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
-          c.execute_stmt("ROLLBACK", {});
-          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          c.execute_stmt("UNLOCK TABLES", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID (mult rows, inc)!");
           return std::nullopt;
         }
       }
-      c.execute_stmt("COMMIT", {});
+      c.execute_stmt("UNLOCK TABLES", {});
       return seq;
     } else {
-      c.execute_stmt("ROLLBACK", {});
+      c.execute_stmt("UNLOCK TABLES", {});
       PMA_EPrintln("ERROR: SEQ_ID in DB is not Unsigned!");
       return std::nullopt;
     }
   } else {
     if (exec_ret->at(0).at(1).get_type() == Value::UNSIGNED_INT) {
       uint64_t seq = *exec_ret->at(0).at(1).get_unsigned_int().value();
-      if (seq + 1 >= 0xFFFFFFFFFFFFFFFF) {
+      if (seq >= 0xFFFFFFFFFFFFFFFF - 1) {
         if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {Value::new_uint(1)})
                  .has_value()) {
-          c.execute_stmt("ROLLBACK", {});
-          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          c.execute_stmt("UNLOCK TABLES", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID! (overflow)");
           return std::nullopt;
         }
       } else {
         if (!c.execute_stmt(DB_UPDATE_SEQ_ID, {seq + 1}).has_value()) {
-          c.execute_stmt("ROLLBACK", {});
-          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID!");
+          c.execute_stmt("UNLOCK TABLES", {});
+          PMA_EPrintln("ERROR: Failed to UPDATE SEQ_ID! (increment)");
           return std::nullopt;
         }
       }
-      c.execute_stmt("COMMIT", {});
+      c.execute_stmt("UNLOCK TABLES", {});
       return seq;
     } else {
-      c.execute_stmt("ROLLBACK", {});
+      c.execute_stmt("UNLOCK TABLES", {});
       PMA_EPrintln("ERROR: SEQ_ID in DB is not Unsigned!");
       return std::nullopt;
     }
