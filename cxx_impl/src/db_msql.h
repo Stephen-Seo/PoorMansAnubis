@@ -20,6 +20,7 @@
 // Standard library includes.
 #include <array>
 #include <bitset>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -32,6 +33,10 @@
 #include "helpers.h"
 
 namespace PMA_MSQL {
+
+constexpr uint_fast8_t CONNECTION_RETRY_COUNT_MAX = 10;
+constexpr std::chrono::milliseconds CONNECTION_RETRY_DELAY =
+    std::chrono::milliseconds(80);
 
 enum class Error {
   SUCCESS = 0,
@@ -165,6 +170,7 @@ class Connection {
   std::bitset<32> flags;
   int fd;
   uint32_t connection_id;
+  uint_fast8_t execute_retry_count;
 
   Connection(int fd, uint32_t connection_id);
   void close_stmt(uint32_t stmt_id);
@@ -184,6 +190,7 @@ std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
 // 0 on success, 1 if error. Second integer is bytes read.
 std::tuple<int, size_t> handle_ok_pkt(uint8_t *data, size_t size);
 
+uint16_t err_pkt_error_code(uint8_t *data, size_t size);
 void print_error_pkt(uint8_t *data, size_t size);
 
 // Integer value and bytes read.
