@@ -34,7 +34,7 @@
 
 namespace PMA_MSQL {
 
-constexpr uint_fast8_t CONNECTION_RETRY_COUNT_MAX = 10;
+constexpr uint_fast8_t CONNECTION_RETRY_COUNT_MAX = 20;
 constexpr std::chrono::milliseconds CONNECTION_RETRY_DELAY =
     std::chrono::milliseconds(80);
 
