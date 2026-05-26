@@ -811,7 +811,7 @@ uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) noexcept(false) {
 
   addr_u.u32 = 0;
 
-  int addr_idx = 4;
+  int addr_idx = 0;
   int value = 0;
   for (uint64_t idx = 0; idx < addr.size(); ++idx) {
     if (addr[idx] >= '0' && addr[idx] <= '9') {
@@ -821,15 +821,15 @@ uint32_t PMA_HTTP::str_to_ipv4_addr(const std::string &addr) noexcept(false) {
             "Failed to parse, segment greater than 255");
       }
     } else if (addr[idx] == '.') {
-      addr_u.u8_arr.at(--addr_idx) = static_cast<uint8_t>(value);
+      addr_u.u8_arr.at(addr_idx++) = static_cast<uint8_t>(value);
       value = 0;
     } else {
       throw std::invalid_argument("Failed to parse");
     }
   }
-  addr_u.u8_arr.at(--addr_idx) = static_cast<uint8_t>(value);
+  addr_u.u8_arr.at(addr_idx++) = static_cast<uint8_t>(value);
 
-  return PMA_HELPER::be_swap_u32(addr_u.u32);
+  return addr_u.u32;
 }
 
 std::string PMA_HTTP::ipv4_addr_to_str(uint32_t ipv4) noexcept {

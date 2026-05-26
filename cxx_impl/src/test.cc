@@ -894,6 +894,8 @@ int main() {
     uint32_t ipv4_addr =
         PMA_HELPER::be_swap_u32(PMA_HTTP::str_to_ipv4_addr("10.123.45.6"));
     CHECK_TRUE(ipv4_addr == 0x0A7B2D06);
+    uint8_t *ipv4_addr_8 = reinterpret_cast<uint8_t *>(&ipv4_addr);
+    CHECK_TRUE(*ipv4_addr_8 == 0x6);
 
     ipv4_addr =
         PMA_HELPER::be_swap_u32(PMA_HTTP::str_to_ipv4_addr("192.168.0.1"));
