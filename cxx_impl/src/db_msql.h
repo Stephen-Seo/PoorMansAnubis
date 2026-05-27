@@ -186,8 +186,8 @@ std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
 std::tuple<int, size_t> handle_ok_pkt(uint8_t *data, size_t size);
 
 // Returns the error code encoded in the given error packet data.
-// Returns 0 on error.
-uint16_t err_pkt_error_code(uint8_t *data, size_t size);
+// Returns negative on error.
+int32_t err_pkt_error_code(uint8_t *data, size_t size);
 
 // Prints error code and server state from the given error packet data.
 void print_error_pkt(uint8_t *data, size_t size);

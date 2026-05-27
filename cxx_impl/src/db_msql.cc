@@ -1766,16 +1766,16 @@ std::tuple<int, size_t> PMA_MSQL::handle_ok_pkt(uint8_t *buf, size_t size) {
   return {0, idx + info_string_size};
 }
 
-uint16_t PMA_MSQL::err_pkt_error_code(uint8_t *data, size_t size) {
+int32_t PMA_MSQL::err_pkt_error_code(uint8_t *data, size_t size) {
   size_t idx = 0;
 
   if (data[idx] != 0xFF) {
-    return 0;
+    return -1;
   }
   ++idx;
 
   if (idx + 2 >= size) {
-    return 0;
+    return -1;
   }
 
   uint16_t u16;
