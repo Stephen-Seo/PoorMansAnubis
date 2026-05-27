@@ -23,7 +23,6 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -33,10 +32,6 @@
 #include "helpers.h"
 
 namespace PMA_MSQL {
-
-constexpr uint_fast8_t CONNECTION_RETRY_COUNT_MAX = 20;
-constexpr std::chrono::milliseconds CONNECTION_RETRY_DELAY =
-    std::chrono::milliseconds(80);
 
 enum class Error {
   SUCCESS = 0,
@@ -156,8 +151,8 @@ class Connection {
   bool is_valid() const;
 
   // Checks that the connection is valid with a ping.
-  // If this fails, the fd is closed, the mutex is unlocked, and this
-  // Connection becomes no longer valid.
+  // If this fails, the fd is closed and this Connection becomes no longer
+  // valid.
   bool ping_check();
 
   // No value on failure. Vector on success. Non-empty vector if there are
@@ -190,7 +185,11 @@ std::array<uint8_t, 20> msql_native_auth_resp(std::vector<uint8_t> seed,
 // 0 on success, 1 if error. Second integer is bytes read.
 std::tuple<int, size_t> handle_ok_pkt(uint8_t *data, size_t size);
 
-uint16_t err_pkt_error_code(uint8_t *data, size_t size);
+// Returns the error code encoded in the given error packet data.
+// Returns negative on error.
+int32_t err_pkt_error_code(uint8_t *data, size_t size);
+
+// Prints error code and server state from the given error packet data.
 void print_error_pkt(uint8_t *data, size_t size);
 
 // Integer value and bytes read.

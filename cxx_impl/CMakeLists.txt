@@ -88,9 +88,19 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
 
+add_library(PMA_LIB STATIC ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES})
+target_compile_features(PMA_LIB PUBLIC cxx_std_23)
+target_include_directories(PMA_LIB PUBLIC
+	"${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/src"
+	"${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/third_party/SimpleArchiver/src"
+	${SQLITE3_INCLUDE_DIRS}
+	${LIBCURL_INCLUDE_DIRS}
+)
+target_link_directories(PMA_LIB PUBLIC ${SQLITE3_LIBRARY_DIRS} ${LIBCURL_LIBRARY_DIRS})
+target_link_libraries(PMA_LIB BLAKE3::blake3 ${SQLITE3_LIBRARIES} ${LIBCURL_LIBRARIES} OpenSSL::Crypto)
+
 add_executable(poor_mans_anubis
     "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(poor_mans_anubis PUBLIC cxx_std_23)
 target_include_directories(poor_mans_anubis PUBLIC
@@ -100,11 +110,10 @@ target_include_directories(poor_mans_anubis PUBLIC
 	${LIBCURL_INCLUDE_DIRS}
 )
 target_link_directories(poor_mans_anubis PUBLIC ${SQLITE3_LIBRARY_DIRS} ${LIBCURL_LIBRARY_DIRS})
-target_link_libraries(poor_mans_anubis BLAKE3::blake3 ${SQLITE3_LIBRARIES} ${LIBCURL_LIBRARIES} OpenSSL::Crypto)
+target_link_libraries(poor_mans_anubis PMA_LIB BLAKE3::blake3 ${SQLITE3_LIBRARIES} ${LIBCURL_LIBRARIES} OpenSSL::Crypto)
 
 add_executable(unittest
     "${CMAKE_CURRENT_SOURCE_DIR}/src/test.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(unittest PUBLIC cxx_std_23)
 target_include_directories(unittest PUBLIC
@@ -114,11 +123,10 @@ target_include_directories(unittest PUBLIC
 	${LIBCURL_INCLUDE_DIRS}
 )
 target_link_directories(unittest PUBLIC ${SQLITE3_LIBRARY_DIRS})
-target_link_libraries(unittest BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
+target_link_libraries(unittest PMA_LIB BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
 
 add_executable(debug_serve
     "${CMAKE_CURRENT_SOURCE_DIR}/debug/test_serve.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(debug_serve PUBLIC cxx_std_23)
 target_include_directories(debug_serve PUBLIC
@@ -127,11 +135,10 @@ target_include_directories(debug_serve PUBLIC
 	${SQLITE3_INCLUDE_DIRS}
 )
 target_link_directories(debug_serve PUBLIC ${SQLITE3_LIBRARY_DIRS})
-target_link_libraries(debug_serve BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
+target_link_libraries(debug_serve PMA_LIB BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
 
 add_executable(debug_client
     "${CMAKE_CURRENT_SOURCE_DIR}/debug/test_client.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(debug_client PUBLIC cxx_std_23)
 target_include_directories(debug_client PUBLIC
@@ -140,7 +147,7 @@ target_include_directories(debug_client PUBLIC
 	${SQLITE3_INCLUDE_DIRS}
 )
 target_link_directories(debug_client PUBLIC ${SQLITE3_LIBRARY_DIRS})
-target_link_libraries(debug_client BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
+target_link_libraries(debug_client PMA_LIB BLAKE3::blake3 ${SQLITE3_LIBRARIES} OpenSSL::Crypto)
 
 if(INCLUDE_BUNDLED_DB_MSQL_CAPI)
     set(DISABLE_BUNDLED_NOTICE ON)

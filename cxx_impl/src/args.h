@@ -41,7 +41,6 @@ struct Args {
   Args(Args &&other) = default;
   Args &operator=(Args &&other) = default;
 
-  uint64_t factors;
   std::string default_dest_url;
   std::deque<AddrPort> addr_ports;
   std::unordered_map<uint16_t, std::string> port_to_dest_urls;
@@ -58,6 +57,7 @@ struct Args {
   std::string js_factors_url;
   std::string sqlite_path;
   std::string mysql_conf_path;
+  uint64_t factors;
   std::optional<uint32_t> thread_count;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;
