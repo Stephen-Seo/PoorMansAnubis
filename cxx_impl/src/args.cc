@@ -105,14 +105,14 @@ void pma_print_usage() {
 }
 
 PMA_ARGS::Args::Args(int argc, char **argv)
-    : factors(DEFAULT_FACTORS_QUADS),
-      default_dest_url("https://seodisparate.com"),
+    : default_dest_url("https://seodisparate.com"),
       addr_ports(),
       port_to_dest_urls(),
       flags(),
       api_url("/pma_api/"),
       js_factors_url("/pma_factors.js"),
       sqlite_path("sqlite_db"),
+      factors(DEFAULT_FACTORS_QUADS),
       thread_count(),
       challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
