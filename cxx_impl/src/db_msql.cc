@@ -1774,7 +1774,7 @@ int32_t PMA_MSQL::err_pkt_error_code(uint8_t *data, size_t size) {
   }
   ++idx;
 
-  if (idx + 2 >= size) {
+  if (idx + 2 > size) {
     return -1;
   }
 
