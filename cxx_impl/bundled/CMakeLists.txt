@@ -403,9 +403,37 @@ add_dependencies(LIBCURL_LIB
     LIBOPENSSL_LIB
 )
 
+add_library(PMA_LIB STATIC ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES})
+target_compile_features(PMA_LIB PUBLIC cxx_std_23)
+target_include_directories(PMA_LIB PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src"
+)
+add_dependencies(PMA_LIB
+    SQLITE3_LIB
+    SQLITE3_HEADER
+    BLAKE3_LIB
+    LIBCURL_LIB
+)
+target_link_libraries(PMA_LIB
+    sqlite3
+    blake3
+    curl
+    nghttp2
+    idn2
+    unistring
+    zstd
+    lzma
+    lz4
+    brotlidec
+    brotlicommon
+    z
+    ssl
+    crypto
+)
+
 add_executable(poor_mans_anubis_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/main.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(poor_mans_anubis_bundled PUBLIC cxx_std_23)
 target_include_directories(poor_mans_anubis_bundled PUBLIC
@@ -419,6 +447,7 @@ add_dependencies(poor_mans_anubis_bundled
     LIBCURL_LIB
 )
 target_link_libraries(poor_mans_anubis_bundled
+    PMA_LIB
     sqlite3
     blake3
     curl
@@ -437,7 +466,6 @@ target_link_libraries(poor_mans_anubis_bundled
 
 add_executable(unittest_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/test.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(unittest_bundled PUBLIC cxx_std_23)
 target_include_directories(unittest_bundled PUBLIC
@@ -445,6 +473,7 @@ target_include_directories(unittest_bundled PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src"
 )
 target_link_libraries(unittest_bundled
+    PMA_LIB
     sqlite3
     blake3
     crypto
@@ -458,7 +487,6 @@ add_dependencies(unittest_bundled
 
 add_executable(debug_serve_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../debug/test_serve.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(debug_serve_bundled PUBLIC cxx_std_23)
 target_include_directories(debug_serve_bundled PUBLIC
@@ -466,6 +494,7 @@ target_include_directories(debug_serve_bundled PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src"
 )
 target_link_libraries(debug_serve_bundled
+    PMA_LIB
     sqlite3
     blake3
     crypto
@@ -479,7 +508,6 @@ add_dependencies(debug_serve_bundled
 
 add_executable(debug_client_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../debug/test_client.cc"
-    ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES}
 )
 target_compile_features(debug_client_bundled PUBLIC cxx_std_23)
 target_include_directories(debug_client_bundled PUBLIC
@@ -487,6 +515,7 @@ target_include_directories(debug_client_bundled PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src"
 )
 target_link_libraries(debug_client_bundled
+    PMA_LIB
     sqlite3
     blake3
     crypto
