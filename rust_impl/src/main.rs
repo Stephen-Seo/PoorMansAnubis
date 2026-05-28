@@ -466,20 +466,21 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
 
     locked.query_drop("LOCK TABLE RUST_SEQ_ID_1 WRITE")?;
 
-    let seq_rows = locked
+    let seq_rows_ret = locked
         .query_rows("SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1")
         .map_err(|e| e.to_owned());
-    if let Err(e) = seq_rows {
+    if let Err(e) = seq_rows_ret {
         locked.query_drop("UNLOCK TABLES").ok();
         return Err(e.into());
     }
-    let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> = seq_rows.unwrap();
+    let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> = seq_rows_ret.unwrap();
 
     if let Some(seq_r) = seq_rows {
         let id: u64 = match seq_r[0][0] {
             MSQLValueEnum::Int64(i) => i as u64,
             MSQLValueEnum::UInt64(u) => u,
             _ => {
+                locked.query_drop("UNLOCK TABLES").ok();
                 return Err(Error::Generic(String::from(
                     "Failed to get ID from SEQ_ID table!",
                 )));
@@ -490,6 +491,7 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
             MSQLValueEnum::Int64(i) => seq = i as u64,
             MSQLValueEnum::UInt64(u) => seq = u,
             _ => {
+                locked.query_drop("UNLOCK TABLES").ok();
                 return Err(Error::Generic(String::from(
                     "Failed to get SEQ from SEQ_ID table!",
                 )));
