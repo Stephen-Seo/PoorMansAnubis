@@ -44,6 +44,12 @@ struct Args {
   std::string default_dest_url;
   std::deque<AddrPort> addr_ports;
   std::unordered_map<uint16_t, std::string> port_to_dest_urls;
+  std::string api_url;
+  std::string js_factors_url;
+  std::string sqlite_path;
+  std::string mysql_conf_path;
+  uint64_t factors;
+  std::optional<uint32_t> thread_count;
   // 0 - enable trusting "x-real-ip" header
   // 1 - enable "override-dest-url" header
   // 2 - failed to parse args
@@ -53,12 +59,6 @@ struct Args {
   // 6 - enable thread-limit
   // 7 - error on unknown args
   std::bitset<32> flags;
-  std::string api_url;
-  std::string js_factors_url;
-  std::string sqlite_path;
-  std::string mysql_conf_path;
-  uint64_t factors;
-  std::optional<uint32_t> thread_count;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;
   uint32_t req_timeout_milliseconds;
