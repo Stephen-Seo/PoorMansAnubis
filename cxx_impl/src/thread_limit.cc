@@ -68,13 +68,13 @@ void internal_manager_function(
 }
 
 ThreadLimit::ThreadLimit(uint64_t limit)
-    : limit(limit),
-      counter(std::make_shared<std::atomic_uint64_t>(0)),
+    : counter(std::make_shared<std::atomic_uint64_t>(0)),
       cv(std::make_shared<std::condition_variable>()),
       stop_flag(std::make_shared<std::atomic_bool>(false)),
       data_mutex(std::make_shared<std::mutex>()),
       overflow_data(std::make_shared<std::list<ThreadLimit::ThreadData> >()),
-      internal_manager_thread() {
+      internal_manager_thread(),
+      limit(limit) {
   if (this->limit == 0) {
     this->limit = 1;
   }
@@ -113,13 +113,13 @@ ThreadLimit::~ThreadLimit() {
 }
 
 ThreadLimit::ThreadLimit(ThreadLimit &&other)
-    : limit(other.limit),
-      counter(other.counter),
+    : counter(other.counter),
       cv(other.cv),
       stop_flag(other.stop_flag),
       data_mutex(other.data_mutex),
       overflow_data(other.overflow_data),
-      internal_manager_thread(other.internal_manager_thread) {
+      internal_manager_thread(other.internal_manager_thread),
+      limit(other.limit) {
   other.counter.reset();
   other.cv.reset();
   other.stop_flag.reset();

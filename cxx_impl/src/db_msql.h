@@ -67,10 +67,10 @@ struct Packet {
   Packet(Packet &&);
   Packet &operator=(Packet &&);
 
+  uint8_t *body;
   // Treat this as 3 bytes.
   uint32_t packet_length : 24;
   uint8_t seq;
-  uint8_t *body;
 };
 
 class Value {

@@ -44,13 +44,13 @@ class ThreadLimit {
                   std::function<void(void *)> cleanup_fn);
 
  private:
-  uint64_t limit;
   std::shared_ptr<std::atomic_uint64_t> counter;
   std::shared_ptr<std::condition_variable> cv;
   std::shared_ptr<std::atomic_bool> stop_flag;
   std::shared_ptr<std::mutex> data_mutex;
   std::shared_ptr<std::list<ThreadData> > overflow_data;
   std::shared_ptr<std::thread> internal_manager_thread;
+  uint64_t limit;
 };
 
 #endif

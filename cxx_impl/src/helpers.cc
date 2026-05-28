@@ -334,7 +334,7 @@ std::string PMA_HELPER::get_file_ext(const std::string &s) {
   return real_ret;
 }
 
-PMA_HELPER::MimeTypes::MimeTypes() : flags(), ext_to_mime_type() {
+PMA_HELPER::MimeTypes::MimeTypes() : ext_to_mime_type(), flags() {
   std::ifstream ifs("/etc/nginx/mime.types");
   if (!ifs.good()) {
     ifs = std::ifstream("/etc/mime.types");
