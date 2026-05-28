@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use std::{path::Path, sync::atomic::AtomicBool};
+use std::path::Path;
 
 use reqwest::Client;
 use reqwest::redirect::Policy;
@@ -460,40 +460,20 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIP
 async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
     let seq: u64;
     let args: &args::Args = depot.obtain().unwrap();
-    let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
     let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
-
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
-
-    let _unlock_scope = helpers::GenericCleanup::new(conn.clone(), |c| {
-        //eprintln!("UNLOCK TABLES in get_next_seq_mysql");
-        let handle = tokio::runtime::Handle::current();
-        let c_clone = c.clone();
-        let locked_bool = locked_bool.clone();
-        handle.spawn(async move {
-            let mut lock = c_clone.lock().await;
-            let f = lock.query_drop("UNLOCK TABLES");
-            f.ok();
-            locked_bool.store(false, std::sync::atomic::Ordering::SeqCst);
-        });
-    });
 
     let mut locked = conn.lock().await;
 
     locked.query_drop("LOCK TABLE RUST_SEQ_ID_1 WRITE")?;
 
-    let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> =
-        locked.query_rows("SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1")?;
+    let seq_rows = locked
+        .query_rows("SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1")
+        .map_err(|e| e.to_owned());
+    if let Err(e) = seq_rows {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
+    let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> = seq_rows.unwrap();
 
     if let Some(seq_r) = seq_rows {
         let id: u64 = match seq_r[0][0] {
@@ -521,27 +501,40 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
             params.append_uint64(1);
             params.append_uint64(id);
 
-            locked.query_with_params_drop(
-                "UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?",
-                &params,
-            )?;
+            let ret = locked
+                .query_with_params_drop("UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?", &params)
+                .map_err(|e| e.to_owned());
+            if let Err(e) = ret {
+                locked.query_drop("UNLOCK TABLES").ok();
+                return Err(e.into());
+            }
         } else {
             let mut params = MSQLParamsWrapper::new();
             params.append_uint64(seq + 1);
             params.append_uint64(id);
 
-            locked.query_with_params_drop(
-                "UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?",
-                &params,
-            )?;
+            let ret = locked
+                .query_with_params_drop("UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?", &params)
+                .map_err(|e| e.to_owned());
+            if let Err(e) = ret {
+                locked.query_drop("UNLOCK TABLES").ok();
+                return Err(e.into());
+            }
         }
     } else {
         let mut params = MSQLParamsWrapper::new();
         params.append_uint64(1);
-        locked.query_with_params_drop("INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (?)", &params)?;
+        let ret = locked
+            .query_with_params_drop("INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (?)", &params)
+            .map_err(|e| e.to_owned());
+        if let Err(e) = ret {
+            locked.query_drop("UNLOCK TABLES").ok();
+            return Err(e.into());
+        }
         seq = 1;
     }
 
+    locked.query_drop("UNLOCK TABLES").ok();
     Ok(seq)
 }
 
@@ -571,24 +564,7 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
 
 async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool, Error> {
     let args: &args::Args = depot.obtain().unwrap();
-    let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
     let mut conn: MSQLWrapper = get_mysql_db_conn(args).await?;
-
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
-
-    let _scoped_cleanup = helpers::GenericCleanup::new(locked_bool, |b| {
-        b.store(false, std::sync::atomic::Ordering::SeqCst);
-    });
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(hash)?;
@@ -627,43 +603,26 @@ async fn set_challenge_factor_mysql(
     factors_hash: &str,
 ) -> Result<(), Error> {
     let args: &args::Args = depot.obtain().unwrap();
-    let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
     let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
-
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
-
-    let _unlock_scope = helpers::GenericCleanup::new(conn.clone(), |c| {
-        //eprintln!("UNLOCK TABLES in challenge_port_mysql");
-        let handle = tokio::runtime::Handle::current();
-        let c_clone = c.clone();
-        let locked_bool = locked_bool.clone();
-        handle.spawn(async move {
-            let mut lock = c_clone.lock().await;
-            let f = lock.query_drop("UNLOCK TABLES");
-            f.ok();
-            locked_bool.store(false, std::sync::atomic::Ordering::SeqCst);
-        });
-    });
 
     let mut locked = conn.lock().await;
 
     locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
-    params.append_str(hash)?;
-    params.append_str(ip)?;
+    if let Err(e) = params.append_str(hash) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
+    if let Err(e) = params.append_str(ip) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
     params.append_uint64(port as u64);
-    params.append_str(factors_hash)?;
+    if let Err(e) = params.append_str(factors_hash) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
 
     locked
         .query_with_params_drop(
@@ -671,6 +630,8 @@ async fn set_challenge_factor_mysql(
             &params,
         )
         .ok();
+
+    locked.query_drop("UNLOCK TABLES").ok();
 
     Ok(())
 }
@@ -771,48 +732,32 @@ fn get_mapped_port_to_dest(args: &args::Args, req: &Request) -> Result<String, E
 async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
     let mut port: Option<u16> = None;
     let args: &args::Args = depot.obtain().unwrap();
-    let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
     let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
-
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
-
-    let _unlock_scope = helpers::GenericCleanup::new(conn.clone(), |c| {
-        //eprintln!("UNLOCK TABLES in challenge_port_mysql");
-        let handle = tokio::runtime::Handle::current();
-        let c_clone = c.clone();
-        let locked_bool = locked_bool.clone();
-        handle.spawn(async move {
-            let mut lock = c_clone.lock().await;
-            let f = lock.query_drop("UNLOCK TABLES");
-            f.ok();
-            locked_bool.store(false, std::sync::atomic::Ordering::SeqCst);
-        });
-    });
 
     let mut locked = conn.lock().await;
 
     locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
-    params.append_str(id)?;
+    if let Err(e) = params.append_str(id) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
+
     {
-        let rows_opt = locked
-            .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)?;
-        if let Some(rows) = rows_opt {
+        let rows_opt_ret = locked
+            .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
+            .map_err(|e| e.to_owned());
+        if let Err(e) = rows_opt_ret {
+            locked.query_drop("UNLOCK TABLES").ok();
+            return Err(e.into());
+        }
+        if let Some(rows) = rows_opt_ret.unwrap() {
             match rows[0][0] {
                 MSQLValueEnum::Int64(i) => port = Some(i as u16),
                 MSQLValueEnum::UInt64(u) => port = Some(u as u16),
                 _ => {
+                    locked.query_drop("UNLOCK TABLES").ok();
                     return Err(Error::Generic(String::from(
                         "Failed to get port from id-to-port",
                     )));
@@ -821,9 +766,16 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
         }
     }
 
-    if port.is_some() {
-        locked.query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)?;
+    if port.is_some()
+        && let Err(e) = locked
+            .query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
+            .map_err(|e| e.to_owned())
+    {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
     }
+
+    locked.query_drop("UNLOCK TABLES").ok();
 
     port.ok_or(Error::Generic(String::from(
         "gen challenge, failed to get port",
@@ -894,41 +846,14 @@ async fn factors_js_fn(
 
 async fn validate_client_mysql(
     args: &args::Args,
-    depot: &Depot,
     factors_response: &json_types::FactorsResponse,
     addr: &str,
 ) -> Result<u16, Error> {
     let correct;
     let mut port: u16 = 0;
     let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
-    let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
-
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
 
     {
-        let _unlock_scope = helpers::GenericCleanup::new(conn.clone(), |c| {
-            //eprintln!("UNLOCK TABLES in validate_client_mysql");
-            let handle = tokio::runtime::Handle::current();
-            let c_clone = c.clone();
-            let locked_bool = locked_bool.clone();
-            handle.spawn(async move {
-                let mut lock = c_clone.lock().await;
-                let f = lock.query_drop("UNLOCK TABLES");
-                f.ok();
-                locked_bool.store(false, std::sync::atomic::Ordering::SeqCst);
-            });
-        });
-
         let mut locked = conn.lock().await;
 
         locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
@@ -937,24 +862,40 @@ async fn validate_client_mysql(
             let mut params = MSQLParamsWrapper::new();
             params.append_uint64(args.challenge_timeout_mins);
 
-            locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params)?;
+            if let Err(e) = locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned()) {
+                locked.query_drop("UNLOCK TABLES").ok();
+                return Err(e.into());
+            }
         }
 
         let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
         let mut params = MSQLParamsWrapper::new();
-        params.append_str(&factors_response.id)?;
-        params.append_str(&hashed_factors)?;
+        if let Err(e) = params.append_str(&factors_response.id) {
+            locked.query_drop("UNLOCK TABLES").ok();
+            return Err(e.into());
+        }
+        if let Err(e) = params.append_str(&hashed_factors) {
+            locked.query_drop("UNLOCK TABLES").ok();
+            return Err(e.into());
+        }
 
-        let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked.query_with_params_rows(
-            "SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ? AND FACTORS = ?",
-            &params,
-        )?;
+        let addr_port_rows_opt_ret: Result<Option<Vec<Vec<MSQLValueEnum>>>, _> = locked
+            .query_with_params_rows(
+                "SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ? AND FACTORS = ?",
+                &params,
+            )
+            .map_err(|e| e.to_owned());
+        if let Err(e) = addr_port_rows_opt_ret {
+            locked.query_drop("UNLOCK TABLES").ok();
+            return Err(e.into());
+        }
 
-        if let Some(rows) = addr_port_rows_opt {
+        if let Some(rows) = addr_port_rows_opt_ret.unwrap() {
             let client_addr: String = match &rows[0][0] {
                 MSQLValueEnum::String(s) => s.to_owned(),
                 _ => {
+                    locked.query_drop("UNLOCK TABLES").ok();
                     return Err(Error::Generic(String::from("No IP from ChallengeFactors")));
                 }
             };
@@ -964,6 +905,7 @@ async fn validate_client_mysql(
                     MSQLValueEnum::Int64(i) => i as u16,
                     MSQLValueEnum::UInt64(u) => u as u16,
                     _ => {
+                        locked.query_drop("UNLOCK TABLES").ok();
                         return Err(Error::Generic(String::from(
                             "No Port from ChallengeFactors",
                         )));
@@ -972,37 +914,32 @@ async fn validate_client_mysql(
                 correct = true;
 
                 let mut params = MSQLParamsWrapper::new();
-                params.append_str(&factors_response.id)?;
+                if let Err(e) = params.append_str(&factors_response.id) {
+                    locked.query_drop("UNLOCK TABLES").ok();
+                    return Err(e.into());
+                }
 
-                locked.query_with_params_drop(
-                    "DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
-                    &params,
-                )?;
+                if let Err(e) = locked
+                    .query_with_params_drop(
+                        "DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
+                        &params,
+                    )
+                    .map_err(|e| e.to_owned())
+                {
+                    locked.query_drop("UNLOCK TABLES").ok();
+                    return Err(e.into());
+                }
             } else {
                 correct = false;
             }
         } else {
             correct = false;
         }
+
+        locked.query_drop("UNLOCK TABLES").ok();
     }
 
     if correct && port != 0 {
-        while locked_bool
-            .compare_exchange_weak(
-                false,
-                true,
-                std::sync::atomic::Ordering::SeqCst,
-                std::sync::atomic::Ordering::Relaxed,
-            )
-            .is_err()
-        {
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        }
-
-        let _scoped_cleanup = helpers::GenericCleanup::new(locked_bool, |b| {
-            b.store(false, std::sync::atomic::Ordering::SeqCst);
-        });
-
         let mut locked = conn.lock().await;
 
         let mut params = MSQLParamsWrapper::new();
@@ -1072,7 +1009,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     let mut validate_result: Result<u16, Error> = Err(String::from("Invalid state").into());
     if args.mysql_has_priority {
         validate_result =
-            validate_client_mysql(args, depot, &factors_response, &client_info_ret.addr).await;
+            validate_client_mysql(args, &factors_response, &client_info_ret.addr).await;
     } else {
         validate_result =
             validate_client_sqlite(args, &factors_response, &client_info_ret.addr).await;
@@ -1103,41 +1040,10 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     Ok(())
 }
 
-async fn check_is_allowed_mysql(
-    args: &args::Args,
-    depot: &Depot,
-    addr: &str,
-    port: u16,
-) -> Result<bool, Error> {
-    let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
+async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Result<bool, Error> {
     let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
 
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
     {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
-
-    {
-        let _unlock_scope = helpers::GenericCleanup::new(conn.clone(), |c| {
-            //eprintln!("UNLOCK TABLES in check_is_allowed_mysql 1");
-            let handle = tokio::runtime::Handle::current();
-            let c_clone = c.clone();
-            let locked_bool = locked_bool.clone();
-            handle.spawn(async move {
-                let mut lock = c_clone.lock().await;
-                let f = lock.query_drop("UNLOCK TABLES");
-                f.ok();
-                locked_bool.store(false, std::sync::atomic::Ordering::SeqCst);
-            });
-        });
-
         let mut locked = conn.lock().await;
 
         locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS WRITE")?;
@@ -1145,49 +1051,44 @@ async fn check_is_allowed_mysql(
         let mut params = MSQLParamsWrapper::new();
         params.append_uint64(args.allowed_timeout_mins);
 
-        locked.query_with_params_drop(
-            "DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
-            &params,
-        )?;
-    }
+        if let Err(e) = locked
+            .query_with_params_drop(
+                "DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
+                &params,
+            )
+            .map_err(|e| e.to_owned())
+        {
+            locked.query_drop("UNLOCK TABLES").ok();
+            return Err(e.into());
+        }
 
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        tokio::time::sleep(Duration::from_millis(1)).await;
+        locked.query_drop("UNLOCK TABLES").ok();
     }
-
-    let _unlock_scope = helpers::GenericCleanup::new(conn.clone(), |c| {
-        //eprintln!("UNLOCK TABLES in check_is_allowed_mysql 2");
-        let handle = tokio::runtime::Handle::current();
-        let c_clone = c.clone();
-        let locked_bool = locked_bool.clone();
-        handle.spawn(async move {
-            let mut lock = c_clone.lock().await;
-            let f = lock.query_drop("UNLOCK TABLES");
-            f.ok();
-            locked_bool.store(false, std::sync::atomic::Ordering::SeqCst);
-        });
-    });
 
     let mut locked = conn.lock().await;
 
     locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS READ")?;
 
     let mut params = MSQLParamsWrapper::new();
-    params.append_str(addr)?;
+    if let Err(e) = params.append_str(addr) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
     params.append_uint64(port as u64);
 
-    let ip_entry_row_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked.query_with_params_rows(
-        "SELECT IP FROM RUST_ALLOWED_IPS WHERE IP = ? AND PORT = ?",
-        &params,
-    )?;
+    let ip_entry_row_opt_res: Result<Option<Vec<Vec<MSQLValueEnum>>>, _> = locked
+        .query_with_params_rows(
+            "SELECT IP FROM RUST_ALLOWED_IPS WHERE IP = ? AND PORT = ?",
+            &params,
+        )
+        .map_err(|e| e.to_owned());
+    if let Err(e) = ip_entry_row_opt_res {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
+    let ip_entry_row_opt = ip_entry_row_opt_res.unwrap();
+
+    locked.query_drop("UNLOCK TABLES").ok();
 
     if ip_entry_row_opt.is_some() {
         Ok(true)
@@ -1214,39 +1115,9 @@ async fn check_is_allowed_sqlite(args: &args::Args, addr: &str, port: u16) -> Re
     Ok(is_allowed)
 }
 
-async fn init_id_to_port_mysql(
-    args: &args::Args,
-    depot: &Depot,
-    port: u16,
-) -> Result<String, Error> {
+async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, Error> {
     let mut hash: String;
-    let locked_bool: Arc<AtomicBool> = depot.obtain::<Arc<AtomicBool>>().unwrap().clone();
     let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
-
-    while locked_bool
-        .compare_exchange_weak(
-            false,
-            true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
-
-    let _unlock_scope = helpers::GenericCleanup::new(conn.clone(), |c| {
-        //eprintln!("UNLOCK TABLES in init_id_to_port_mysql");
-        let handle = tokio::runtime::Handle::current();
-        let c_clone = c.clone();
-        let locked_bool = locked_bool.clone();
-        handle.spawn(async move {
-            let mut lock = c_clone.lock().await;
-            let f = lock.query_drop("UNLOCK TABLES");
-            f.ok();
-            locked_bool.store(false, std::sync::atomic::Ordering::SeqCst);
-        });
-    });
 
     let mut locked = conn.lock().await;
 
@@ -1255,28 +1126,46 @@ async fn init_id_to_port_mysql(
     let mut params = MSQLParamsWrapper::new();
     params.append_uint64(args.challenge_timeout_mins);
 
-    locked.query_with_params_drop(
-        "DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
-        &params,
-    )?;
+    if let Err(e) = locked
+        .query_with_params_drop(
+            "DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
+            &params,
+        )
+        .map_err(|e| e.to_owned())
+    {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
 
     let mut hasher = blake3::Hasher::new();
     let mut buf = [0u8; GETRANDOM_BUF_SIZE];
-    getrandom::fill(&mut buf).map_err(Into::<Error>::into)?;
+    if let Err(e) = getrandom::fill(&mut buf).map_err(Into::<Error>::into) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e);
+    }
     hasher.update(&buf);
     hash = hasher.finalize().to_string();
 
     let mut params = MSQLParamsWrapper::new();
-    params.append_str(&hash)?;
+    if let Err(e) = params.append_str(&hash) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
 
     loop {
-        let rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
-            .query_with_params_rows("SELECT ID FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)?;
+        let rows_opt_ret: Result<Option<Vec<Vec<MSQLValueEnum>>>, _> = locked
+            .query_with_params_rows("SELECT ID FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
+            .map_err(|e| e.to_owned());
+        if let Err(e) = rows_opt_ret {
+            locked.query_drop("UNLOCK TABLES").ok();
+            return Err(e.into());
+        }
 
-        if let Some(rows) = rows_opt {
+        if let Some(rows) = rows_opt_ret.unwrap() {
             let id: String = match &rows[0][0] {
                 MSQLValueEnum::String(s) => s.to_owned(),
                 _ => {
+                    locked.query_drop("UNLOCK TABLES").ok();
                     return Err(Error::Generic(String::from(
                         "Failed to fetch ID from id-to-port",
                     )));
@@ -1285,7 +1174,10 @@ async fn init_id_to_port_mysql(
 
             if id == hash {
                 hasher = blake3::Hasher::new();
-                getrandom::fill(&mut buf).map_err(Into::<Error>::into)?;
+                if let Err(e) = getrandom::fill(&mut buf).map_err(Into::<Error>::into) {
+                    locked.query_drop("UNLOCK TABLES").ok();
+                    return Err(e);
+                }
                 hasher.update(&buf);
                 hash = hasher.finalize().to_string();
                 continue;
@@ -1295,13 +1187,24 @@ async fn init_id_to_port_mysql(
     }
 
     let mut params = MSQLParamsWrapper::new();
-    params.append_str(&hash)?;
+    if let Err(e) = params.append_str(&hash) {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
     params.append_uint64(port as u64);
 
-    locked.query_with_params_drop(
-        "INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (?, ?)",
-        &params,
-    )?;
+    if let Err(e) = locked
+        .query_with_params_drop(
+            "INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (?, ?)",
+            &params,
+        )
+        .map_err(|e| e.to_owned())
+    {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
+    }
+
+    locked.query_drop("UNLOCK TABLES").ok();
 
     Ok(hash)
 }
@@ -1360,7 +1263,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     .get(&req.local_addr().port().ok_or(Into::<salvo::Error>::into(
                         Error::from("Failed to get local port"),
                     ))?)
-                    .or_else(|| Some(&args.dest_url))
+                    .or(Some(&args.dest_url))
                     .ok_or(Into::<salvo::Error>::into(Error::from(
                         "Failed to get default dest url",
                     )))?,
@@ -1377,7 +1280,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         cached_allow.get_allowed(&req.remote_addr().to_string(), CACHED_TIMEOUT)?;
     if !is_allowed {
         if args.mysql_has_priority {
-            is_allowed = check_is_allowed_mysql(args, depot, &client_info_ret.addr, port).await?;
+            is_allowed = check_is_allowed_mysql(args, &client_info_ret.addr, port).await?;
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
@@ -1447,7 +1350,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         let mut hash: Option<String> = None;
 
         if args.mysql_has_priority {
-            hash = Some(init_id_to_port_mysql(args, depot, port).await?);
+            hash = Some(init_id_to_port_mysql(args, port).await?);
         } else {
             hash = Some(init_id_to_port_sqlite(args, port).await?);
         }
@@ -1506,11 +1409,11 @@ async fn main() {
     }
 
     let router = if parsed_args.mysql_has_priority {
-        let locked_bool = Arc::new(AtomicBool::new(false));
+        //let locked_bool = Arc::new(AtomicBool::new(false));
         Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
             .hoop(affix_state::inject(CachedAllow::new()))
-            .hoop(affix_state::inject(locked_bool))
+            //.hoop(affix_state::inject(locked_bool))
             .hoop(affix_state::inject(client_wrapper))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
