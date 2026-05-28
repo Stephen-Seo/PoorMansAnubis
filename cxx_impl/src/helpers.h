@@ -143,9 +143,9 @@ class MimeTypes {
   std::string get_mimetype_from_ext(const std::string &ext) const;
 
  private:
+  std::unordered_map<std::string, std::string> ext_to_mime_type;
   // 0 - is loaded
   std::bitset<32> flags;
-  std::unordered_map<std::string, std::string> ext_to_mime_type;
 };
 
 uint64_t rand_uint64_t();
