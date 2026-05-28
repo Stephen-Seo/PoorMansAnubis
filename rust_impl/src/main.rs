@@ -766,14 +766,13 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
         }
     }
 
-    if port.is_some() {
-        if let Err(e) = locked
+    if port.is_some()
+        && let Err(e) = locked
             .query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
             .map_err(|e| e.to_owned())
-        {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
+    {
+        locked.query_drop("UNLOCK TABLES").ok();
+        return Err(e.into());
     }
 
     locked.query_drop("UNLOCK TABLES").ok();
@@ -1142,7 +1141,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
     let mut buf = [0u8; GETRANDOM_BUF_SIZE];
     if let Err(e) = getrandom::fill(&mut buf).map_err(Into::<Error>::into) {
         locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
+        return Err(e);
     }
     hasher.update(&buf);
     hash = hasher.finalize().to_string();
@@ -1177,7 +1176,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
                 hasher = blake3::Hasher::new();
                 if let Err(e) = getrandom::fill(&mut buf).map_err(Into::<Error>::into) {
                     locked.query_drop("UNLOCK TABLES").ok();
-                    return Err(e.into());
+                    return Err(e);
                 }
                 hasher.update(&buf);
                 hash = hasher.finalize().to_string();
@@ -1264,7 +1263,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     .get(&req.local_addr().port().ok_or(Into::<salvo::Error>::into(
                         Error::from("Failed to get local port"),
                     ))?)
-                    .or_else(|| Some(&args.dest_url))
+                    .or(Some(&args.dest_url))
                     .ok_or(Into::<salvo::Error>::into(Error::from(
                         "Failed to get default dest url",
                     )))?,
