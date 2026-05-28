@@ -188,7 +188,7 @@ bool PMA_MSQL::error_is_client_err(Error e) {
   }
 }
 
-PMA_MSQL::Packet::Packet() : packet_length(0), seq(0), body(nullptr) {}
+PMA_MSQL::Packet::Packet() : body(nullptr), packet_length(0), seq(0) {}
 
 PMA_MSQL::Packet::~Packet() {
   if (body) {
@@ -197,10 +197,10 @@ PMA_MSQL::Packet::~Packet() {
 }
 
 PMA_MSQL::Packet::Packet(uint32_t len, uint8_t seq, uint8_t *data)
-    : packet_length(len & 0xFFFFFF), seq(seq), body(data) {}
+    : body(data), packet_length(len & 0xFFFFFF), seq(seq) {}
 
 PMA_MSQL::Packet::Packet(Packet &&other)
-    : packet_length(other.packet_length), seq(other.seq), body(other.body) {
+    : body(other.body), packet_length(other.packet_length), seq(other.seq) {
   other.body = nullptr;
 }
 
