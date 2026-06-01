@@ -58,8 +58,8 @@ constexpr int SOCKET_BACKLOG_SIZE = 2048;
 
 constexpr uint32_t DEFAULT_THREAD_COUNT = 4;
 
-constexpr uint_fast8_t CONNECTION_RETRY_COUNT_MAX = 20;
+constexpr uint_fast8_t CONNECTION_RETRY_COUNT_MAX = 100;
 constexpr std::chrono::milliseconds CONNECTION_RETRY_DELAY =
-    std::chrono::milliseconds(80);
+    std::chrono::milliseconds(50);
 
 #endif

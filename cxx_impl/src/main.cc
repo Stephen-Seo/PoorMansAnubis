@@ -945,7 +945,11 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
     size_t wait_ticks = 0;
 
     while (true) {
-      ssize_t write_ret =
+      ssize_t write_ret = -1;
+      if (socket_fd < 0 && using_dest_conn_fd) {
+        goto USING_DEST_CONN_FD;
+      }
+      write_ret =
           write(socket_fd, to_write.data() + (to_write.size() - remaining),
                 remaining);
       if (write_ret == -1) {
@@ -963,6 +967,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
           }
           continue;
         } else if (using_dest_conn_fd) {
+        USING_DEST_CONN_FD:
           using_dest_conn_fd = 0;
           if (socket_fd > 0) {
             close(socket_fd);

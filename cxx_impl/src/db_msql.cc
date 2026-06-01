@@ -1126,7 +1126,9 @@ PMA_MSQL::Connection::StmtRet PMA_MSQL::Connection::execute_stmt(
     }
 
     if (recv_part.data[idx] == 0xFF) {
-      if (err_pkt_error_code(recv_part.data + idx, pkt_size) == 1213) {
+      const int32_t err_code =
+          err_pkt_error_code(recv_part.data + idx, pkt_size);
+      if (err_code == 1213 || err_code == 1205) {
         ++execute_retry_count;
         if (execute_retry_count > CONNECTION_RETRY_COUNT_MAX) {
           execute_retry_count = 0;
