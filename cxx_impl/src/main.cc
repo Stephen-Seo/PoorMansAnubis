@@ -149,7 +149,6 @@ size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
   return min;
 }
 
-// Returns true if "goto PMA_RESPONSE_SEND_LOCATION" is required.
 void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
                         uint16_t cli_port, std::string &body,
                         std::string &status, std::string &content_type,
