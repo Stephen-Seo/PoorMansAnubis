@@ -746,7 +746,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     content_type.append(header_iter->second);
     content_type.append("\r\n");
   }
-  content_type.append("Connection: close");
+  content_type.append("Connection: keep-alive");
 }
 
 // Returns fd to destination.
@@ -1744,8 +1744,13 @@ void thread_handle_connection_fn(void *ud) {
 
       PMA_RESPONSE_SEND_LOCATION:
         std::string full;
-        if (forward_flags.test(0)) {
-          full = std::format("{}\r\n{}\r\n\r\n{}", status, content_type, body);
+        if (forward_flags.test(0) && !data->args->flags.test(5)) {
+          std::string ending;
+          if (!body.ends_with("0\r\n\r\n")) {
+            ending = "0\r\n\r\n";
+          }
+          full = std::format("{}\r\n{}\r\n\r\n{}{}", status, content_type, body,
+                             ending);
         } else {
           full = std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
                              content_type, body.size(), body);
@@ -1769,10 +1774,6 @@ void thread_handle_connection_fn(void *ud) {
           // Success
           // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
           //             data->dest_conn_fd, req.full_url);
-          if (data->args->flags.test(5)) {
-            // `break` when using libcurl.
-            break;
-          }
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
