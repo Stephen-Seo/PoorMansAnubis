@@ -751,12 +751,10 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
         }
     }
 
-    if port.is_some()
-        && let Err(e) = locked
+    if port.is_some() {
+        locked
             .query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
-            .map_err(|e| e.to_owned())
-    {
-        return Err(e.into());
+            .map_err(|e| e.to_owned())?;
     }
 
     port.ok_or(Error::Generic(String::from(
