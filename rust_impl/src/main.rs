@@ -38,12 +38,13 @@ use tokio::sync::RwLock;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
-    sync::Mutex as tMutex,
 };
 
 use error::Error;
 
 use msql_ffi::{MSQLParamsWrapper, MSQLValueEnum, MSQLWrapper};
+
+use crate::helpers::GenericCleanup;
 
 const GETRANDOM_BUF_SIZE: usize = 64;
 const CACHED_TIMEOUT: Duration = Duration::from_secs(120);
@@ -460,27 +461,28 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIP
 async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
     let seq: u64;
     let args: &args::Args = depot.obtain().unwrap();
-    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let mut locked = conn.lock().await;
+    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+        let mut locked = conn_ref.lock().unwrap();
+        locked
+            .query_drop("UNLOCK TABLES")
+            .expect("Should be able to UNLOCK TABLES in cleanup");
+    });
+
+    let mut locked = conn.lock().unwrap();
 
     locked.query_drop("LOCK TABLE RUST_SEQ_ID_1 WRITE")?;
 
-    let seq_rows_ret = locked
+    let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> = locked
         .query_rows("SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1")
-        .map_err(|e| e.to_owned());
-    if let Err(e) = seq_rows_ret {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
-    let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> = seq_rows_ret.unwrap();
+        .map_err(|e| e.to_owned())?;
 
     if let Some(seq_r) = seq_rows {
         let id: u64 = match seq_r[0][0] {
             MSQLValueEnum::Int64(i) => i as u64,
             MSQLValueEnum::UInt64(u) => u,
             _ => {
-                locked.query_drop("UNLOCK TABLES").ok();
                 return Err(Error::Generic(String::from(
                     "Failed to get ID from SEQ_ID table!",
                 )));
@@ -491,7 +493,6 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
             MSQLValueEnum::Int64(i) => seq = i as u64,
             MSQLValueEnum::UInt64(u) => seq = u,
             _ => {
-                locked.query_drop("UNLOCK TABLES").ok();
                 return Err(Error::Generic(String::from(
                     "Failed to get SEQ from SEQ_ID table!",
                 )));
@@ -503,40 +504,27 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
             params.append_uint64(1);
             params.append_uint64(id);
 
-            let ret = locked
+            locked
                 .query_with_params_drop("UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?", &params)
-                .map_err(|e| e.to_owned());
-            if let Err(e) = ret {
-                locked.query_drop("UNLOCK TABLES").ok();
-                return Err(e.into());
-            }
+                .map_err(|e| e.to_owned())?;
         } else {
             let mut params = MSQLParamsWrapper::new();
             params.append_uint64(seq + 1);
             params.append_uint64(id);
 
-            let ret = locked
+            locked
                 .query_with_params_drop("UPDATE RUST_SEQ_ID_1 SET SEQ_ID = ? WHERE ID = ?", &params)
-                .map_err(|e| e.to_owned());
-            if let Err(e) = ret {
-                locked.query_drop("UNLOCK TABLES").ok();
-                return Err(e.into());
-            }
+                .map_err(|e| e.to_owned())?;
         }
     } else {
         let mut params = MSQLParamsWrapper::new();
         params.append_uint64(1);
-        let ret = locked
+        locked
             .query_with_params_drop("INSERT INTO RUST_SEQ_ID_1 (SEQ_ID) VALUES (?)", &params)
-            .map_err(|e| e.to_owned());
-        if let Err(e) = ret {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
+            .map_err(|e| e.to_owned())?;
         seq = 1;
     }
 
-    locked.query_drop("UNLOCK TABLES").ok();
     Ok(seq)
 }
 
@@ -605,26 +593,24 @@ async fn set_challenge_factor_mysql(
     factors_hash: &str,
 ) -> Result<(), Error> {
     let args: &args::Args = depot.obtain().unwrap();
-    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let mut locked = conn.lock().await;
+    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+        let mut locked = conn_ref.lock().unwrap();
+        locked
+            .query_drop("UNLOCK TABLES")
+            .expect("Should be able to UNLOCK TABLES in cleanup");
+    });
+
+    let mut locked = conn.lock().unwrap();
 
     locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
-    if let Err(e) = params.append_str(hash) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
-    if let Err(e) = params.append_str(ip) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
+    params.append_str(hash)?;
+    params.append_str(ip)?;
     params.append_uint64(port as u64);
-    if let Err(e) = params.append_str(factors_hash) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
+    params.append_str(factors_hash)?;
 
     locked
         .query_with_params_drop(
@@ -632,8 +618,6 @@ async fn set_challenge_factor_mysql(
             &params,
         )
         .ok();
-
-    locked.query_drop("UNLOCK TABLES").ok();
 
     Ok(())
 }
@@ -734,32 +718,31 @@ fn get_mapped_port_to_dest(args: &args::Args, req: &Request) -> Result<String, E
 async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
     let mut port: Option<u16> = None;
     let args: &args::Args = depot.obtain().unwrap();
-    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let mut locked = conn.lock().await;
+    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+        let mut locked = conn_ref.lock().unwrap();
+        locked
+            .query_drop("UNLOCK TABLES")
+            .expect("Should be able to UNLOCK TABLES in cleanup");
+    });
+
+    let mut locked = conn.lock().unwrap();
 
     locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
-    if let Err(e) = params.append_str(id) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
+    params.append_str(id)?;
 
     {
         let rows_opt_ret = locked
             .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
-            .map_err(|e| e.to_owned());
-        if let Err(e) = rows_opt_ret {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
-        if let Some(rows) = rows_opt_ret.unwrap() {
+            .map_err(|e| e.to_owned())?;
+        if let Some(rows) = rows_opt_ret {
             match rows[0][0] {
                 MSQLValueEnum::Int64(i) => port = Some(i as u16),
                 MSQLValueEnum::UInt64(u) => port = Some(u as u16),
                 _ => {
-                    locked.query_drop("UNLOCK TABLES").ok();
                     return Err(Error::Generic(String::from(
                         "Failed to get port from id-to-port",
                     )));
@@ -773,11 +756,8 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
             .query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
             .map_err(|e| e.to_owned())
     {
-        locked.query_drop("UNLOCK TABLES").ok();
         return Err(e.into());
     }
-
-    locked.query_drop("UNLOCK TABLES").ok();
 
     port.ok_or(Error::Generic(String::from(
         "gen challenge, failed to get port",
@@ -853,10 +833,17 @@ async fn validate_client_mysql(
 ) -> Result<u16, Error> {
     let correct;
     let mut port: u16 = 0;
-    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     {
-        let mut locked = conn.lock().await;
+        let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+            let mut locked = conn_ref.lock().unwrap();
+            locked
+                .query_drop("UNLOCK TABLES")
+                .expect("Should be able to UNLOCK TABLES in cleanup");
+        });
+
+        let mut locked = conn.lock().unwrap();
 
         locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
 
@@ -864,40 +851,26 @@ async fn validate_client_mysql(
             let mut params = MSQLParamsWrapper::new();
             params.append_uint64(args.challenge_timeout_mins);
 
-            if let Err(e) = locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned()) {
-                locked.query_drop("UNLOCK TABLES").ok();
-                return Err(e.into());
-            }
+            locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
         }
 
         let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
         let mut params = MSQLParamsWrapper::new();
-        if let Err(e) = params.append_str(&factors_response.id) {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
-        if let Err(e) = params.append_str(&hashed_factors) {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
+        params.append_str(&factors_response.id)?;
+        params.append_str(&hashed_factors)?;
 
-        let addr_port_rows_opt_ret: Result<Option<Vec<Vec<MSQLValueEnum>>>, _> = locked
+        let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
             .query_with_params_rows(
                 "SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ? AND FACTORS = ?",
                 &params,
             )
-            .map_err(|e| e.to_owned());
-        if let Err(e) = addr_port_rows_opt_ret {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
+            .map_err(|e| e.to_owned())?;
 
-        if let Some(rows) = addr_port_rows_opt_ret.unwrap() {
+        if let Some(rows) = addr_port_rows_opt {
             let client_addr: String = match &rows[0][0] {
                 MSQLValueEnum::String(s) => s.to_owned(),
                 _ => {
-                    locked.query_drop("UNLOCK TABLES").ok();
                     return Err(Error::Generic(String::from("No IP from ChallengeFactors")));
                 }
             };
@@ -907,7 +880,6 @@ async fn validate_client_mysql(
                     MSQLValueEnum::Int64(i) => i as u16,
                     MSQLValueEnum::UInt64(u) => u as u16,
                     _ => {
-                        locked.query_drop("UNLOCK TABLES").ok();
                         return Err(Error::Generic(String::from(
                             "No Port from ChallengeFactors",
                         )));
@@ -916,33 +888,24 @@ async fn validate_client_mysql(
                 correct = true;
 
                 let mut params = MSQLParamsWrapper::new();
-                if let Err(e) = params.append_str(&factors_response.id) {
-                    locked.query_drop("UNLOCK TABLES").ok();
-                    return Err(e.into());
-                }
+                params.append_str(&factors_response.id)?;
 
-                if let Err(e) = locked
+                locked
                     .query_with_params_drop(
                         "DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
                         &params,
                     )
-                    .map_err(|e| e.to_owned())
-                {
-                    locked.query_drop("UNLOCK TABLES").ok();
-                    return Err(e.into());
-                }
+                    .map_err(|e| e.to_owned())?;
             } else {
                 correct = false;
             }
         } else {
             correct = false;
         }
-
-        locked.query_drop("UNLOCK TABLES").ok();
     }
 
     if correct && port != 0 {
-        let mut locked = conn.lock().await;
+        let mut locked = conn.lock().unwrap();
 
         let mut params = MSQLParamsWrapper::new();
         params.append_str(addr)?;
@@ -1043,54 +1006,52 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 }
 
 async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Result<bool, Error> {
-    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     {
-        let mut locked = conn.lock().await;
+        let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+            let mut locked = conn_ref.lock().unwrap();
+            locked
+                .query_drop("UNLOCK TABLES")
+                .expect("Should be able to UNLOCK TABLES in cleanup");
+        });
+
+        let mut locked = conn.lock().unwrap();
 
         locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS WRITE")?;
 
         let mut params = MSQLParamsWrapper::new();
         params.append_uint64(args.allowed_timeout_mins);
 
-        if let Err(e) = locked
+        locked
             .query_with_params_drop(
                 "DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
                 &params,
             )
-            .map_err(|e| e.to_owned())
-        {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
-
-        locked.query_drop("UNLOCK TABLES").ok();
+            .map_err(|e| e.to_owned())?;
     }
 
-    let mut locked = conn.lock().await;
+    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+        let mut locked = conn_ref.lock().unwrap();
+        locked
+            .query_drop("UNLOCK TABLES")
+            .expect("Should be able to UNLOCK TABLES in cleanup");
+    });
+
+    let mut locked = conn.lock().unwrap();
 
     locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS READ")?;
 
     let mut params = MSQLParamsWrapper::new();
-    if let Err(e) = params.append_str(addr) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
+    params.append_str(addr)?;
     params.append_uint64(port as u64);
 
-    let ip_entry_row_opt_res: Result<Option<Vec<Vec<MSQLValueEnum>>>, _> = locked
+    let ip_entry_row_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
         .query_with_params_rows(
             "SELECT IP FROM RUST_ALLOWED_IPS WHERE IP = ? AND PORT = ?",
             &params,
         )
-        .map_err(|e| e.to_owned());
-    if let Err(e) = ip_entry_row_opt_res {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
-    let ip_entry_row_opt = ip_entry_row_opt_res.unwrap();
-
-    locked.query_drop("UNLOCK TABLES").ok();
+        .map_err(|e| e.to_owned())?;
 
     if ip_entry_row_opt.is_some() {
         Ok(true)
@@ -1119,55 +1080,47 @@ async fn check_is_allowed_sqlite(args: &args::Args, addr: &str, port: u16) -> Re
 
 async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, Error> {
     let mut hash: String;
-    let conn: Arc<tMutex<MSQLWrapper>> = Arc::new(tMutex::new(get_mysql_db_conn(args).await?));
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let mut locked = conn.lock().await;
+    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+        let mut locked = conn_ref.lock().unwrap();
+        locked
+            .query_drop("UNLOCK TABLES")
+            .expect("Should be able to UNLOCK TABLES in cleanup");
+    });
+
+    let mut locked = conn.lock().unwrap();
 
     locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
     params.append_uint64(args.challenge_timeout_mins);
 
-    if let Err(e) = locked
+    locked
         .query_with_params_drop(
             "DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
             &params,
         )
-        .map_err(|e| e.to_owned())
-    {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
+        .map_err(|e| e.to_owned())?;
 
     let mut hasher = blake3::Hasher::new();
     let mut buf = [0u8; GETRANDOM_BUF_SIZE];
-    if let Err(e) = getrandom::fill(&mut buf).map_err(Into::<Error>::into) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e);
-    }
+    getrandom::fill(&mut buf).map_err(Into::<Error>::into)?;
     hasher.update(&buf);
     hash = hasher.finalize().to_string();
 
     let mut params = MSQLParamsWrapper::new();
-    if let Err(e) = params.append_str(&hash) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
+    params.append_str(&hash)?;
 
     loop {
-        let rows_opt_ret: Result<Option<Vec<Vec<MSQLValueEnum>>>, _> = locked
+        let rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
             .query_with_params_rows("SELECT ID FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
-            .map_err(|e| e.to_owned());
-        if let Err(e) = rows_opt_ret {
-            locked.query_drop("UNLOCK TABLES").ok();
-            return Err(e.into());
-        }
+            .map_err(|e| e.to_owned())?;
 
-        if let Some(rows) = rows_opt_ret.unwrap() {
+        if let Some(rows) = rows_opt {
             let id: String = match &rows[0][0] {
                 MSQLValueEnum::String(s) => s.to_owned(),
                 _ => {
-                    locked.query_drop("UNLOCK TABLES").ok();
                     return Err(Error::Generic(String::from(
                         "Failed to fetch ID from id-to-port",
                     )));
@@ -1176,10 +1129,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
 
             if id == hash {
                 hasher = blake3::Hasher::new();
-                if let Err(e) = getrandom::fill(&mut buf).map_err(Into::<Error>::into) {
-                    locked.query_drop("UNLOCK TABLES").ok();
-                    return Err(e);
-                }
+                getrandom::fill(&mut buf).map_err(Into::<Error>::into)?;
                 hasher.update(&buf);
                 hash = hasher.finalize().to_string();
                 continue;
@@ -1189,24 +1139,15 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
     }
 
     let mut params = MSQLParamsWrapper::new();
-    if let Err(e) = params.append_str(&hash) {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
+    params.append_str(&hash)?;
     params.append_uint64(port as u64);
 
-    if let Err(e) = locked
+    locked
         .query_with_params_drop(
             "INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (?, ?)",
             &params,
         )
-        .map_err(|e| e.to_owned())
-    {
-        locked.query_drop("UNLOCK TABLES").ok();
-        return Err(e.into());
-    }
-
-    locked.query_drop("UNLOCK TABLES").ok();
+        .map_err(|e| e.to_owned())?;
 
     Ok(hash)
 }

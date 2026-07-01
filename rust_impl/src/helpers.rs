@@ -87,34 +87,34 @@ pub fn validate_client_response(resp: &str) -> Result<(), Error> {
     Ok(())
 }
 
-//pub struct GenericCleanup<T, F>
-//where
-//    T: Clone,
-//    F: FnMut(T),
-//{
-//    data: T,
-//    function: F,
-//}
-//
-//impl<T, F> GenericCleanup<T, F>
-//where
-//    T: Clone,
-//    F: FnMut(T),
-//{
-//    pub fn new(data: T, function: F) -> Self {
-//        Self { data, function }
-//    }
-//}
-//
-//impl<T, F> Drop for GenericCleanup<T, F>
-//where
-//    T: Clone,
-//    F: FnMut(T),
-//{
-//    fn drop(&mut self) {
-//        (self.function)(self.data.clone());
-//    }
-//}
+pub struct GenericCleanup<'a, T, F>
+where
+    F: Fn(&'a T),
+{
+    reference: &'a T,
+    function: F,
+}
+
+impl<'a, T, F> GenericCleanup<'a, T, F>
+where
+    F: Fn(&'a T),
+{
+    pub fn new(reference: &'a T, function: F) -> Self {
+        Self {
+            reference,
+            function,
+        }
+    }
+}
+
+impl<'a, T, F> Drop for GenericCleanup<'a, T, F>
+where
+    F: Fn(&'a T),
+{
+    fn drop(&mut self) {
+        (self.function)(self.reference);
+    }
+}
 
 #[cfg(test)]
 mod tests {
