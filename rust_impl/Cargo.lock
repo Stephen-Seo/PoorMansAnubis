@@ -1701,9 +1701,9 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "salvo"
-version = "0.93.0"
+version = "0.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40cfaf23175e76ad1db0f61cdb1257f1dc5fb829eba958a87e5bc6e7b9ca4709"
+checksum = "e58d7158d996e7005dc9b67b0fe01bc070d500e644156ea74badc4826bb18d42"
 dependencies = [
  "salvo_core",
  "salvo_extra",
@@ -1711,9 +1711,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-serde-util"
-version = "0.93.0"
+version = "0.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0187d25cd4186a3761560f91f4bbdb0213958164e16aed7ed4f45d9d84e945bd"
+checksum = "92fa0afee41d6feb8983ee997d0827ecdb67a74ab00f3e932b6308b467630a3f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1722,9 +1722,9 @@ dependencies = [
 
 [[package]]
 name = "salvo_core"
-version = "0.93.0"
+version = "0.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cfdd1110c4b15f0813f461f899d40ea41f090eee0c46cd9ed26887bb4261dc6"
+checksum = "31dfe3c744ac1585cfa730d24b17710248ae96e8fcef9ac0df600c5e712ab709"
 dependencies = [
  "async-trait",
  "base64",
@@ -1764,9 +1764,9 @@ dependencies = [
 
 [[package]]
 name = "salvo_extra"
-version = "0.93.0"
+version = "0.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "094931f8bdd5dbd459d7034fcfd007ed1f899142a123d83c73de842127acaa5f"
+checksum = "61b71870d38e66f9328b11d375556698eeac4e3067ce94fd0bfae96898de027c"
 dependencies = [
  "base64",
  "etag",
@@ -1786,14 +1786,13 @@ dependencies = [
 
 [[package]]
 name = "salvo_macros"
-version = "0.93.0"
+version = "0.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ba5fc67541cd8e1bb602f7a629a66426323965c3dc0e422f1bb3aebba12813"
+checksum = "42e4f904389a10df1a8ec0dfa84313c357cf35860b8f1d827493c8bac773a2e8"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "regex",
  "salvo-serde-util",
  "syn",
 ]
