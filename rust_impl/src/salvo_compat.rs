@@ -20,7 +20,7 @@ use futures::{StreamExt, TryStreamExt, stream::FuturesUnordered};
 use salvo::{
     Listener,
     conn::{Acceptor, Holding, TcpListener, tcp::TcpAcceptor},
-    fuse::FuseFactory,
+    fuse::FusePolicy,
 };
 use tokio::net::ToSocketAddrs;
 
@@ -57,10 +57,10 @@ impl Acceptor for TcpVectorAcceptor {
 
     async fn accept(
         &mut self,
-        fuse_factory: Option<Arc<dyn FuseFactory + Sync + Send + 'static>>,
+        fuse_policy: Option<Arc<dyn FusePolicy>>,
     ) -> std::io::Result<salvo::conn::Accepted<Self::Coupler, Self::Stream>> {
         let iter = self.acceptors.iter_mut();
-        let futures = FuturesUnordered::from_iter(iter.map(|a| a.accept(fuse_factory.clone())));
+        let futures = FuturesUnordered::from_iter(iter.map(|a| a.accept(fuse_policy.clone())));
 
         futures
             .try_ready_chunks(1)

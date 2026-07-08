@@ -398,7 +398,7 @@ pub struct ClientIPAddrRet {
 }
 
 async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIPAddrRet, Error> {
-    let args = depot.obtain::<args::Args>().unwrap();
+    let args = depot.get_typed::<args::Args>().unwrap();
     let addr_string: String;
     let local_port: Option<u16>;
     let remote_port: Option<u16>;
@@ -460,7 +460,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIP
 
 async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
     let seq: u64;
-    let args: &args::Args = depot.obtain().unwrap();
+    let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
@@ -553,7 +553,7 @@ async fn get_next_seq_sqlite(args: &args::Args) -> Result<u64, Error> {
 }
 
 async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool, Error> {
-    let args: &args::Args = depot.obtain().unwrap();
+    let args: &args::Args = depot.get_typed().unwrap();
     let mut conn: MSQLWrapper = get_mysql_db_conn(args).await?;
 
     let mut params = MSQLParamsWrapper::new();
@@ -592,7 +592,7 @@ async fn set_challenge_factor_mysql(
     port: u16,
     factors_hash: &str,
 ) -> Result<(), Error> {
-    let args: &args::Args = depot.obtain().unwrap();
+    let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
@@ -644,7 +644,7 @@ async fn set_up_factors_challenge(
     ip: &str,
     port: u16,
 ) -> Result<(String, String), Error> {
-    let args = depot.obtain::<args::Args>().unwrap();
+    let args = depot.get_typed::<args::Args>().unwrap();
 
     let (value, factors) = ffi::generate_value_and_factors_strings2(
         args.factors.unwrap_or(constants::DEFAULT_FACTORS_QUADS),
@@ -717,7 +717,7 @@ fn get_mapped_port_to_dest(args: &args::Args, req: &Request) -> Result<String, E
 
 async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
     let mut port: Option<u16> = None;
-    let args: &args::Args = depot.obtain().unwrap();
+    let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
@@ -782,7 +782,7 @@ async fn factors_js_fn(
     req: &mut Request,
     res: &mut Response,
 ) -> salvo::Result<()> {
-    let args = depot.obtain::<args::Args>().unwrap();
+    let args = depot.get_typed::<args::Args>().unwrap();
     let client_info_ret = get_client_ip_addr(depot, req).await?;
     let id: String = req.query("id").ok_or(crate::Error::Generic(
         "No id passed to factors_js url!".to_owned(),
@@ -958,7 +958,7 @@ async fn validate_client_sqlite(
 
 #[handler]
 async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
-    let args = depot.obtain::<args::Args>().unwrap();
+    let args = depot.get_typed::<args::Args>().unwrap();
     let client_info_ret = get_client_ip_addr(depot, req).await?;
     //eprintln!("API: {}", &addr_string);
     let factors_response: json_types::FactorsResponse = req
@@ -1193,10 +1193,10 @@ async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, 
 
 #[handler]
 async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
-    let args = depot.obtain::<args::Args>().unwrap();
-    let cached_allow: &CachedAllow = depot.obtain::<CachedAllow>().unwrap();
+    let args = depot.get_typed::<args::Args>().unwrap();
+    let cached_allow: &CachedAllow = depot.get_typed::<CachedAllow>().unwrap();
     cached_allow.check_cleanup()?;
-    let client_wrapper: &ClientWrapper = depot.obtain().unwrap();
+    let client_wrapper: &ClientWrapper = depot.get_typed().unwrap();
     let client: Client =
         client_wrapper
             .get_client(
