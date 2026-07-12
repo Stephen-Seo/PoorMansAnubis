@@ -1274,7 +1274,8 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
           return Request::from_error(ErrorT::INVALID_STATE,
                                      "No value for key in header");
         } else {
-          headers.emplace(PMA_HELPER::ascii_str_to_lower(key), val);
+          headers.emplace(PMA_HELPER::ascii_str_to_lower(key),
+                          PMA_HELPER::trim_whitespace(val));
           key.clear();
           val.clear();
           fetching_key = true;
@@ -1283,15 +1284,14 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
             ++idx;
           }
         }
-      } else if (req.at(idx) == ' ') {
-        // Intentionally left blank
       } else {
         val.push_back(req.at(idx));
       }
     }
   }
   if (!fetching_key && !key.empty() && !val.empty()) {
-    headers.emplace(PMA_HELPER::ascii_str_to_lower(key), val);
+    headers.emplace(PMA_HELPER::ascii_str_to_lower(key),
+                    PMA_HELPER::trim_whitespace(val));
   }
 
   std::string body;
