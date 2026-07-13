@@ -1035,7 +1035,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
       content_type.append(": ");
       content_type.append(header_value);
       content_type.append("\r\n");
-    } else {
+    } else if (header_name_lower == "content-length") {
       try {
         size_t content_size = std::stoull(header_value);
         if (content_size > 0) {
@@ -1051,6 +1051,9 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
 
   while (wait_ticks < args.req_timeout_ticks && !force_break) {
     skip_before_idx = 0;
+    if (forward_flags.test(1) && !before_content) {
+      break;
+    }
     ssize_t read_ret = read(socket_fd, buf.data(), buf.size());
     if (read_ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -1095,6 +1098,10 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
                 "<html><p>500 Internal Server Error</p><p>Failed to "
                 "forward</p></html>";
             return -1;
+          }
+
+          if (status.ends_with("304")) {
+            forward_flags.set(1);
           }
         } else if (before_content) {
           if (idx < skip_before_idx) {
@@ -1321,6 +1328,7 @@ void thread_handle_connection_fn(void *ud) {
         }
 
         // 0 - content-type: chunked
+        // 1 - 304 response
         std::bitset<32> forward_flags;
 
         if (err != PMA_SQL::ErrorT::SUCCESS) {
