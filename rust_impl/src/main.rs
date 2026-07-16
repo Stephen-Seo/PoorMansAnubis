@@ -327,7 +327,7 @@ async fn req_to_url(
     body: Option<Vec<u8>>,
     method: &str,
     client: Client,
-) -> Result<(reqwest::Response, u16, reqwest::header::HeaderMap), Error> {
+) -> Result<reqwest::Response, Error> {
     let req_builder = match method {
         "GET" => client.get(url),
         "POST" => client.post(url),
@@ -386,9 +386,7 @@ async fn req_to_url(
 
     let resp = req_builder.send().await?;
 
-    let status = resp.status().as_u16();
-    let headers = resp.headers().to_owned();
-    Ok((resp, status, headers))
+    Ok(resp)
 }
 
 pub struct ClientIPAddrRet {
@@ -798,7 +796,7 @@ async fn factors_js_fn(
     if port.is_err() {
         eprintln!(
             "WARNING: Failed to query id-to-port for client {}:{} to {}!",
-            &client_info_ret.addr,
+            client_info_ret.addr,
             client_info_ret.remote_port.unwrap_or(0),
             client_info_ret.local_port.unwrap_or(0)
         );
@@ -807,7 +805,7 @@ async fn factors_js_fn(
 
     eprintln!(
         "Requested challenge from {}:{} -> {}",
-        &client_info_ret.addr,
+        client_info_ret.addr,
         client_info_ret.remote_port.unwrap_or(0),
         port
     );
@@ -981,7 +979,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     if let Ok(port) = validate_result {
         eprintln!(
             "Challenge response accepted from {}:{} -> {}",
-            &client_info_ret.addr,
+            client_info_ret.addr,
             client_info_ret.remote_port.unwrap_or(0),
             port
         );
@@ -991,7 +989,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     } else {
         eprintln!(
             "Challenge response DENIED from {}:{} -> {}",
-            &client_info_ret.addr,
+            client_info_ret.addr,
             client_info_ret.remote_port.unwrap_or(0),
             client_info_ret.local_port.unwrap_or(0)
         );
@@ -1256,7 +1254,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         let res_body_res = if payload.is_empty() {
             req_to_url(
                 req,
-                format!("{}{}", url, &path_str),
+                format!("{}{}", url, path_str),
                 Some(&client_info_ret.addr),
                 None,
                 &method_str,
@@ -1266,7 +1264,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         } else {
             req_to_url(
                 req,
-                format!("{}{}", url, &path_str),
+                format!("{}{}", url, path_str),
                 Some(&client_info_ret.addr),
                 Some(payload),
                 &method_str,
@@ -1275,10 +1273,10 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .await
         };
 
-        if let Ok((mut res_body, status, headers)) = res_body_res {
+        if let Ok(mut res_body) = res_body_res {
             //eprintln!("Returned status code is {}", status);
-            res.status_code = Some(StatusCode::from_u16(status).unwrap());
-            for (k, v) in headers.iter() {
+            res.status_code = Some(StatusCode::from_u16(res_body.status().as_u16()).unwrap());
+            for (k, v) in res_body.headers().iter() {
                 res.headers.append(k, v.clone());
             }
             let mut tx = res.channel();
@@ -1310,7 +1308,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             let html = constants::HTML_BODY_FACTORS;
             let html = html.replacen(
                 "{JS_FACTORS_URL}",
-                &format!("{}?id={}", args.js_factors_url, &hash),
+                &format!("{}?id={}", args.js_factors_url, hash),
                 1,
             );
             res.body(html).status_code(StatusCode::OK);
@@ -1340,7 +1338,7 @@ async fn main() {
         .await
         .expect("Should be able to init database");
 
-    eprintln!("Default Dest URL: {}", &parsed_args.dest_url);
+    eprintln!("Default Dest URL: {}", parsed_args.dest_url);
     eprintln!("Listening: {:?}", parsed_args.addr_port_strs.iter());
     eprintln!("Port Mappings: {:?}", parsed_args.port_to_dest_urls.iter());
     if parsed_args.enable_override_dest_url {
