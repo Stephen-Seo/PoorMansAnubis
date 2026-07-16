@@ -33,7 +33,7 @@ use std::path::Path;
 use reqwest::Client;
 use reqwest::redirect::Policy;
 use rusqlite::Connection;
-use salvo::{http::ResBody, prelude::*};
+use salvo::prelude::*;
 use tokio::sync::RwLock;
 use tokio::{
     fs::File,
@@ -327,7 +327,7 @@ async fn req_to_url(
     body: Option<Vec<u8>>,
     method: &str,
     client: Client,
-) -> Result<(ResBody, u16, reqwest::header::HeaderMap), Error> {
+) -> Result<(reqwest::Response, u16, reqwest::header::HeaderMap), Error> {
     let req_builder = match method {
         "GET" => client.get(url),
         "POST" => client.post(url),
@@ -388,7 +388,7 @@ async fn req_to_url(
 
     let status = resp.status().as_u16();
     let headers = resp.headers().to_owned();
-    Ok((ResBody::Once(resp.bytes().await?), status, headers))
+    Ok((resp, status, headers))
 }
 
 pub struct ClientIPAddrRet {
@@ -1275,13 +1275,23 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .await
         };
 
-        if let Ok((res_body, status, headers)) = res_body_res {
-            res.replace_body(res_body);
+        if let Ok((mut res_body, status, headers)) = res_body_res {
             //eprintln!("Returned status code is {}", status);
             res.status_code = Some(StatusCode::from_u16(status).unwrap());
             for (k, v) in headers.iter() {
                 res.headers.append(k, v.clone());
             }
+            let mut tx = res.channel();
+            tokio::spawn(async move {
+                loop {
+                    let chunk = res_body.chunk().await;
+                    if let Ok(Some(bytes)) = chunk {
+                        tx.send_data(bytes).await.unwrap();
+                    } else {
+                        break;
+                    }
+                }
+            });
         } else {
             res.render("Failed to query");
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
