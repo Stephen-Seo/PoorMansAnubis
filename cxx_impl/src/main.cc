@@ -1269,8 +1269,10 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
 
           buf.at(read_size++) = '\r';
           buf.at(read_size++) = '\n';
+          size_t offset = 0;
         DO_SOCKET_FORWARDING_CHUNK_WRITE:
-          write_ret = write(data->conn_fd, buf.data(), read_size);
+          write_ret =
+              write(data->conn_fd, buf.data() + offset, read_size - offset);
           if (write_ret < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
               // Non-blocking IO, client did not accept data
@@ -1286,10 +1288,9 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                 "ERROR: Failed to write content to client (client closed "
                 "connection)!");
             return;
-          } else if (static_cast<size_t>(write_ret) != read_size) {
-            PMA_EPrintln(
-                "ERROR: Failed to write content to client (partial write)!");
-            return;
+          } else if (static_cast<size_t>(write_ret) != read_size - offset) {
+            offset += static_cast<size_t>(write_ret);
+            goto DO_SOCKET_FORWARDING_CHUNK_WRITE;
           }
 
           if (recv_content_size.has_value()) {
