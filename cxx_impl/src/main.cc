@@ -1138,7 +1138,9 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
               goto DO_SOCKET_FORWARDING_STATUS;
             } else {
               PMA_EPrintln(
-                  "ERROR: Failed to write status to client (write error)!");
+                  "ERROR: Failed to write status to client (write error; errno "
+                  "{})!",
+                  errno);
               return;
             }
           } else if (write_ret == 0) {
@@ -1165,7 +1167,9 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                 goto DO_SOCKET_FORWARDING_HEADER;
               } else {
                 PMA_EPrintln(
-                    "ERROR: Failed to write header to client (write error)!");
+                    "ERROR: Failed to write header to client (write error; "
+                    "errno {})!",
+                    errno);
                 return;
               }
             } else if (write_ret == 0) {
@@ -1190,7 +1194,8 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
             } else {
               PMA_EPrintln(
                   "ERROR: Failed to write ending newline after headers (write "
-                  "error)!");
+                  "error; errno {})!",
+                  errno);
               return;
             }
           } else if (write_ret != 2) {
@@ -1213,7 +1218,9 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                 continue;
               } else {
                 PMA_EPrintln(
-                    "ERROR: Failed to write response to client (error)!");
+                    "ERROR: Failed to write response to client (write error; "
+                    "errno {})!",
+                    errno);
                 return;
               }
             } else if (write_ret == 0) {
@@ -1253,8 +1260,9 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
               goto DO_SOCKET_FORWARDING_CHUNK_SIZE_WRITE;
             } else {
               PMA_EPrintln(
-                  "ERROR: Failed to write chunk size to client (write "
-                  "error)!");
+                  "ERROR: Failed to write chunk size to client (write error; "
+                  "errno {})!",
+                  errno);
               return;
             }
           } else if (write_ret == 0) {
@@ -1282,7 +1290,9 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
               goto DO_SOCKET_FORWARDING_CHUNK_WRITE;
             } else {
               PMA_EPrintln(
-                  "ERROR: Failed to write content to client (write error)!");
+                  "ERROR: Failed to write content to client (write error; "
+                  "errno {})!",
+                  errno);
               return;
             }
           } else if (write_ret == 0) {
