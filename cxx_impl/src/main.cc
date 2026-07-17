@@ -1123,6 +1123,8 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
           buf = std::move(temp_buf);
           read_size -= skip_before_idx;
           skip_before_idx = 0;
+        } else if (skip_before_idx == read_size) {
+          continue;
         }
         if (!headers.empty()) {
           // writing status and headers
