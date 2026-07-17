@@ -1222,8 +1222,10 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                   "connection)!");
               return;
             } else if (static_cast<size_t>(write_ret) != read_size) {
-              std::memcpy(buf.data(), buf.data() + write_ret,
+              std::array<char, REQ_READ_BUF_SIZE + 2> temp_buf;
+              std::memcpy(temp_buf.data(), buf.data() + write_ret,
                           read_size - static_cast<size_t>(write_ret));
+              buf = std::move(temp_buf);
               read_size -= static_cast<size_t>(write_ret);
               continue;
             } else {
