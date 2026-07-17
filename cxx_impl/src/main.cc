@@ -69,6 +69,18 @@ struct AddrPortInfo {
   uint16_t ticks;
 };
 
+struct ThreadData {
+  AddrPortInfo addr_port_info;
+  const PMA_ARGS::Args *args;
+  const std::optional<PMA_MSQL::Conf> *msql_conf_opt;
+  std::mutex *cached_allowed_mutex;
+  std::unordered_map<std::string,
+                     std::chrono::time_point<std::chrono::steady_clock> >
+      *cached_allowed;
+  int conn_fd;
+  int dest_conn_fd;
+};
+
 AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
   AddrPortInfo info = {std::nullopt,           std::get<0>(addr_port),
                        std::string{},          std::string{},
@@ -749,26 +761,24 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
   content_type.append("Connection: keep-alive");
 }
 
-// Returns fd to destination.
-int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
-                              uint16_t cli_port, std::string &body,
-                              std::string &status, std::string &content_type,
-                              std::bitset<32> &forward_flags,
-                              const PMA_HTTP::Request &req,
-                              const PMA_ARGS::Args &args, int dest_conn_fd) {
+void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
+                               const PMA_HTTP::Request &req) {
+  forward_flags.set(2);
+
   std::string addr;
   uint32_t port = 80;
 
   {
     std::string full_addr;
     if (auto h_iter = req.headers.find("override-dest-url");
-        h_iter != req.headers.end() && args.flags.test(1)) {
+        h_iter != req.headers.end() && data->args->flags.test(1)) {
       full_addr = h_iter->second;
-    } else if (auto iter = args.port_to_dest_urls.find(cli_port);
-               iter != args.port_to_dest_urls.end()) {
+    } else if (auto iter = data->args->port_to_dest_urls.find(
+                   data->addr_port_info.local_port);
+               iter != data->args->port_to_dest_urls.end()) {
       full_addr = iter->second;
     } else {
-      full_addr = args.default_dest_url;
+      full_addr = data->args->default_dest_url;
     }
     std::optional<size_t> http_idx;
     for (size_t idx = 0; idx + 7 < full_addr.size(); ++idx) {
@@ -789,11 +799,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
           if (has_number == 0) {
             PMA_EPrintln(
                 "ERROR: Failed to parse ip addr from url (invalid ipv4)!");
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Invalid "
-                "settings</p></html>";
-            return -1;
+            return;
           }
           ++decimal_count;
           has_number = 0;
@@ -801,11 +807,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
             PMA_EPrintln(
                 "ERROR: Failed to parse ip addr from url (invalid ipv4, more "
                 "than 3 decimals)!");
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Invalid "
-                "settings</p></html>";
-            return -1;
+            return;
           }
         } else if (decimal_count == 3) {
           if (full_addr.at(end_idx) < '0' || full_addr.at(end_idx) > '9') {
@@ -820,11 +822,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
       } else {
         PMA_EPrintln(
             "ERROR: Failed to parse ip addr from url (failed to parse ipv4)!");
-        status = "HTTP/1.0 500 Internal Server Error";
-        body =
-            "<html><p>500 Internal Server Error</p><p>Invalid "
-            "settings</p></html>";
-        return -1;
+        return;
       }
 
       if (end_idx < full_addr.size() && full_addr.at(end_idx) == ':') {
@@ -838,21 +836,13 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
               PMA_EPrintln(
                   "ERROR: Failed to parse ip addr from url (port is too "
                   "large)!");
-              status = "HTTP/1.0 500 Internal Server Error";
-              body =
-                  "<html><p>500 Internal Server Error</p><p>Invalid "
-                  "settings</p></html>";
-              return -1;
+              return;
             }
           } else {
             PMA_EPrintln(
                 "ERROR: Failed to parse ip addr from url (invalid char while "
                 "parsing port)!");
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Invalid "
-                "settings</p></html>";
-            return -1;
+            return;
           }
         }
       }
@@ -860,31 +850,24 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
       PMA_EPrintln(
           "ERROR: Failed to parse ip addr from url (no \"http://\")! (For "
           "https:// and/or ipv6 addresses, use \"--enable-libcurl\")");
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Invalid "
-          "settings</p></html>";
-      return -1;
+      return;
     }
   }
 
   if (addr.empty()) {
     PMA_EPrintln("ERROR: Failed to parse ip addr from url (failed to parse)!");
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Invalid settings</p></html>";
-    return -1;
+    return;
   }
 
   // PMA_EPrintln("DEBUG: Got addr: {}, port {}", addr, port);
 
   PMA_HTTP::ErrorT err = PMA_HTTP::ErrorT::SUCCESS;
   std::string err_msg{};
-  int socket_fd = dest_conn_fd;
+  int socket_fd = data->dest_conn_fd;
   int_fast8_t using_dest_conn_fd = 1;
 
   GenericCleanup<int *> cleanup_socket(&socket_fd, [](int **fd) {
-    if (fd && *fd && **fd && **fd > 0) {
+    if (fd && *fd && **fd > 0) {
       close(**fd);
       **fd = -1;
     }
@@ -907,7 +890,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
     to_write.append("User-Agent: PoorMansAnubis\r\n");
     to_write.append("Connection: keep-alive\r\n");
     to_write.append("x-real-ip: ");
-    to_write.append(cli_addr);
+    to_write.append(data->addr_port_info.client_addr);
     to_write.append("\r\n");
 
     for (auto iter = req.headers.cbegin(); iter != req.headers.cend(); ++iter) {
@@ -915,7 +898,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
         to_write.append("x-forwarded-for: ");
         to_write.append(iter->second);
         to_write.append(", ");
-        to_write.append(imm_cli_addr);
+        to_write.append(data->addr_port_info.immediate_client_addr);
         to_write.append("\r\n");
       } else if (iter->first != "user-agent" && iter->first != "connection" &&
                  iter->first != "host" && iter->first != "accept" &&
@@ -955,14 +938,10 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
           // PMA_EPrintln("DEGUG: write forwarding req: EAGAIN/EWOULDBLOCK");
-          if (++wait_ticks > args.req_timeout_ticks) {
+          if (++wait_ticks > data->args->req_timeout_ticks) {
             PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
                          errno);
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Failed to "
-                "fetch, timed out write</p></html>";
-            return -1;
+            return;
           }
           continue;
         } else if (using_dest_conn_fd) {
@@ -977,21 +956,13 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
           if (err != PMA_HTTP::ErrorT::SUCCESS) {
             PMA_EPrintln("ERROR: Failed to get socket (invalid addr/port?): {}",
                          err_msg);
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Failed to forward "
-                "connect</p></html>";
-            return -1;
+            return;
           }
           continue;
         } else {
           PMA_EPrintln("ERROR: Failed to write to destination, errno {}",
                        errno);
-          status = "HTTP/1.0 500 Internal Server Error";
-          body =
-              "<html><p>500 Internal Server Error</p><p>Failed to "
-              "fetch</p></html>";
-          return -1;
+          return;
         }
       } else {
         remaining -= static_cast<size_t>(write_ret);
@@ -1004,7 +975,7 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
     }
   }
 
-  std::array<char, REQ_READ_BUF_SIZE> buf;
+  std::array<char, REQ_READ_BUF_SIZE + 2> buf;
   int_fast8_t before_first_line = 1;
   int_fast8_t before_content = 1;
   int_fast8_t force_break = 0;
@@ -1014,27 +985,25 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
   size_t skip_before_idx = 0;
   size_t wait_ticks = 0;
   std::optional<size_t> recv_content_size;
+  std::unordered_multimap<std::string, std::string> headers;
+  std::string status;
 
-  body.clear();
-  status.clear();
-  content_type.clear();
+  headers.insert(std::make_pair("transfer-encoding", "chunked"));
 
-  const auto verify_header_fn = [&header_name, &header_value, &content_type,
-                                 &recv_content_size, &forward_flags]() {
+  const auto verify_header_fn = [&header_name, &header_value,
+                                 &recv_content_size, &forward_flags,
+                                 &headers]() {
     std::string header_name_lower = PMA_HELPER::ascii_str_to_lower(header_name);
     if (header_name_lower == "transfer-encoding" &&
         PMA_HELPER::ascii_str_to_lower(
             PMA_HELPER::trim_whitespace(header_value)) == "chunked") {
       forward_flags.set(0);
-    }
-    if (header_name_lower != "content-length" &&
-        header_name_lower != "connection" &&
-        header_name_lower != "accept-ranges") {
+    } else if (header_name_lower != "content-length" &&
+               header_name_lower != "connection" &&
+               header_name_lower != "accept-ranges" &&
+               header_name_lower != "transfer-encoding") {
       // PMA_EPrintln("  DEBUG recv header: {}: {}", header_name, header_value);
-      content_type.append(header_name);
-      content_type.append(": ");
-      content_type.append(header_value);
-      content_type.append("\r\n");
+      headers.insert(std::make_pair(header_name_lower, header_value));
     } else if (header_name_lower == "content-length") {
       try {
         size_t content_size = std::stoull(header_value);
@@ -1049,145 +1018,292 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
     header_value.clear();
   };
 
-  while (wait_ticks < args.req_timeout_ticks && !force_break) {
+  while (wait_ticks < data->args->req_timeout_ticks && !force_break) {
     skip_before_idx = 0;
     if (forward_flags.test(1) && !before_content) {
       break;
     }
-    ssize_t read_ret = read(socket_fd, buf.data(), buf.size());
+    ssize_t read_ret = read(socket_fd, buf.data(), REQ_READ_BUF_SIZE);
     if (read_ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         if (recv_content_size.has_value() && recv_content_size.value() == 0) {
-          break;
+          goto DO_IPV4_FORWARDING_END_OF_STREAM;
         }
         std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
         ++wait_ticks;
         continue;
       } else {
         PMA_EPrintln("ERROR: Failed to read response, errno {}", errno);
-        status = "HTTP/1.0 500 Internal Server Error";
-        body =
-            "<html><p>500 Internal Server Error</p><p>Failed to "
-            "forward</p></html>";
-        return -1;
+        return;
       }
     } else if (read_ret == 0) {
-      if (body.empty() || status.empty() || content_type.empty()) {
-        PMA_EPrintln("ERROR: EOF, no response, errno {}", errno);
-        status = "HTTP/1.0 500 Internal Server Error";
-        body =
-            "<html><p>500 Internal Server Error</p><p>Failed to "
-            "forward</p></html>";
-        return -1;
+      // EOF.
+    DO_IPV4_FORWARDING_END_OF_STREAM:
+      ssize_t write_ret = write(data->conn_fd, "0\r\n\r\n", 5);
+      if (write_ret != 5) {
+        PMA_EPrintln(
+            "ERROR: Failed to write end of chunked encoding to client!");
+        return;
       }
       break;
     } else {
       wait_ticks = 0;
-      const size_t read_size = static_cast<size_t>(read_ret);
-      for (size_t idx = 0; idx < read_size; ++idx) {
-        if (before_first_line) {
-          if (buf.at(idx) != '\r') {
-            status.push_back(buf.at(idx));
-          } else if (read_size > idx + 1 && buf.at(idx + 1) == '\n') {
-            before_first_line = 0;
-            skip_before_idx = idx + 2;
-          } else {
-            PMA_EPrintln("ERROR: Invalid forwarded status line");
-            status = "HTTP/1.0 500 Internal Server Error";
-            body =
-                "<html><p>500 Internal Server Error</p><p>Failed to "
-                "forward</p></html>";
-            return -1;
-          }
+      size_t read_size = static_cast<size_t>(read_ret);
+      if (before_content) {
+        for (size_t idx = 0; idx < read_size; ++idx) {
+          if (before_first_line) {
+            if (buf.at(idx) != '\r') {
+              status.push_back(buf.at(idx));
+            } else if (read_size > idx + 1 && buf.at(idx + 1) == '\n') {
+              before_first_line = 0;
+              skip_before_idx = idx + 2;
+            } else {
+              PMA_EPrintln("ERROR: Invalid forwarded status line");
+              return;
+            }
 
-          if (status.ends_with("304")) {
-            forward_flags.set(1);
-          }
-        } else if (before_content) {
-          if (idx < skip_before_idx) {
+            if (status.ends_with("304")) {
+              forward_flags.set(1);
+            }
+          } else if (idx < skip_before_idx) {
             continue;
           } else {
-            skip_before_idx = 0;
+            if (idx < skip_before_idx) {
+              continue;
+            } else {
+              skip_before_idx = 0;
+            }
+
+            if (buf.at(idx) != '\r') {
+              if (buf.at(idx) == ':' && header_name.empty()) {
+                header_name = std::move(temp);
+                temp.clear();
+              } else {
+                temp.push_back(buf.at(idx));
+              }
+            } else if (read_size > idx + 3 && buf.at(idx + 1) == '\n' &&
+                       buf.at(idx + 2) == '\r' && buf.at(idx + 3) == '\n') {
+              if (!temp.empty() && !header_name.empty() &&
+                  header_value.empty()) {
+                header_value = PMA_HELPER::trim_whitespace(temp);
+                temp.clear();
+                verify_header_fn();
+              } else if (!temp.empty()) {
+                PMA_EPrintln(
+                    "ERROR: Invalid forwarded last header internal state");
+                return;
+              }
+              before_content = 0;
+              skip_before_idx = idx + 4;
+              goto PREP_READ_DATA_AFTER_HEADERS;
+            } else if (read_size > idx + 1 && buf.at(idx + 1) == '\n') {
+              if (!temp.empty() && !header_name.empty() &&
+                  header_value.empty()) {
+                header_value = PMA_HELPER::trim_whitespace(temp);
+                temp.clear();
+                verify_header_fn();
+                skip_before_idx = idx + 2;
+              } else if (!temp.empty()) {
+                PMA_EPrintln("ERROR: Invalid forwarded headers internal state");
+                return;
+              }
+            } else {
+              PMA_EPrintln("ERROR: Invalid forwarded headers");
+              return;
+            }
+          }
+        }  // for idx < read_size
+      } else {
+        // after "before_content"
+      PREP_READ_DATA_AFTER_HEADERS:
+        if (skip_before_idx > 0 && skip_before_idx < read_size) {
+          std::array<char, REQ_READ_BUF_SIZE + 2> temp_buf;
+          std::memcpy(temp_buf.data(), buf.data() + skip_before_idx,
+                      read_size - skip_before_idx);
+          buf = std::move(temp_buf);
+          read_size -= skip_before_idx;
+          skip_before_idx = 0;
+        }
+        if (!headers.empty()) {
+          // writing status and headers
+          status.push_back('\r');
+          status.push_back('\n');
+        DO_SOCKET_FORWARDING_STATUS:
+          ssize_t write_ret =
+              write(data->conn_fd, status.data(), status.size());
+          if (write_ret < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              // Non-blocking IO, client did not accept data
+              std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+              goto DO_SOCKET_FORWARDING_STATUS;
+            } else {
+              PMA_EPrintln(
+                  "ERROR: Failed to write status to client (write error)!");
+              return;
+            }
+          } else if (write_ret == 0) {
+            PMA_EPrintln(
+                "ERROR: Failed to write status to client (client closed "
+                "connection)!");
+            return;
+          } else if (static_cast<size_t>(write_ret) != status.size()) {
+            PMA_EPrintln(
+                "ERROR: Failed to write status to client (partial write)!");
+            return;
+          }
+          for (auto header_iter = headers.cbegin();
+               header_iter != headers.cend(); ++header_iter) {
+            std::string header_entry = std::format(
+                "{}: {}\r\n", header_iter->first, header_iter->second);
+          DO_SOCKET_FORWARDING_HEADER:
+            write_ret =
+                write(data->conn_fd, header_entry.data(), header_entry.size());
+            if (write_ret < 0) {
+              if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // Non-blocking IO, client did not accept data
+                std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+                goto DO_SOCKET_FORWARDING_HEADER;
+              } else {
+                PMA_EPrintln(
+                    "ERROR: Failed to write header to client (write error)!");
+                return;
+              }
+            } else if (write_ret == 0) {
+              PMA_EPrintln(
+                  "ERROR: Failed to write header to client (client closed "
+                  "connection)!");
+              return;
+            } else if (static_cast<size_t>(write_ret) != header_entry.size()) {
+              PMA_EPrintln(
+                  "ERROR: Failed to write header to client (partial write)!");
+              return;
+            }
+          }
+          headers.clear();
+        DO_SOCKET_FORWARDING_AFTER_HEADERS_WRITE:
+          write_ret = write(data->conn_fd, "\r\n", 2);
+          if (write_ret < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              // Non-blocking IO, client did not accept data
+              std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+              goto DO_SOCKET_FORWARDING_AFTER_HEADERS_WRITE;
+            } else {
+              PMA_EPrintln(
+                  "ERROR: Failed to write ending newline after headers (write "
+                  "error)!");
+              return;
+            }
+          } else if (write_ret != 2) {
+            PMA_EPrintln(
+                "ERROR: Failed to write ending newline after headers (partial "
+                "write)!");
+            return;
+          }
+        }
+
+        if (forward_flags.test(0)) {
+          // receiving chunked encoding
+          while (true) {
+            ssize_t write_ret = write(data->conn_fd, buf.data(), read_size);
+            if (write_ret < 0) {
+              if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // Non-blocking IO, client did not accept data
+                std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+                write_ret = 1;
+                continue;
+              } else {
+                PMA_EPrintln(
+                    "ERROR: Failed to write response to client (error)!");
+                return;
+              }
+            } else if (write_ret == 0) {
+              PMA_EPrintln(
+                  "ERROR: Failed to write response to client (client closed "
+                  "connection)!");
+              return;
+            } else if (static_cast<size_t>(write_ret) != read_size) {
+              std::memcpy(buf.data(), buf.data() + write_ret,
+                          read_size - static_cast<size_t>(write_ret));
+              read_size -= static_cast<size_t>(write_ret);
+              continue;
+            } else {
+              break;
+            }
+          }  // while (true), receiving chunked encoding
+        } else {
+          // receiving data without chunked encoding
+          std::array<char, 24> chunk_size_buf;
+          int snprintf_ret =
+              std::snprintf(chunk_size_buf.data(), 24, "%zx\r\n", read_size);
+          if (snprintf_ret <= 0) {
+            PMA_EPrintln("ERROR: Failed to prepare chunk size buf!");
+            return;
+          }
+          // PMA_EPrintln("DEBUG: Writing chunk of size 0x{:x} ({})", read_size,
+          //              read_size);
+        DO_SOCKET_FORWARDING_CHUNK_SIZE_WRITE:
+          ssize_t write_ret = write(data->conn_fd, chunk_size_buf.data(),
+                                    static_cast<size_t>(snprintf_ret));
+          if (write_ret < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              // Non-blocking IO, client did not accept data
+              std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+              goto DO_SOCKET_FORWARDING_CHUNK_SIZE_WRITE;
+            } else {
+              PMA_EPrintln(
+                  "ERROR: Failed to write chunk size to client (write "
+                  "error)!");
+              return;
+            }
+          } else if (write_ret == 0) {
+            PMA_EPrintln(
+                "ERROR: Failed to write chunk size to client (client closed "
+                "connection)!");
+            return;
+          } else if (write_ret != snprintf_ret) {
+            PMA_EPrintln(
+                "ERROR: Failed to write chunk size to client (partial "
+                "write)!");
+            return;
           }
 
-          if (buf.at(idx) != '\r') {
-            if (buf.at(idx) == ':' && header_name.empty()) {
-              header_name = std::move(temp);
-              temp.clear();
+          buf.at(read_size++) = '\r';
+          buf.at(read_size++) = '\n';
+        DO_SOCKET_FORWARDING_CHUNK_WRITE:
+          write_ret = write(data->conn_fd, buf.data(), read_size);
+          if (write_ret < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              // Non-blocking IO, client did not accept data
+              std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+              goto DO_SOCKET_FORWARDING_CHUNK_WRITE;
             } else {
-              temp.push_back(buf.at(idx));
-            }
-          } else if (read_size > idx + 3 && buf.at(idx + 1) == '\n' &&
-                     buf.at(idx + 2) == '\r' && buf.at(idx + 3) == '\n') {
-            if (!temp.empty() && !header_name.empty() && header_value.empty()) {
-              header_value = PMA_HELPER::trim_whitespace(temp);
-              temp.clear();
-              verify_header_fn();
-            } else if (!temp.empty()) {
               PMA_EPrintln(
-                  "ERROR: Invalid forwarded last header internal state");
-              status = "HTTP/1.0 500 Internal Server Error";
-              content_type.clear();
-              body =
-                  "<html><p>500 Internal Server Error</p><p>Failed to "
-                  "forward</p></html>";
-              return -1;
+                  "ERROR: Failed to write content to client (write error)!");
+              return;
             }
-            before_content = 0;
-            skip_before_idx = idx + 4;
-          } else if (read_size > idx + 1 && buf.at(idx + 1) == '\n') {
-            if (!temp.empty() && !header_name.empty() && header_value.empty()) {
-              header_value = PMA_HELPER::trim_whitespace(temp);
-              temp.clear();
-              verify_header_fn();
-              skip_before_idx = idx + 2;
-            } else if (!temp.empty()) {
-              PMA_EPrintln("ERROR: Invalid forwarded headers internal state");
-              status = "HTTP/1.0 500 Internal Server Error";
-              content_type.clear();
-              body =
-                  "<html><p>500 Internal Server Error</p><p>Failed to "
-                  "forward</p></html>";
-              return -1;
-            }
-          } else {
-            PMA_EPrintln("ERROR: Invalid forwarded headers");
-            status = "HTTP/1.0 500 Internal Server Error";
-            content_type.clear();
-            body =
-                "<html><p>500 Internal Server Error</p><p>Failed to "
-                "forward</p></html>";
-            return -1;
+          } else if (write_ret == 0) {
+            PMA_EPrintln(
+                "ERROR: Failed to write content to client (client closed "
+                "connection)!");
+            return;
+          } else if (static_cast<size_t>(write_ret) != read_size) {
+            PMA_EPrintln(
+                "ERROR: Failed to write content to client (partial write)!");
+            return;
           }
-        } else if (idx < skip_before_idx) {
-          continue;
-        } else {
-          // body.push_back(buf.at(idx));
-          body.append(buf.data() + idx, read_size - idx);
+
           if (recv_content_size.has_value()) {
-            if (recv_content_size.value() < read_size - idx) {
-              PMA_EPrintln(
-                  "ERROR: Invalid state handling content size: size is {}, "
-                  "value is {}",
-                  recv_content_size.value(), read_size - idx);
-              status = "HTTP/1.0 500 Internal Server Error";
-              content_type.clear();
-              body =
-                  "<html><p>500 Internal Server Error</p><p>Failed to "
-                  "forward</p></html>";
-              return -1;
+            if (recv_content_size.value() >= (read_size - 2)) {
+              recv_content_size.value() -= (read_size - 2);
             } else {
-              recv_content_size.value() -= read_size - idx;
-              // PMA_EPrintln("DEBUG: recv_content_size now {}",
-              //              recv_content_size.value());
+              PMA_EPrintln("ERROR: Internal error handling recv_content_size!");
+              return;
             }
-          } else if (forward_flags.test(0) && body.ends_with("0\r\n\r\n")) {
-            force_break = 1;
-            break;
+            // PMA_EPrintln("DEBUG: recv_content_size: {}",
+            // recv_content_size.value());
           }
-          break;
         }
-      }  // for idx < read_size
+      }
     }  // read_ret == -1  else
   }  // while
 
@@ -1195,35 +1311,9 @@ int do_ipv4_socket_forwarding(std::string imm_cli_addr, std::string cli_addr,
   //   PMA_EPrintln("TIMED OUT read from dest for url {}", req.full_url);
   // }
 
-  if (status.empty()) {
-    status = "HTTP/1.0 500 Internal Server Error";
-    content_type = "Connection: close";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to "
-        "forward, no response</p></html>";
-  } else {
-    // Append "Connection: keep-alive" without ending "\r\n" as it is added
-    // later.
-    content_type.append("Connection: keep-alive");
-  }
-
-  dest_conn_fd = socket_fd;
+  data->dest_conn_fd = socket_fd;
   socket_fd = -1;
-
-  return dest_conn_fd;
 }
-
-struct ThreadData {
-  AddrPortInfo addr_port_info;
-  const PMA_ARGS::Args *args;
-  const std::optional<PMA_MSQL::Conf> *msql_conf_opt;
-  std::mutex *cached_allowed_mutex;
-  std::unordered_map<std::string,
-                     std::chrono::time_point<std::chrono::steady_clock> >
-      *cached_allowed;
-  int conn_fd;
-  int dest_conn_fd;
-};
 
 void thread_handle_connection_fn(void *ud) {
   ThreadData *data = reinterpret_cast<ThreadData *>(ud);
@@ -1327,8 +1417,9 @@ void thread_handle_connection_fn(void *ud) {
               PMA_SQL::init_sqlite(data->args->sqlite_path);
         }
 
-        // 0 - content-type: chunked
+        // 0 - remote content-type: chunked
         // 1 - 304 response
+        // 2 - using forwarding
         std::bitset<32> forward_flags;
 
         if (err != PMA_SQL::ErrorT::SUCCESS) {
@@ -1583,14 +1674,9 @@ void thread_handle_connection_fn(void *ud) {
                                      status, content_type, req, *data->args,
                                      forward_flags);
                 } else {
-                  data->dest_conn_fd = do_ipv4_socket_forwarding(
-                      data->addr_port_info.immediate_client_addr,
-                      data->addr_port_info.client_addr,
-                      data->addr_port_info.local_port, body, status,
-                      content_type, forward_flags, req, *data->args,
-                      data->dest_conn_fd);
+                  do_ipv4_socket_forwarding(data, forward_flags, req);
                 }
-                goto PMA_RESPONSE_SEND_LOCATION;
+                goto PMA_RESPONSE_AFTER_SENDING;
               }
             }
           }
@@ -1633,13 +1719,9 @@ void thread_handle_connection_fn(void *ud) {
                                    status, content_type, req, *data->args,
                                    forward_flags);
               } else {
-                data->dest_conn_fd = do_ipv4_socket_forwarding(
-                    data->addr_port_info.immediate_client_addr,
-                    data->addr_port_info.client_addr,
-                    data->addr_port_info.local_port, body, status, content_type,
-                    forward_flags, req, *data->args, data->dest_conn_fd);
+                do_ipv4_socket_forwarding(data, forward_flags, req);
               }
-              goto PMA_RESPONSE_SEND_LOCATION;
+              goto PMA_RESPONSE_AFTER_SENDING;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
               const auto [err, id] = PMA_MSQL::init_id_to_port(
                   msql_conn_opt.value(), data->addr_port_info.local_port,
@@ -1698,14 +1780,9 @@ void thread_handle_connection_fn(void *ud) {
                                      status, content_type, req, *data->args,
                                      forward_flags);
                 } else {
-                  data->dest_conn_fd = do_ipv4_socket_forwarding(
-                      data->addr_port_info.immediate_client_addr,
-                      data->addr_port_info.client_addr,
-                      data->addr_port_info.local_port, body, status,
-                      content_type, forward_flags, req, *data->args,
-                      data->dest_conn_fd);
+                  do_ipv4_socket_forwarding(data, forward_flags, req);
                 }
-                goto PMA_RESPONSE_SEND_LOCATION;
+                goto PMA_RESPONSE_AFTER_SENDING;
               }
             }
           }
@@ -1740,48 +1817,46 @@ void thread_handle_connection_fn(void *ud) {
                                  data->addr_port_info.local_port, body, status,
                                  content_type, req, *data->args, forward_flags);
             } else {
-              data->dest_conn_fd = do_ipv4_socket_forwarding(
-                  data->addr_port_info.immediate_client_addr,
-                  data->addr_port_info.client_addr,
-                  data->addr_port_info.local_port, body, status, content_type,
-                  forward_flags, req, *data->args, data->dest_conn_fd);
+              do_ipv4_socket_forwarding(data, forward_flags, req);
             }
-            goto PMA_RESPONSE_SEND_LOCATION;
+            goto PMA_RESPONSE_AFTER_SENDING;
           }
         }
 
-      PMA_RESPONSE_SEND_LOCATION:
-        std::string full;
-        if (forward_flags.test(0) && !data->args->flags.test(5)) {
-          std::string ending;
-          if (!body.ends_with("0\r\n\r\n")) {
-            ending = "0\r\n\r\n";
-          }
-          full = std::format("{}\r\n{}\r\n\r\n{}{}", status, content_type, body,
-                             ending);
-        } else {
-          full = std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}", status,
-                             content_type, body.size(), body);
-        }
-        ssize_t write_ret = write(data->conn_fd, full.data(), full.size());
-        if (write_ret != static_cast<ssize_t>(full.size())) {
-          if (write_ret > 0) {
-            data->addr_port_info.remaining_buffer =
-                full.substr(static_cast<size_t>(write_ret));
+      PMA_RESPONSE_AFTER_SENDING:
+        if (!forward_flags.test(2)) {
+          std::string full;
+          if (forward_flags.test(0) && !data->args->flags.test(5)) {
+            std::string ending;
+            if (!body.ends_with("0\r\n\r\n")) {
+              ending = "0\r\n\r\n";
+            }
+            full = std::format("{}\r\n{}\r\n\r\n{}{}", status, content_type,
+                               body, ending);
           } else {
-            PMA_EPrintln(
-                "ERROR: Failed to send response to client {} (write_ret {})!",
-                data->addr_port_info.client_addr, write_ret);
-            break;
+            full = std::format("{}\r\n{}\r\nContent-Length: {}\r\n\r\n{}",
+                               status, content_type, body.size(), body);
           }
-        } else if (write_ret == -1) {
-          PMA_EPrintln("ERROR: Failed to write to client {}, errno {}!",
-                       data->addr_port_info.client_addr, errno);
-          break;
-        } else {
-          // Success
-          // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
-          //             data->dest_conn_fd, req.full_url);
+          ssize_t write_ret = write(data->conn_fd, full.data(), full.size());
+          if (write_ret != static_cast<ssize_t>(full.size())) {
+            if (write_ret > 0) {
+              data->addr_port_info.remaining_buffer =
+                  full.substr(static_cast<size_t>(write_ret));
+            } else {
+              PMA_EPrintln(
+                  "ERROR: Failed to send response to client {} (write_ret {})!",
+                  data->addr_port_info.client_addr, write_ret);
+              break;
+            }
+          } else if (write_ret == -1) {
+            PMA_EPrintln("ERROR: Failed to write to client {}, errno {}!",
+                         data->addr_port_info.client_addr, errno);
+            break;
+          } else {
+            // Success
+            // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
+            //             data->dest_conn_fd, req.full_url);
+          }
         }
       } else {
         PMA_EPrintln("ERROR {}: {}", PMA_HTTP::error_t_to_str(req.error_enum),
