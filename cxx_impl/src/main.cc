@@ -1309,7 +1309,10 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
             if (recv_content_size.value() >= (read_size - 2)) {
               recv_content_size.value() -= (read_size - 2);
             } else {
-              PMA_EPrintln("ERROR: Internal error handling recv_content_size!");
+              PMA_EPrintln(
+                  "ERROR: Internal error handling recv_content_size (recv_size "
+                  "is {}, read_size is {})!",
+                  recv_content_size.value(), read_size);
               return;
             }
             // PMA_EPrintln("DEBUG: recv_content_size: {}",
