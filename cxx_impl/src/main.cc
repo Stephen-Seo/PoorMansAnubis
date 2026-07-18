@@ -1401,10 +1401,11 @@ void thread_handle_connection_fn(void *ud) {
         // Nonblocking-IO indicating no bytes to read
         continue;
       } else {
-        PMA_Println("Failed to read from client {} (errno {})",
-                    data->addr_port_info.client_addr, errno);
+        if (errno != ECONNRESET) {
+          PMA_Println("Failed to read from client {} (errno {})",
+                      data->addr_port_info.client_addr, errno);
+        }
         break;
-        continue;
       }
     }
     if (read_ret > 0) {
