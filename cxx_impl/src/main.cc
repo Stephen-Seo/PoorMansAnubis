@@ -57,6 +57,8 @@ void receive_signal(int sig) {
   interrupt_received = 1;
 }
 
+void ignore_sigpipe(__attribute__((unused)) int sig) {}
+
 struct AddrPortInfo {
   std::optional<std::string> remaining_buffer;
   std::string host_addr;
@@ -2031,6 +2033,8 @@ int main(int argc, char **argv) {
   PMA_HELPER::set_signal_handler(SIGINT, receive_signal);
   PMA_HELPER::set_signal_handler(SIGHUP, receive_signal);
   PMA_HELPER::set_signal_handler(SIGTERM, receive_signal);
+
+  PMA_HELPER::set_signal_handler(SIGPIPE, ignore_sigpipe);
 
   struct sockaddr_in sain4;
   std::memset(&sain4, 0, sizeof(struct sockaddr_in));
