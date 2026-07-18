@@ -975,6 +975,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
     }
   }
 
+  // Must be REQ_READ_BUF_SIZE + 2, because up to 2 bytes are appended later.
   std::array<char, REQ_READ_BUF_SIZE + 2> buf;
   int_fast8_t before_first_line = 1;
   int_fast8_t before_content = 1;
@@ -1026,6 +1027,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
     if (forward_flags.test(1) && !before_content) {
       goto DO_IPV4_FORWARDING_END_OF_STREAM;
     }
+    // Must be REQ_READ_BUF_SIZE not buf.size(), because buf is actually larger.
     read_ret = read(socket_fd, buf.data(), REQ_READ_BUF_SIZE);
     if (read_ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
