@@ -1022,10 +1022,11 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
   // PMA_EPrintln("DEBUG: start response loop");
   while (wait_ticks < data->args->req_timeout_ticks && !force_break) {
     skip_before_idx = 0;
+    ssize_t read_ret = -1;
     if (forward_flags.test(1) && !before_content) {
-      break;
+      goto DO_IPV4_FORWARDING_END_OF_STREAM;
     }
-    ssize_t read_ret = read(socket_fd, buf.data(), REQ_READ_BUF_SIZE);
+    read_ret = read(socket_fd, buf.data(), REQ_READ_BUF_SIZE);
     if (read_ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         if (recv_content_size.has_value() && recv_content_size.value() == 0) {
@@ -1219,11 +1220,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
         }
 
         if (read_size == 0) {
-          if (forward_flags.test(1)) {
-            goto DO_IPV4_FORWARDING_END_OF_STREAM;
-          } else {
-            continue;
-          }
+          continue;
         } else if (forward_flags.test(0)) {
           // receiving chunked encoding
           while (true) {
