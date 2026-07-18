@@ -1225,37 +1225,31 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
           continue;
         } else if (forward_flags.test(0)) {
           // receiving chunked encoding
-          while (true) {
-            ssize_t write_ret = write(data->conn_fd, buf.data(), read_size);
-            if (write_ret < 0) {
-              if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // Non-blocking IO, client did not accept data
-                std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
-                write_ret = 1;
-                continue;
-              } else {
-                PMA_EPrintln(
-                    "ERROR: Failed to write response to client (write error; "
-                    "errno {})!",
-                    errno);
-                return;
-              }
-            } else if (write_ret == 0) {
-              PMA_EPrintln(
-                  "ERROR: Failed to write response to client (client closed "
-                  "connection)!");
-              return;
-            } else if (static_cast<size_t>(write_ret) != read_size) {
-              std::array<char, REQ_READ_BUF_SIZE + 2> temp_buf;
-              std::memcpy(temp_buf.data(), buf.data() + write_ret,
-                          read_size - static_cast<size_t>(write_ret));
-              buf = std::move(temp_buf);
-              read_size -= static_cast<size_t>(write_ret);
-              continue;
+          size_t offset = 0;
+        DO_SOCKET_FORWARDING_FORWARD_CHUNKED_ENCODED:
+          ssize_t write_ret =
+              write(data->conn_fd, buf.data() + offset, read_size - offset);
+          if (write_ret < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              // Non-blocking IO, client did not accept data
+              std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+              goto DO_SOCKET_FORWARDING_FORWARD_CHUNKED_ENCODED;
             } else {
-              break;
+              PMA_EPrintln(
+                  "ERROR: Failed to write response to client (write error; "
+                  "errno {})!",
+                  errno);
+              return;
             }
-          }  // while (true), receiving chunked encoding
+          } else if (write_ret == 0) {
+            PMA_EPrintln(
+                "ERROR: Failed to write response to client (client closed "
+                "connection)!");
+            return;
+          } else if (static_cast<size_t>(write_ret) != read_size - offset) {
+            offset += static_cast<size_t>(write_ret);
+            goto DO_SOCKET_FORWARDING_FORWARD_CHUNKED_ENCODED;
+          }
         } else {
           // receiving data without chunked encoding
           std::array<char, 24> chunk_size_buf;
