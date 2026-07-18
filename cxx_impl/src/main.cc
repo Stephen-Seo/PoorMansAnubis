@@ -997,6 +997,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
     if (header_name_lower == "transfer-encoding" &&
         PMA_HELPER::ascii_str_to_lower(
             PMA_HELPER::trim_whitespace(header_value)) == "chunked") {
+      // PMA_EPrintln("DEBUG: remote is using chunked encoding");
       forward_flags.set(0);
     } else if (header_name_lower != "content-length" &&
                header_name_lower != "connection" &&
@@ -1018,6 +1019,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
     header_value.clear();
   };
 
+  // PMA_EPrintln("DEBUG: start response loop");
   while (wait_ticks < data->args->req_timeout_ticks && !force_break) {
     skip_before_idx = 0;
     if (forward_flags.test(1) && !before_content) {
@@ -1027,6 +1029,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
     if (read_ret == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         if (recv_content_size.has_value() && recv_content_size.value() == 0) {
+          // PMA_EPrintln("DEBUG: at non-blocking IO");
           goto DO_IPV4_FORWARDING_END_OF_STREAM;
         }
         std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
@@ -1039,6 +1042,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
     } else if (read_ret == 0) {
       // EOF.
     DO_IPV4_FORWARDING_END_OF_STREAM:
+      // PMA_EPrintln("DEBUG: end");
       ssize_t write_ret = write(data->conn_fd, "0\r\n\r\n", 5);
       if (write_ret != 5) {
         PMA_EPrintln(
@@ -1050,6 +1054,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
       wait_ticks = 0;
       size_t read_size = static_cast<size_t>(read_ret);
       if (before_content) {
+        // PMA_EPrintln("DEBUG: Before content {}", read_size);
         for (size_t idx = 0; idx < read_size; ++idx) {
           if (before_first_line) {
             if (buf.at(idx) != '\r') {
@@ -1063,6 +1068,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
             }
 
             if (status.ends_with("304")) {
+              // PMA_EPrintln("DEBUG: 304");
               forward_flags.set(1);
             }
           } else if (idx < skip_before_idx) {
@@ -1093,6 +1099,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                     "ERROR: Invalid forwarded last header internal state");
                 return;
               }
+              // PMA_EPrintln("DEBUG: now not before_content");
               before_content = 0;
               skip_before_idx = idx + 4;
               goto PREP_READ_DATA_AFTER_HEADERS;
@@ -1116,6 +1123,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
       } else {
         // after "before_content"
       PREP_READ_DATA_AFTER_HEADERS:
+        // PMA_EPrintln("DEBUG: After before content {}", read_size);
         if (skip_before_idx > 0 && skip_before_idx < read_size) {
           std::array<char, REQ_READ_BUF_SIZE + 2> temp_buf;
           std::memcpy(temp_buf.data(), buf.data() + skip_before_idx,
@@ -1124,10 +1132,12 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
           read_size -= skip_before_idx;
           skip_before_idx = 0;
         } else if (skip_before_idx == read_size) {
-          continue;
+          // PMA_EPrintln("DEBUG: skip_before_idx continue");
+          read_size = 0;
         }
         if (!headers.empty()) {
           // writing status and headers
+          // PMA_EPrintln("DEBUG: Writing headers");
           status.push_back('\r');
           status.push_back('\n');
         DO_SOCKET_FORWARDING_STATUS:
@@ -1208,7 +1218,13 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
           }
         }
 
-        if (forward_flags.test(0)) {
+        if (read_size == 0) {
+          if (forward_flags.test(1)) {
+            goto DO_IPV4_FORWARDING_END_OF_STREAM;
+          } else {
+            continue;
+          }
+        } else if (forward_flags.test(0)) {
           // receiving chunked encoding
           while (true) {
             ssize_t write_ret = write(data->conn_fd, buf.data(), read_size);
