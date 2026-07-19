@@ -1130,7 +1130,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
       PREP_READ_DATA_AFTER_HEADERS:
         // PMA_EPrintln("DEBUG: After before content {}", read_size);
         if (skip_before_idx > 0 && skip_before_idx < read_size) {
-          std::array<char, REQ_READ_BUF_SIZE + 2> temp_buf;
+          decltype(buf) temp_buf;
           std::memcpy(temp_buf.data(), buf.data() + skip_before_idx,
                       read_size - skip_before_idx);
           buf = std::move(temp_buf);
