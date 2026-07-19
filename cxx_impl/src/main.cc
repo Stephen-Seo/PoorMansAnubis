@@ -1145,9 +1145,10 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
           // PMA_EPrintln("DEBUG: Writing headers");
           status.push_back('\r');
           status.push_back('\n');
+          size_t offset = 0;
         DO_SOCKET_FORWARDING_STATUS:
-          ssize_t write_ret =
-              write(data->conn_fd, status.data(), status.size());
+          ssize_t write_ret = write(data->conn_fd, status.data() + offset,
+                                    status.size() - offset);
           if (write_ret < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
               // Non-blocking IO, client did not accept data
@@ -1165,18 +1166,18 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                 "ERROR: Failed to write status to client (client closed "
                 "connection)!");
             return;
-          } else if (static_cast<size_t>(write_ret) != status.size()) {
-            PMA_EPrintln(
-                "ERROR: Failed to write status to client (partial write)!");
-            return;
+          } else if (static_cast<size_t>(write_ret) != status.size() - offset) {
+            offset += static_cast<size_t>(write_ret);
+            goto DO_SOCKET_FORWARDING_STATUS;
           }
           for (auto header_iter = headers.cbegin();
                header_iter != headers.cend(); ++header_iter) {
             std::string header_entry = std::format(
                 "{}: {}\r\n", header_iter->first, header_iter->second);
+            offset = 0;
           DO_SOCKET_FORWARDING_HEADER:
-            write_ret =
-                write(data->conn_fd, header_entry.data(), header_entry.size());
+            write_ret = write(data->conn_fd, header_entry.data() + offset,
+                              header_entry.size() - offset);
             if (write_ret < 0) {
               if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // Non-blocking IO, client did not accept data
@@ -1194,15 +1195,16 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                   "ERROR: Failed to write header to client (client closed "
                   "connection)!");
               return;
-            } else if (static_cast<size_t>(write_ret) != header_entry.size()) {
-              PMA_EPrintln(
-                  "ERROR: Failed to write header to client (partial write)!");
-              return;
+            } else if (static_cast<size_t>(write_ret) !=
+                       header_entry.size() - offset) {
+              offset += static_cast<size_t>(write_ret);
+              goto DO_SOCKET_FORWARDING_HEADER;
             }
           }
           headers.clear();
+          offset = 0;
         DO_SOCKET_FORWARDING_AFTER_HEADERS_WRITE:
-          write_ret = write(data->conn_fd, "\r\n", 2);
+          write_ret = write(data->conn_fd, "\r\n" + offset, 2 - offset);
           if (write_ret < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
               // Non-blocking IO, client did not accept data
@@ -1215,11 +1217,14 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                   errno);
               return;
             }
-          } else if (write_ret != 2) {
+          } else if (write_ret == 0) {
             PMA_EPrintln(
-                "ERROR: Failed to write ending newline after headers (partial "
-                "write)!");
+                "ERROR: Failed to write header end to client (client closed "
+                "connection)!");
             return;
+          } else if (static_cast<size_t>(write_ret) != 2 - offset) {
+            offset += static_cast<size_t>(write_ret);
+            goto DO_SOCKET_FORWARDING_AFTER_HEADERS_WRITE;
           }
         }
 
@@ -1237,10 +1242,12 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
               std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
               goto DO_SOCKET_FORWARDING_FORWARD_CHUNKED_ENCODED;
             } else {
-              PMA_EPrintln(
-                  "ERROR: Failed to write response to client (write error; "
-                  "errno {})!",
-                  errno);
+              if (errno != EPIPE) {
+                PMA_EPrintln(
+                    "ERROR: Failed to write response to client (write error; "
+                    "errno {})!",
+                    errno);
+              }
               return;
             }
           } else if (write_ret == 0) {
@@ -1303,10 +1310,12 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
               std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
               goto DO_SOCKET_FORWARDING_CHUNK_WRITE;
             } else {
-              PMA_EPrintln(
-                  "ERROR: Failed to write content to client (write error; "
-                  "errno {})!",
-                  errno);
+              if (errno != EPIPE) {
+                PMA_EPrintln(
+                    "ERROR: Failed to write content to client (write error; "
+                    "errno {})!",
+                    errno);
+              }
               return;
             }
           } else if (write_ret == 0) {
