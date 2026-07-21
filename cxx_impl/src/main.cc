@@ -110,11 +110,6 @@ std::vector<uint8_t> internal_blake3_hash_fn(void *data, size_t size) {
   return hash;
 }
 
-size_t pma_curl_recvheader_callback(char *buf, size_t size, size_t nitems,
-                                    void *ud) {
-  return 0;
-}
-
 size_t pma_curl_data_callback(char *buf, size_t size, size_t nmemb, void *ud) {
   ThreadData *data = reinterpret_cast<ThreadData *>(ud);
 
