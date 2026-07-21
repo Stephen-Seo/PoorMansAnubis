@@ -110,41 +110,175 @@ std::vector<uint8_t> internal_blake3_hash_fn(void *data, size_t size) {
   return hash;
 }
 
-size_t pma_curl_data_callback(void *buf, size_t size, size_t nmemb, void *ud) {
-  std::string *res = reinterpret_cast<std::string *>(ud);
-  res->append(reinterpret_cast<char *>(buf), size * nmemb);
+size_t pma_curl_recvheader_callback(char *buf, size_t size, size_t nitems,
+                                    void *ud) {
+  return 0;
+}
+
+size_t pma_curl_data_callback(char *buf, size_t size, size_t nmemb, void *ud) {
+  ThreadData *data = reinterpret_cast<ThreadData *>(ud);
+
+  size_t bytes = size * nmemb;
+
+  std::array<char, 32> count_buf;
+  int ret = std::snprintf(count_buf.data(), count_buf.size(), "%zx\r\n", bytes);
+  if (ret < 0) {
+    PMA_EPrintln("ERROR: Failed to set up count_buf during CURL write fn!");
+    return 0;
+  }
+  size_t offset = 0;
+CURL_DATA_CALLBACK_WRITE_FUNCTION_COUNT:
+  ssize_t write_ret = write(data->conn_fd, count_buf.data() + offset,
+                            static_cast<size_t>(ret) - offset);
+  if (write_ret < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      // Non-blocking IO, destination unable to write to temporarily
+      std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+      goto CURL_DATA_CALLBACK_WRITE_FUNCTION_COUNT;
+    } else {
+      if (errno != EPIPE) {
+        PMA_EPrintln(
+            "ERROR: Failed to write chunked-encoding count during CURL write "
+            "fn (errno {})!",
+            errno);
+      }
+      return 0;
+    }
+  } else if (write_ret == 0) {
+    PMA_EPrintln(
+        "ERROR: Failed to write chunked-encoding count during CURL write fn "
+        "(EOF)!");
+    return 0;
+  } else if (static_cast<size_t>(write_ret) !=
+             static_cast<size_t>(ret) - offset) {
+    offset += static_cast<size_t>(write_ret);
+    goto CURL_DATA_CALLBACK_WRITE_FUNCTION_COUNT;
+  }
+
+  offset = 0;
+CURL_DATA_CALLBACK_WRITE_FUNCTION_DATA:
+  write_ret = write(data->conn_fd, buf + offset, bytes - offset);
+  if (write_ret < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      // Non-blocking IO, destination unable to write to temporarily
+      std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+      goto CURL_DATA_CALLBACK_WRITE_FUNCTION_DATA;
+    } else {
+      if (errno != EPIPE) {
+        PMA_EPrintln(
+            "ERROR: Failed to write chunked-encoding data during CURL write fn "
+            "(errno {})!",
+            errno);
+      }
+      return 0;
+    }
+  } else if (write_ret == 0) {
+    PMA_EPrintln(
+        "ERROR: Failed to write chunked-encoding data during CURL write fn "
+        "(EOF)!");
+    return 0;
+  } else if (static_cast<size_t>(write_ret) !=
+             static_cast<size_t>(bytes) - offset) {
+    offset += static_cast<size_t>(write_ret);
+    goto CURL_DATA_CALLBACK_WRITE_FUNCTION_DATA;
+  }
+
+  offset = 0;
+CURL_DATA_CALLBACK_WRITE_FUNCTION_DATA_END:
+  write_ret =
+      write(data->conn_fd, reinterpret_cast<const char *>("\r\n") + offset,
+            2 - offset);
+  if (write_ret < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      // Non-blocking IO, destination unable to write to temporarily
+      std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+      goto CURL_DATA_CALLBACK_WRITE_FUNCTION_DATA_END;
+    } else {
+      PMA_EPrintln(
+          "ERROR: Failed to write chunked-encoding data during CURL write fn "
+          "(errno {})!",
+          errno);
+      return 0;
+    }
+  } else if (write_ret == 0) {
+    PMA_EPrintln(
+        "ERROR: Failed to write chunked-encoding data during CURL write fn "
+        "(EOF)!");
+    return 0;
+  } else if (static_cast<size_t>(write_ret) != 2 - offset) {
+    offset += static_cast<size_t>(write_ret);
+    goto CURL_DATA_CALLBACK_WRITE_FUNCTION_DATA_END;
+  }
+
   return size * nmemb;
 }
 
-size_t pma_curl_header_callback(void *buf, size_t size, size_t nitems,
+size_t pma_curl_header_callback(char *buf, size_t size, size_t nitems,
                                 void *ud) {
-  std::unordered_map<std::string, std::string> *header_map =
-      reinterpret_cast<std::unordered_map<std::string, std::string> *>(ud);
-  const char *char_buf = reinterpret_cast<char *>(buf);
-  std::string key, val;
-  bool get_key = true;
-  bool get_val = false;
-  for (size_t idx = 0; idx < size * nitems; ++idx) {
-    if (get_key) {
-      if (char_buf[idx] == ':') {
-        get_key = false;
-        get_val = true;
+  ThreadData *data = reinterpret_cast<ThreadData *>(ud);
+
+  if (buf[0] == '\r' && buf[1] == '\n') {
+    // End of headers.
+    const std::string header("transfer-encoding: chunked\r\n\r\n");
+
+    size_t offset = 0;
+  CURL_HEADER_CALLBACK_WRITE_TRANSFER_ENCODING:
+    ssize_t write_ret =
+        write(data->conn_fd, header.data() + offset, header.size() - offset);
+    if (write_ret < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        // Non-blocking IO, client did not accept write data.
+        std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+        goto CURL_HEADER_CALLBACK_WRITE_TRANSFER_ENCODING;
       } else {
-        key.push_back(char_buf[idx]);
+        PMA_EPrintln("ERROR: Failed to write last header to client (errno {})!",
+                     errno);
+        return 0;
       }
-    } else if (get_val) {
-      if (char_buf[idx] == ' ' || char_buf[idx] == '\n' ||
-          char_buf[idx] == '\r') {
-        continue;
-      } else {
-        val.push_back(char_buf[idx]);
-      }
+    } else if (write_ret == 0) {
+      PMA_EPrintln("ERROR: Failed to write last header to client (EOF)!");
+      return 0;
+    } else if (static_cast<size_t>(write_ret) != header.size() - offset) {
+      offset += static_cast<size_t>(write_ret);
+      goto CURL_HEADER_CALLBACK_WRITE_TRANSFER_ENCODING;
     }
+
+    return size * nitems;
   }
 
-  if (!key.empty() && !val.empty()) {
-    header_map->emplace(
-        PMA_HELPER::trim_whitespace(PMA_HELPER::ascii_str_to_lower(key)), val);
+  size_t bytes = size * nitems;
+
+  std::string buf_str(buf, size * nitems);
+  buf_str =
+      PMA_HELPER::ascii_str_to_lower(PMA_HELPER::trim_whitespace(buf_str));
+  if (buf_str.starts_with("content-length") ||
+      buf_str.starts_with("connection") ||
+      buf_str.starts_with("accept-ranges") ||
+      buf_str.starts_with("transfer-encoding")) {
+    return bytes;
+  }
+
+  size_t offset = 0;
+CURL_HEADER_CALLBACK_WRITE_HEADER_LINE:
+  ssize_t write_ret = write(data->conn_fd, buf + offset, bytes - offset);
+  if (write_ret < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      // Non-blocking IO, client did not accept written data
+      std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+      goto CURL_HEADER_CALLBACK_WRITE_HEADER_LINE;
+    } else {
+      PMA_EPrintln(
+          "ERROR: Failed to write header line to client (errno {}): {:.{}s}",
+          errno, buf, bytes);
+      return 0;
+    }
+  } else if (write_ret == 0) {
+    PMA_EPrintln("ERROR: Failed to write header line to client (EOF): {:.{}s}",
+                 buf, bytes);
+    return 0;
+  } else if (static_cast<size_t>(write_ret) != bytes - offset) {
+    offset += static_cast<size_t>(write_ret);
+    goto CURL_HEADER_CALLBACK_WRITE_HEADER_LINE;
   }
 
   return size * nitems;
@@ -163,12 +297,10 @@ size_t pma_curl_body_send_callback(char *buf, size_t size, size_t nitems,
   return min;
 }
 
-void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
-                        uint16_t cli_port, std::string &body,
-                        std::string &status, std::string &content_type,
-                        const PMA_HTTP::Request &req,
-                        const PMA_ARGS::Args &args,
+void do_curl_forwarding(ThreadData *data, const PMA_HTTP::Request &req,
                         std::bitset<32> &forward_flags) {
+  forward_flags.set(2);
+
   CURLcode pma_curl_ret;
   CURL *curl_handle = curl_easy_init();
   GenericCleanup<CURL *> pma_curl_cleanup(
@@ -180,11 +312,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     PMA_EPrintln(
         "ERROR: Failed to set curl verbose (client {}, port "
         "{})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "curl verbose</p></html>";
+        data->addr_port_info.client_addr, data->addr_port_info.local_port);
     return;
   }
 #endif
@@ -195,32 +323,24 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     PMA_EPrintln(
         "ERROR: Failed to set curl NOSIGNAL (client {}, port "
         "{})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "curl NOSIGNAL</p></html>";
+        data->addr_port_info.client_addr, data->addr_port_info.local_port);
     return;
   }
 
   // Set curl connection timeout
   pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT_MS,
-                                  args.req_timeout_milliseconds);
+                                  data->args->req_timeout_milliseconds);
   if (pma_curl_ret != CURLE_OK) {
     PMA_EPrintln(
         "ERROR: Failed to set curl timeout (client {}, port "
         "{})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "curl timeout</p></html>";
+        data->addr_port_info.client_addr, data->addr_port_info.local_port);
     return;
   }
 
   // Set curl destination
   if (auto header_iter = req.headers.find("override-dest-url");
-      header_iter != req.headers.end() && args.flags.test(1)) {
+      header_iter != req.headers.end() && data->args->flags.test(1)) {
     std::string req_url = header_iter->second;
     while (req_url.ends_with('/')) {
       req_url.pop_back();
@@ -232,16 +352,12 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
           "ERROR: Failed to set curl destination (client {}, "
           "port "
           "{})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl url</p></html>";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
-  } else if (auto url_iter = args.port_to_dest_urls.find(cli_port);
-             url_iter != args.port_to_dest_urls.end()) {
+  } else if (auto url_iter = data->args->port_to_dest_urls.find(
+                 data->addr_port_info.local_port);
+             url_iter != data->args->port_to_dest_urls.end()) {
     std::string req_url = url_iter->second;
     while (req_url.ends_with('/')) {
       req_url.pop_back();
@@ -253,16 +369,11 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
           "ERROR: Failed to set curl destination (client {}, "
           "port "
           "{})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl url</p></html>";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
   } else {
-    std::string req_url = args.default_dest_url;
+    std::string req_url = data->args->default_dest_url;
     while (req_url.ends_with('/')) {
       req_url.pop_back();
     }
@@ -273,12 +384,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
           "ERROR: Failed to set curl destination (client {}, "
           "port "
           "{})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl url</p></html>";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
   }
@@ -293,13 +399,14 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
   headers_list =
       curl_slist_append(headers_list, "user-agent: PoorMansAnubis libcurl");
   headers_list = curl_slist_append(
-      headers_list, std::format("x-real-ip: {}", cli_addr).c_str());
+      headers_list,
+      std::format("x-real-ip: {}", data->addr_port_info.client_addr).c_str());
   for (const auto &pair : req.headers) {
     if (pair.first == "x-forwarded-for") {
       std::string forwarded_for("x-forwarded-for: ");
       forwarded_for.append(pair.second);
       forwarded_for.append(", ");
-      forwarded_for.append(imm_cli_addr);
+      forwarded_for.append(data->addr_port_info.immediate_client_addr);
       headers_list = curl_slist_append(headers_list, forwarded_for.c_str());
     } else if (pair.first == "host" || pair.first == "override-dest-url" ||
                pair.first == "accept" || pair.first == "user-agent" ||
@@ -313,16 +420,12 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
       curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers_list);
   if (pma_curl_ret != CURLE_OK) {
     PMA_EPrintln("ERROR: Failed to set curl headers (client {}, port {})!",
-                 cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "curl headers</p></html>";
+                 data->addr_port_info.client_addr,
+                 data->addr_port_info.local_port);
     return;
   }
 
   // Set callback for fetched data
-  body.clear();
   pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION,
                                   pma_curl_data_callback);
   if (pma_curl_ret != CURLE_OK) {
@@ -330,53 +433,35 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
         "ERROR: Failed to set curl write callback (client {}, "
         "port "
         "{})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "callback write function</p></html>";
+        data->addr_port_info.client_addr, data->addr_port_info.local_port);
     return;
   }
-  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &body);
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, data);
   if (pma_curl_ret != CURLE_OK) {
     PMA_EPrintln(
         "ERROR: Failed to set curl write callback user-data "
         "(client {}, port {})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "callback write function user-data</p></html>";
+        data->addr_port_info.client_addr, data->addr_port_info.local_port);
     return;
   }
 
   // Set callback for fetched headers
-  std::unordered_map<std::string, std::string> resp_headers;
   pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION,
                                   pma_curl_header_callback);
   if (pma_curl_ret != CURLE_OK) {
     PMA_EPrintln(
         "ERROR: Failed to set header callback (client {}, port "
         "{})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "curl header callback</p></html>";
+        data->addr_port_info.client_addr, data->addr_port_info.local_port);
     return;
   }
 
-  pma_curl_ret =
-      curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &resp_headers);
+  pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, data);
   if (pma_curl_ret != CURLE_OK) {
     PMA_EPrintln(
         "ERROR: Failed to set header callback user-data (client "
         "{}, port {})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to set "
-        "curl header callback user-data</p></html>";
+        data->addr_port_info.client_addr, data->addr_port_info.local_port);
     return;
   }
 
@@ -389,21 +474,19 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
   ptrs[1] = &count;
   if (req.method == "GET") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} GET request...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} GET request...",
+                data->addr_port_info.client_addr);
 #endif
   } else if (req.method == "POST") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} POST request body...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} POST request body...",
+                data->addr_port_info.client_addr);
 #endif
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln("ERROR: Failed to set curl POST (client {}, port {})!",
-                   cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl upload as POST</p> </html> ";
+                   data->addr_port_info.client_addr,
+                   data->addr_port_info.local_port);
       return;
     }
 
@@ -413,12 +496,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
           "ERROR: Failed to set curl upload as POST (fields; "
           "client {}, "
           "port {})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl upload as POST (fields)</p> </html> ";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
 
@@ -428,12 +506,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
       PMA_EPrintln(
           "ERROR: Failed to set curl POST READFUNCTION (client {}, "
           "port {})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl upload callback</p></html>";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
 
@@ -441,12 +514,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln(
           "ERROR: Failed to set curl POST READDATA (client {}, port {})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl upload callback user-data</p></html>";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
 
@@ -456,26 +524,19 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
       PMA_EPrintln(
           "ERROR: Failed to set curl POST size (client {}, port "
           "{})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to "
-          "set "
-          "curl POST size</p></html>";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
   } else if (req.method == "PUT") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} PUT request...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} PUT request...",
+                data->addr_port_info.client_addr);
 #endif
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1);
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln("ERROR: Failed to set curl PUT (client {}, port {})!",
-                   cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set curl request "
-          "as PUT</p> </html> ";
+                   data->addr_port_info.client_addr,
+                   data->addr_port_info.local_port);
       return;
     }
 
@@ -484,11 +545,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln(
           "ERROR: Failed to set curl PUT READFUNCTION (client {}, port {})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set up curl</p> "
-          "</html> ";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
 
@@ -496,11 +553,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln(
           "ERROR: Failed to set curl PUT READDATA (client {}, port {})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set up curl</p> "
-          "</html> ";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
 
@@ -510,88 +563,70 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
       PMA_EPrintln(
           "ERROR: Failed to set curl PUT INFILESIZE_LARGE (client {}, port "
           "{})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set up curl</p> "
-          "</html> ";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
   } else if (req.method == "HEAD") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} HEAD request...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} HEAD request...",
+                data->addr_port_info.client_addr);
 #endif
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "HEAD");
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln("ERROR: Failed to set curl HEAD (client {}, port {})!",
-                   cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set curl request "
-          "as HEAD</p> </html> ";
+                   data->addr_port_info.client_addr,
+                   data->addr_port_info.local_port);
       return;
     }
   } else if (req.method == "DELETE") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} DELETE request...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} DELETE request...",
+                data->addr_port_info.client_addr);
 #endif
     pma_curl_ret =
         curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE");
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln("ERROR: Failed to set curl DELETE (client {}, port {})!",
-                   cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
-          "request "
-          "as DELETE</p> </html> ";
+                   data->addr_port_info.client_addr,
+                   data->addr_port_info.local_port);
       return;
     }
   } else if (req.method == "OPTIONS") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} OPTIONS request...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} OPTIONS request...",
+                data->addr_port_info.client_addr);
 #endif
     pma_curl_ret =
         curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "OPTIONS");
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln("ERROR: Failed to set curl OPTIONS (client {}, port {})!",
-                   cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
-          "request "
-          "as OPTIONS</p> </html> ";
+                   data->addr_port_info.client_addr,
+                   data->addr_port_info.local_port);
       return;
     }
   } else if (req.method == "TRACE") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} TRACE request...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} TRACE request...",
+                data->addr_port_info.client_addr);
 #endif
     pma_curl_ret =
         curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "TRACE");
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln("ERROR: Failed to set curl TRACE (client {}, port {})!",
-                   cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
-          "request "
-          "as TRACE</p> </html> ";
+                   data->addr_port_info.client_addr,
+                   data->addr_port_info.local_port);
       return;
     }
   } else if (req.method == "PATCH") {
 #ifndef NDEBUG
-    PMA_Println("NOTICE: Sending client {} PATCH request...", cli_addr);
+    PMA_Println("NOTICE: Sending client {} PATCH request...",
+                data->addr_port_info.client_addr);
 #endif
     pma_curl_ret = curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1);
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln("ERROR: Failed to set curl PATCH (client {}, port {})!",
-                   cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set curl "
-          "request "
-          "as PATCH</p> </html> ";
+                   data->addr_port_info.client_addr,
+                   data->addr_port_info.local_port);
       return;
     }
 
@@ -604,11 +639,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
       PMA_EPrintln(
           "ERROR: Failed to set curl PATCH READFUNCTION (client {}, port "
           "{})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set up "
-          "curl</p> </html> ";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
 
@@ -616,11 +647,7 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
     if (pma_curl_ret != CURLE_OK) {
       PMA_EPrintln(
           "ERROR: Failed to set curl PATCH READDATA (client {}, port {})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set up "
-          "curl</p> </html> ";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
 
@@ -630,19 +657,11 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
       PMA_EPrintln(
           "ERROR: Failed to set curl PATCH INFILESIZE_LARGE (client {}, port "
           "{})!",
-          cli_addr, cli_port);
-      status = "HTTP/1.0 500 Internal Server Error";
-      body =
-          "<html><p>500 Internal Server Error</p><p>Failed to set up "
-          "curl</p> </html> ";
+          data->addr_port_info.client_addr, data->addr_port_info.local_port);
       return;
     }
   } else {
     PMA_EPrintln("ERROR: Invalid request method {}!", req.method);
-    status = "HTTP/1.0 400 Bad Request";
-    body = std::format(
-        "<html><p>400 Bad Request</p><p>{} is not supported</p> </html> ",
-        req.method);
     return;
   }
 
@@ -650,117 +669,40 @@ void do_curl_forwarding(std::string imm_cli_addr, std::string cli_addr,
   pma_curl_ret = curl_easy_perform(curl_handle);
   if (pma_curl_ret != CURLE_OK) {
     PMA_EPrintln("ERROR: Failed to fetch with curl (client {}, port {})!",
-                 cli_addr, cli_port);
+                 data->addr_port_info.client_addr,
+                 data->addr_port_info.local_port);
     long error = 0;
     pma_curl_ret = curl_easy_getinfo(curl_handle, CURLINFO_OS_ERRNO, &error);
     if (pma_curl_ret == CURLE_OK) {
       PMA_EPrintln("Errno: {}", error);
     }
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to fetch with "
-        "curl</p></html>";
     return;
   }
 
-  long resp_code = 200;
-
-  pma_curl_ret =
-      curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &resp_code);
-  if (pma_curl_ret != CURLE_OK) {
-    PMA_EPrintln(
-        "ERROR: Failed to get curl fetch response code (client "
-        "{}, "
-        "port {})!",
-        cli_addr, cli_port);
-    status = "HTTP/1.0 500 Internal Server Error";
-    body =
-        "<html><p>500 Internal Server Error</p><p>Failed to get "
-        "curl fetch response code</p></html>";
+  std::string ch_enc_end("0\r\n\r\n");
+  size_t offset = 0;
+END_OF_LIBCURL_SEND_CHUNKED_ENC_END:
+  ssize_t write_ret = write(data->conn_fd, ch_enc_end.data() + offset,
+                            ch_enc_end.size() - offset);
+  if (write_ret < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      // Non-blocking IO, client did not accept written data.
+      std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
+      goto END_OF_LIBCURL_SEND_CHUNKED_ENC_END;
+    } else {
+      PMA_EPrintln(
+          "ERROR: Failed to send end of chunked-encoding (libcurl; errno {})",
+          errno);
+      return;
+    }
+  } else if (write_ret == 0) {
+    PMA_EPrintln("ERROR: Failed to send end of chunked-encoding (libcurl; EOF)",
+                 errno);
     return;
+  } else if (static_cast<size_t>(write_ret) != ch_enc_end.size() - offset) {
+    offset += static_cast<size_t>(write_ret);
+    goto END_OF_LIBCURL_SEND_CHUNKED_ENC_END;
   }
-
-  switch (resp_code) {
-    case 200:
-      status = "HTTP/1.0 200 OK";
-      break;
-    case 301:
-      status = "HTTP/1.0 301 Moved Permanently";
-      break;
-    case 302:
-      status = "HTTP/1.0 302 Found";
-      break;
-    case 303:
-      status = "HTTP/1.0 303 See Other";
-      break;
-    case 304:
-      status = "HTTP/1.0 304 Not Modified";
-      break;
-    case 307:
-      status = "HTTP/1.0 307 Temporary Redirect";
-      break;
-    case 308:
-      status = "HTTP/1.0 308 Permanent Redirect";
-      break;
-    case 400:
-      status = "HTTP/1.0 400 Bad Request";
-      break;
-    case 401:
-      status = "HTTP/1.0 401 Unauthorized";
-      break;
-    case 403:
-      status = "HTTP/1.0 403 Forbidden";
-      break;
-    case 404:
-      status = "HTTP/1.0 404 Not Found";
-      break;
-    case 502:
-      status = "HTTP/1.0 502 Bad Gateway";
-      break;
-    case 503:
-      status = "HTTP/1.0 503 Service Unavailable";
-      break;
-    case 504:
-      status = "HTTP/1.0 504 Gateway Timeout";
-      break;
-    default:
-      PMA_EPrintln("WARNING: Unhandled response code {} for client {}",
-                   resp_code, cli_addr);
-      [[fallthrough]];
-    case 500:
-      status = "HTTP/1.0 500 Internal Server Error";
-      break;
-  }
-
-  // DEBUG
-  // PMA_Println("Result headers:");
-  // for (auto header_iter = resp_headers.begin();
-  //      header_iter != resp_headers.end(); ++header_iter) {
-  //   PMA_Println("  {}: {}", header_iter->first,
-  //               header_iter->second);
-  // }
-  // PMA_Println("Result data: {}", body);
-
-  content_type.clear();
-  for (auto header_iter = resp_headers.begin();
-       header_iter != resp_headers.end(); ++header_iter) {
-    if (header_iter->first == "transfer-encoding" &&
-        PMA_HELPER::ascii_str_to_lower(
-            PMA_HELPER::trim_whitespace(header_iter->second)) == "chunked") {
-      forward_flags.set(0);
-      continue;
-    }
-    if (header_iter->first == "content-length" ||
-        header_iter->first == "connection" ||
-        header_iter->first == "accept-ranges") {
-      continue;
-    }
-    content_type.append(header_iter->first);
-    content_type.append(": ");
-    content_type.append(header_iter->second);
-    content_type.append("\r\n");
-  }
-  content_type.append("Connection: keep-alive");
 }
 
 void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
@@ -1204,7 +1146,9 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
           headers.clear();
           offset = 0;
         DO_SOCKET_FORWARDING_AFTER_HEADERS_WRITE:
-          write_ret = write(data->conn_fd, "\r\n" + offset, 2 - offset);
+          write_ret = write(data->conn_fd,
+                            reinterpret_cast<const char *>("\r\n") + offset,
+                            2 - offset);
           if (write_ret < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
               // Non-blocking IO, client did not accept data
@@ -1708,11 +1652,7 @@ void thread_handle_connection_fn(void *ud) {
               } else {
                 cached_allowed_lock.unlock();
                 if (data->args->flags.test(5)) {
-                  do_curl_forwarding(data->addr_port_info.immediate_client_addr,
-                                     data->addr_port_info.client_addr,
-                                     data->addr_port_info.local_port, body,
-                                     status, content_type, req, *data->args,
-                                     forward_flags);
+                  do_curl_forwarding(data, req, forward_flags);
                 } else {
                   do_ipv4_socket_forwarding(data, forward_flags, req);
                 }
@@ -1753,11 +1693,7 @@ void thread_handle_connection_fn(void *ud) {
                   time_now));
               cached_allowed_lock.unlock();
               if (data->args->flags.test(5)) {
-                do_curl_forwarding(data->addr_port_info.immediate_client_addr,
-                                   data->addr_port_info.client_addr,
-                                   data->addr_port_info.local_port, body,
-                                   status, content_type, req, *data->args,
-                                   forward_flags);
+                do_curl_forwarding(data, req, forward_flags);
               } else {
                 do_ipv4_socket_forwarding(data, forward_flags, req);
               }
@@ -1814,11 +1750,7 @@ void thread_handle_connection_fn(void *ud) {
               } else {
                 cached_allowed_lock.unlock();
                 if (data->args->flags.test(5)) {
-                  do_curl_forwarding(data->addr_port_info.immediate_client_addr,
-                                     data->addr_port_info.client_addr,
-                                     data->addr_port_info.local_port, body,
-                                     status, content_type, req, *data->args,
-                                     forward_flags);
+                  do_curl_forwarding(data, req, forward_flags);
                 } else {
                   do_ipv4_socket_forwarding(data, forward_flags, req);
                 }
@@ -1852,10 +1784,7 @@ void thread_handle_connection_fn(void *ud) {
                 time_now));
             cached_allowed_lock.unlock();
             if (data->args->flags.test(5)) {
-              do_curl_forwarding(data->addr_port_info.immediate_client_addr,
-                                 data->addr_port_info.client_addr,
-                                 data->addr_port_info.local_port, body, status,
-                                 content_type, req, *data->args, forward_flags);
+              do_curl_forwarding(data, req, forward_flags);
             } else {
               do_ipv4_socket_forwarding(data, forward_flags, req);
             }
