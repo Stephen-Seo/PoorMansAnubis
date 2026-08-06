@@ -9,4 +9,3 @@ updates:
     directory: "rust_impl/" # Location of package manifests
     schedule:
       interval: "weekly"
-
