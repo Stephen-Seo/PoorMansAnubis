@@ -140,6 +140,207 @@ int main() {
         CHECK_TRUE(vec.at(7) == 'V');
     }
 
+    // Test base64_data_to_base64.
+    {
+        unsigned long long size = 0;
+        char *ret = base64_data_to_base64("t", 1, &size);
+        CHECK_TRUE(size == 4);
+        CHECK_TRUE(strcmp(ret, "dA==") == 0);
+        free(ret);
+
+        ret = base64_data_to_base64("te", 2, &size);
+        CHECK_TRUE(size == 4);
+        CHECK_TRUE(strcmp(ret, "dGU=") == 0);
+        free(ret);
+
+        ret = base64_data_to_base64("tes", 3, &size);
+        CHECK_TRUE(size == 4);
+        CHECK_TRUE(strcmp(ret, "dGVz") == 0);
+        free(ret);
+
+        ret = base64_data_to_base64("test", 4, &size);
+        CHECK_TRUE(size == 8);
+        CHECK_TRUE(strcmp(ret, "dGVzdA==") == 0);
+        free(ret);
+    }
+    // Test base64_base64_to_data.
+    {
+        unsigned long long size = 0;
+        unsigned char *ret = base64_base64_to_data("threetwoonc=", 12, &size);
+        CHECK_TRUE(size == 8);
+        CHECK_TRUE(ret);
+        if (ret) {
+            CHECK_TRUE(ret[0] == 0xb6);
+            CHECK_TRUE(ret[1] == 0x1a);
+            CHECK_TRUE(ret[2] == 0xde);
+            CHECK_TRUE(ret[3] == 0x7a);
+            CHECK_TRUE(ret[4] == 0xdc);
+            CHECK_TRUE(ret[5] == 0x28);
+            CHECK_TRUE(ret[6] == 0xa2);
+            CHECK_TRUE(ret[7] == 0x77);
+            free(ret);
+        }
+
+        ret = base64_base64_to_data("SevenEightNineTenOK+", 20, &size);
+        CHECK_TRUE(size == 15);
+        CHECK_TRUE(ret);
+        if (ret) {
+            CHECK_TRUE(ret[0] == 0x49);
+            CHECK_TRUE(ret[1] == 0xeb);
+            CHECK_TRUE(ret[2] == 0xde);
+            CHECK_TRUE(ret[3] == 0x9c);
+            CHECK_TRUE(ret[4] == 0x48);
+            CHECK_TRUE(ret[5] == 0xa0);
+            CHECK_TRUE(ret[6] == 0x86);
+            CHECK_TRUE(ret[7] == 0xd3);
+            CHECK_TRUE(ret[8] == 0x62);
+            CHECK_TRUE(ret[9] == 0x9d);
+            CHECK_TRUE(ret[10] == 0xe4);
+            CHECK_TRUE(ret[11] == 0xde);
+            CHECK_TRUE(ret[12] == 0x9c);
+            CHECK_TRUE(ret[13] == 0xe2);
+            CHECK_TRUE(ret[14] == 0xbe);
+            free(ret);
+        }
+
+        ret = base64_base64_to_data("Zero123Four567EightNine10Q==", 28, &size);
+        CHECK_TRUE(size == 19);
+        CHECK_TRUE(ret);
+        if (ret) {
+            CHECK_TRUE(ret[0] == 0x65);
+            CHECK_TRUE(ret[1] == 0xea);
+            CHECK_TRUE(ret[2] == 0xe8);
+            CHECK_TRUE(ret[3] == 0xd7);
+            CHECK_TRUE(ret[4] == 0x6d);
+            CHECK_TRUE(ret[5] == 0xc5);
+            CHECK_TRUE(ret[6] == 0xa2);
+            CHECK_TRUE(ret[7] == 0xea);
+            CHECK_TRUE(ret[8] == 0xf9);
+            CHECK_TRUE(ret[9] == 0xeb);
+            CHECK_TRUE(ret[10] == 0xb1);
+            CHECK_TRUE(ret[11] == 0x22);
+            CHECK_TRUE(ret[12] == 0x82);
+            CHECK_TRUE(ret[13] == 0x1b);
+            CHECK_TRUE(ret[14] == 0x4d);
+            CHECK_TRUE(ret[15] == 0x8a);
+            CHECK_TRUE(ret[16] == 0x77);
+            CHECK_TRUE(ret[17] == 0xb5);
+            CHECK_TRUE(ret[18] == 0xd1);
+        }
+        free(ret);
+    }
+
+    // Previous tests on base64 <-> data.
+    {
+        const char *b64 = "dA==";
+        unsigned long long size = 0;
+        unsigned char *ret = base64_base64_to_data(b64, 4, &size);
+        CHECK_TRUE(size == 1);
+        CHECK_TRUE(ret);
+        if (ret) {
+            CHECK_TRUE(strncmp((const char*)ret, "t", 1) == 0);
+            free(ret);
+        }
+    }
+    {
+        const char *b64 = "dGU=";
+        unsigned long long size = 0;
+        unsigned char *ret = base64_base64_to_data(b64, 4, &size);
+        CHECK_TRUE(size == 2);
+        CHECK_TRUE(ret);
+        if (ret) {
+            CHECK_TRUE(strncmp((const char*)ret, "te", 2) == 0);
+            free(ret);
+        }
+    }
+    {
+        const char *b64 = "dGVz";
+        unsigned long long size = 0;
+        unsigned char *ret = base64_base64_to_data(b64, 4, &size);
+        CHECK_TRUE(size == 3);
+        CHECK_TRUE(ret);
+        if (ret) {
+            CHECK_TRUE(strncmp((const char*)ret, "tes", 3) == 0);
+            free(ret);
+        }
+    }
+    {
+        const char *b64 = "dGVzdA==";
+        unsigned long long size = 0;
+        unsigned char *ret = base64_base64_to_data(b64, 8, &size);
+        CHECK_TRUE(size == 4);
+        CHECK_TRUE(ret);
+        if (ret) {
+            CHECK_TRUE(strncmp((const char*)ret, "test", 4) == 0);
+            free(ret);
+        }
+    }
+    {
+        const unsigned char data[8] = {
+            0xb6,
+            0x1a,
+            0xde,
+            0x7a,
+            0xdc,
+            0x28,
+            0xa2,
+            0x77
+        };
+        const char *s_data = (const char*)data;
+        unsigned long long size = 0;
+        char *b64_ret = base64_data_to_base64(s_data, 8, &size);
+        CHECK_TRUE(size == 12);
+        CHECK_TRUE(b64_ret);
+        if (b64_ret) {
+            CHECK_TRUE(strcmp(b64_ret, "threetwoonc=") == 0);
+            free(b64_ret);
+        }
+    }
+    {
+        const unsigned char data[15] = {
+            0x49,
+            0xeb,
+            0xde,
+            0x9c,
+            0x48,
+            0xa0,
+            0x86,
+            0xd3,
+            0x62,
+            0x9d,
+            0xe4,
+            0xde,
+            0x9c,
+            0xe2,
+            0xbe
+        };
+        const char *s_data = (const char*)data;
+        unsigned long long size = 0;
+        char *b64_ret = base64_data_to_base64(s_data, 15, &size);
+        CHECK_TRUE(size == 20);
+        CHECK_TRUE(b64_ret);
+        if (b64_ret) {
+            CHECK_TRUE(strcmp(b64_ret, "SevenEightNineTenOK+") == 0);
+            free(b64_ret);
+        }
+    }
+
+    {
+        const unsigned char data[19] = {
+            0x65, 0xea, 0xe8, 0xd7, 0x6d, 0xc5, 0xa2, 0xea, 0xf9, 0xeb, 0xb1,
+            0x22, 0x82, 0x1b, 0x4d, 0x8a, 0x77, 0xb5, 0xd1
+        };
+        const char *s_data = (const char*)data;
+        unsigned long long size = 0;
+        char *b64_ret = base64_data_to_base64(s_data, 19, &size);
+        CHECK_TRUE(size == 28);
+        CHECK_TRUE(b64_ret);
+        if (b64_ret) {
+            CHECK_TRUE(strcmp(b64_ret, "Zero123Four567EightNine10Q==") == 0);
+            free(b64_ret);
+        }
+    }
+
     std::cerr << "Passed: " << passed.load() << "\n";
     std::cerr << "Tested: " << tested.load() << std::endl;
     return passed.load() == tested.load() ? 0 : 1;

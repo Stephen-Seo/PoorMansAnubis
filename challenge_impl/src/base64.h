@@ -31,6 +31,16 @@ char *base64_number_str_to_base64_str(const char *);
 // Returned ptr must be free'd.
 char *base64_base64_str_to_number_str(const char *);
 
+// Uses "=", returned ptr must be free'd.
+char *base64_data_to_base64(const char *data,
+                            unsigned long long size,
+                            unsigned long long *out_size);
+
+// Expects that there may be "=" padding, returend ptr must be free'd.
+unsigned char *base64_base64_to_data(const char *b64,
+                                     unsigned long long size,
+                                     unsigned long long *out_size);
+
 #ifdef __cplusplus
 }
 #endif
