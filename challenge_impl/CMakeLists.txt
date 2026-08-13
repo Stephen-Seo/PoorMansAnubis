@@ -85,3 +85,37 @@ target_include_directories(PoorMansAnubis PUBLIC
 target_include_directories(UnitTest PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/SimpleArchiver/src"
 )
+
+if("$ENV{CC}" STREQUAL "")
+    set(ENV{CC} "gcc")
+endif()
+if("$ENV{AR}" STREQUAL "")
+    set(ENV{AR} "ar")
+endif()
+
+# Raylib for generating images.
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a"
+    COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/raylib"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib.tar.gz" || curl -L -o "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib.tar.gz" "https://github.com/raysan5/raylib/archive/refs/tags/6.0.tar.gz"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/raylib"
+    COMMAND sed -i -e "/^CC/cCC ?= gcc" -e "/^AR/cAR ?= ar" "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src/Makefile"
+    COMMAND env PLATFORM=PLATFORM_MEMORY CC=$ENV{CC} AR=$ENV{AR} make -C "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
+    COMMAND ln -s "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a"
+    VERBATIM)
+add_custom_target(RAYLIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a")
+set_target_properties(RAYLIB PROPERTIES
+    ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/raylib"
+)
+
+add_dependencies(PoorMansAnubis RAYLIB)
+add_dependencies(UnitTest RAYLIB)
+
+target_include_directories(PoorMansAnubis PUBLIC
+    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
+)
+target_include_directories(UnitTest PUBLIC
+    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
+)
+
+target_link_libraries(PoorMansAnubis "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a")
+target_link_libraries(UnitTest "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a")
