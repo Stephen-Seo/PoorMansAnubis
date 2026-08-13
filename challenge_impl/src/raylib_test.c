@@ -23,9 +23,8 @@
 
 #include "raylib_test.h"
 
-const unsigned char _binary_QuinqueFive_ttf[] = {
-#embed "../third_party/QuinqueFive.ttf"
-};
+extern const unsigned char _binary_QuinqueFive_ttf_start[];
+extern const unsigned char _binary_QuinqueFive_ttf_end[];
 
 void test_raylib(void) {
     fprintf(stderr, "Testing raylib...\n");
@@ -40,13 +39,16 @@ void test_raylib(void) {
     //                            0);
     Font f = { 0 };
     {
+        const size_t font_size =
+            (size_t)(_binary_QuinqueFive_ttf_end
+                     - _binary_QuinqueFive_ttf_start);
         // Font loading adapted from raylib's rtext.c "LoadFontFromMemory"
         // to load without anti-aliasing.
         f.baseSize = 40;
         f.glyphPadding = 1;
         f.glyphs = LoadFontData(
-            _binary_QuinqueFive_ttf,
-            sizeof _binary_QuinqueFive_ttf,
+            _binary_QuinqueFive_ttf_start,
+            (int)font_size,
             f.baseSize,
             NULL,
             0,
