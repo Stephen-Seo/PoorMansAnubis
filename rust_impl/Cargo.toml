@@ -19,4 +19,4 @@ msql_ffi = { path = "msql_ffi" }
 
 [build-dependencies]
 bindgen = "0.72"
-cc = "1.2"
+cmake = "0.1"
