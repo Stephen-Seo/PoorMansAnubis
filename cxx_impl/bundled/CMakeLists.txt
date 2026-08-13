@@ -140,15 +140,6 @@ set(poor_mans_anubis_bundled_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/thread_limit.cc"
 )
 
-set(challenge_impl_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/work.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/base64.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src/work2.cc"
-)
-
 add_compile_options(
 $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-Og,-O2>
 $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-g,-DNDEBUG>
@@ -403,7 +394,7 @@ add_dependencies(LIBCURL_LIB
     LIBOPENSSL_LIB
 )
 
-add_library(PMA_LIB STATIC ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES})
+add_library(PMA_LIB STATIC ${poor_mans_anubis_bundled_SOURCES})
 target_compile_features(PMA_LIB PUBLIC cxx_std_23)
 target_include_directories(PMA_LIB PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl/src"
@@ -431,6 +422,8 @@ target_link_libraries(PMA_LIB
     ssl
     crypto
 )
+
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../challenge_impl" "${CMAKE_CURRENT_BINARY_DIR}/challenge_impl")
 
 add_executable(poor_mans_anubis_bundled
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/main.cc"
@@ -462,6 +455,7 @@ target_link_libraries(poor_mans_anubis_bundled
     z
     ssl
     crypto
+    PMA_Challenge
 )
 
 add_executable(unittest_bundled
@@ -477,6 +471,7 @@ target_link_libraries(unittest_bundled
     sqlite3
     blake3
     crypto
+    PMA_Challenge
 )
 add_dependencies(unittest_bundled
     SQLITE3_LIB
@@ -532,7 +527,6 @@ add_library(db_msql_api_pre STATIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/http.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/helpers.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/poor_mans_print.cc"
-    ${challenge_impl_SOURCES}
 )
 target_compile_features(db_msql_api_pre PUBLIC cxx_std_23)
 target_include_directories(db_msql_api_pre PUBLIC
