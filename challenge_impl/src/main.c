@@ -21,6 +21,9 @@
 #include <string.h>
 #include <limits.h>
 
+// third party includes.
+#include <raylib.h>
+
 // Local includes.
 #include "work.h"
 #include "base64.h"
@@ -37,6 +40,7 @@ void print_help(void) {
        "in a compact way.");
   puts("  --n-to-b64=<number> : Convert number to b64 string.");
   puts("  --b64-to-n=<number> : Convert b64 to number string.");
+  puts("  --test-raylib");
 }
 
 void free_work_factors(Work_Factors **factors) {
@@ -59,6 +63,7 @@ int main(int argc, char **argv) {
   __attribute__((cleanup(free_work_factors2)))
   Work_Factors *work_factors2 = NULL;
   int_fast8_t factors_2 = 0;
+  int_fast8_t raylib = 0;
 
   char *number = NULL;
   char *b64 = NULL;
@@ -107,6 +112,8 @@ int main(int argc, char **argv) {
       number = argv[0] + 11;
     } else if (strncmp("--b64-to-n=", argv[0], 11) == 0) {
       b64 = argv[0] + 11;
+    } else if (strcmp("--test-raylib", argv[0]) == 0) {
+      raylib = 1;
     } else {
       fprintf(stderr, "ERROR: Invalid arg \"%s\"!\n", argv[0]);
       print_help();
@@ -175,6 +182,33 @@ int main(int argc, char **argv) {
     } else {
       fprintf(stderr, "ERROR: Got invalid base64 value!\n");
     }
+  } else if (raylib) {
+    fprintf(stderr, "Testing raylib...\n");
+
+    InitWindow(100, 100, "test");
+
+    BeginDrawing();
+    ClearBackground(WHITE);
+    DrawText("Test text.", 2, 20, 12, BLACK);
+    EndDrawing();
+
+    Image screen_img = LoadImageFromScreen();
+    ImageFlipVertical(&screen_img);
+    int size = 0;
+    unsigned char *img_data = ExportImageToMemory(screen_img, ".png", &size);
+    UnloadImage(screen_img);
+
+    if (img_data && size > 0) {
+        unsigned long long out_size = 0;
+        char *b64 = base64_data_to_base64((const char*)img_data, (unsigned long long)size, &out_size);
+        if (b64 && out_size > 0) {
+            printf("image/png in base64:\n%.*s\n", (int)out_size, b64);
+            free(b64);
+        }
+        MemFree(img_data);
+    }
+
+    CloseWindow();
   } else {
     print_help();
     return 1;
