@@ -27,6 +27,7 @@
 // Local includes.
 #include "work.h"
 #include "base64.h"
+#include "raylib_test.h"
 
 void print_help(void) {
   puts("Usage:");
@@ -183,32 +184,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "ERROR: Got invalid base64 value!\n");
     }
   } else if (raylib) {
-    fprintf(stderr, "Testing raylib...\n");
-
-    InitWindow(100, 100, "test");
-
-    BeginDrawing();
-    ClearBackground(WHITE);
-    DrawText("Test text.", 2, 20, 12, BLACK);
-    EndDrawing();
-
-    Image screen_img = LoadImageFromScreen();
-    ImageFlipVertical(&screen_img);
-    int size = 0;
-    unsigned char *img_data = ExportImageToMemory(screen_img, ".png", &size);
-    UnloadImage(screen_img);
-
-    if (img_data && size > 0) {
-        unsigned long long out_size = 0;
-        char *b64 = base64_data_to_base64((const char*)img_data, (unsigned long long)size, &out_size);
-        if (b64 && out_size > 0) {
-            printf("image/png in base64:\n%.*s\n", (int)out_size, b64);
-            free(b64);
-        }
-        MemFree(img_data);
-    }
-
-    CloseWindow();
+    test_raylib();
   } else {
     print_help();
     return 1;

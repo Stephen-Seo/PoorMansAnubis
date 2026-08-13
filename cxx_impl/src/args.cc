@@ -432,6 +432,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       flags.set(3);
     } else if (std::strcmp(argv[0], "--enable-unknown-arg-error") == 0) {
       flags.set(7);
+    } else if (std::strcmp(argv[0], "--test-raylib") == 0) {
+      flags.set(8);
     } else {
       unknown_args.push_back(std::string(argv[0]));
     }
