@@ -6,6 +6,7 @@ set(PoorMansAnubis_VERSION 1.0)
 set(PoorMansAnubis_SOURCES
     src/work.c
     src/base64.c
+    src/raylib_test.c
     third_party/SimpleArchiver/src/data_structures/linked_list.c
     third_party/SimpleArchiver/src/data_structures/chunked_array.c
     third_party/SimpleArchiver/src/data_structures/priority_heap.c
@@ -174,3 +175,5 @@ target_link_libraries(UnitTest "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a")
 target_link_libraries(PMA_Challenge "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a")
 
 install(TARGETS PMA_Challenge)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a"
+    TYPE LIB)

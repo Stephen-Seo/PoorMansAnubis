@@ -36,6 +36,7 @@ pub struct Args {
     pub allowed_timeout_mins: u64,
     pub enable_override_dest_url: bool,
     pub mysql_has_priority: bool,
+    pub test_raylib: bool,
 }
 
 pub fn print_args() {
@@ -98,6 +99,7 @@ pub fn parse_args() -> Result<Args, Error> {
         allowed_timeout_mins: crate::constants::ALLOWED_IP_TIMEOUT_MINUTES,
         enable_override_dest_url: false,
         mysql_has_priority: true,
+        test_raylib: false,
     };
 
     let p_args = args_fn();
@@ -169,6 +171,8 @@ pub fn parse_args() -> Result<Args, Error> {
             override_dest_url_warning_read = true;
         } else if arg == "--enable-unknown-arg-error" {
             unknown_arg_error = true;
+        } else if arg == "--test-raylib" {
+            args.test_raylib = true;
         } else {
             unknown_args.push_back(arg);
         }

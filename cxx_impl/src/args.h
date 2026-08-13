@@ -58,6 +58,7 @@ struct Args {
   // 5 - use libcurl
   // 6 - enable thread-limit
   // 7 - error on unknown args
+  // 8 - test raylib
   std::bitset<32> flags;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;

@@ -201,6 +201,10 @@ impl ClientWrapper {
     }
 }
 
+unsafe extern "C" {
+    fn test_raylib();
+}
+
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
     let mut map: HashMap<String, String> = HashMap::new();
 
@@ -1332,6 +1336,13 @@ async fn main() {
             "\"--factors=<digits>\" not specified, defaulting to \"{}\"",
             constants::DEFAULT_FACTORS_QUADS
         );
+    }
+
+    if parsed_args.test_raylib {
+        unsafe {
+            test_raylib();
+        }
+        return;
     }
 
     init_db(&parsed_args)
