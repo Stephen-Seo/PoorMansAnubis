@@ -64,6 +64,7 @@ target_compile_options(PMA_Challenge PUBLIC
     -Wl,-z,nodlopen -Wl,-z,noexecstack
     -Wl,-z,relro -Wl,-z,now
     -Wl,--as-needed -Wl,--no-copy-dt-needed-entries
+    -fPIC
 )
 target_link_options(PMA_Challenge PUBLIC
     -O2 -Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough
@@ -75,6 +76,7 @@ target_link_options(PMA_Challenge PUBLIC
     -Wl,-z,nodlopen -Wl,-z,noexecstack
     -Wl,-z,relro -Wl,-z,now
     -Wl,--as-needed -Wl,--no-copy-dt-needed-entries
+    -fPIC
 )
 
 if(NOT DEFINED DISABLE_FLAGS_FOR_COMPAT)
