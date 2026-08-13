@@ -46,6 +46,9 @@
 #include "poor_mans_print.h"
 #include "thread_limit.h"
 #include "thread_pool.h"
+extern "C" {
+#include "raylib_test.h"
+}
 
 volatile int interrupt_received = 0;
 
@@ -1865,6 +1868,9 @@ int main(int argc, char **argv) {
   if (args.flags.test(2)) {
     PMA_EPrintln("ERROR: Failed to parse args!");
     return 3;
+  } else if (args.flags.test(8)) {
+    test_raylib();
+    return 0;
   }
 
   std::optional<PMA_MSQL::Conf> msql_conf_opt;

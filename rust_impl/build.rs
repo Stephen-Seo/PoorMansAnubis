@@ -7,6 +7,7 @@ fn main() {
     let dst = cmake::build(format!("{cargo_manifest_dir}/../challenge_impl"));
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-lib=static=PMA_Challenge");
+    println!("cargo:rustc-link-lib=static=raylib");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
