@@ -8,6 +8,7 @@ fn main() {
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-lib=static=PMA_Challenge");
     println!("cargo:rustc-link-lib=static=raylib");
+    println!("cargo:rustc-link-lib=static=QuinqueFive_ttf");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
