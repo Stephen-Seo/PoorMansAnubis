@@ -21,14 +21,79 @@
 
 #include "base64.h"
 
+#include "raylib_test.h"
+
+const unsigned char _binary_QuinqueFive_ttf[] = {
+#embed "../third_party/QuinqueFive.ttf"
+};
+
 void test_raylib(void) {
     fprintf(stderr, "Testing raylib...\n");
 
-    InitWindow(100, 100, "test");
+    InitWindow(300, 150, "test");
+
+    //Font f = LoadFontFromMemory(".ttf",
+    //                            _tmp_QuinqueFive_ttf,
+    //                            _tmp_QuinqueFive_ttf_len,
+    //                            15,
+    //                            NULL,
+    //                            0);
+    Font f = { 0 };
+    {
+        // Font loading adapted from raylib's rtext.c "LoadFontFromMemory"
+        // to load without anti-aliasing.
+        f.baseSize = 40;
+        f.glyphPadding = 1;
+        f.glyphs = LoadFontData(
+            _binary_QuinqueFive_ttf,
+            sizeof _binary_QuinqueFive_ttf,
+            f.baseSize,
+            NULL,
+            0,
+            FONT_BITMAP,
+            &f.glyphCount);
+
+        Image atlas = GenImageFontAtlas(f.glyphs,
+                                        &f.recs,
+                                        f.glyphCount,
+                                        f.baseSize,
+                                        1,
+                                        0);
+        f.texture = LoadTextureFromImage(atlas);
+
+        for (int i = 0; i < f.glyphCount; ++i) {
+            UnloadImage(f.glyphs[i].image);
+            f.glyphs[i].image = ImageFromImage(atlas, f.recs[i]);
+        }
+
+        UnloadImage(atlas);
+    }
 
     BeginDrawing();
     ClearBackground(WHITE);
-    DrawText("Test text.", 2, 20, 12, BLACK);
+
+    if (IsFontValid(f)) {
+        fprintf(stderr, "Using QuinqueFive font...\n");
+        fprintf(stderr,
+                "QuinqueFive font is licensed under the OFL 1.1 "
+                "https://openfontlicense.org/\n");
+        DrawTextEx(f,
+                   "QinqueFive\nTest\ntext.",
+                   (Vector2){2, 2},
+                   40.0F,
+                   1.0F,
+                   BLACK);
+        DrawTextEx(f,
+                   "QinqueFive\nTest\ntext.",
+                   (Vector2){170, 50},
+                   10.0F,
+                   1.0F,
+                   BLACK);
+        UnloadFont(f);
+    } else {
+        DrawText("Default\nTest\ntext.", 2, 2, 40, BLACK);
+    }
+
     EndDrawing();
 
     Image screen_img = LoadImageFromScreen();
@@ -39,7 +104,9 @@ void test_raylib(void) {
 
     if (img_data && size > 0) {
         unsigned long long out_size = 0;
-        char *b64 = base64_data_to_base64((const char*)img_data, (unsigned long long)size, &out_size);
+        char *b64 = base64_data_to_base64((const char*)img_data,
+                                          (unsigned long long)size,
+                                          &out_size);
         if (b64 && out_size > 0) {
             printf("image/png in base64:\n%.*s\n", (int)out_size, b64);
             free(b64);
