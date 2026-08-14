@@ -24,15 +24,19 @@
 #include <raylib.h>
 
 #include "base64.h"
+#include "random.h"
 
 extern const unsigned char _binary_QuinqueFive_ttf_start[];
 extern const unsigned char _binary_QuinqueFive_ttf_end[];
 
-void draw_obscuring_circle(Color color, float interval, Image *image) {
+void draw_obscuring_circle(Color color,
+                           float interval,
+                           Image *image,
+                           void *r_state) {
     int center_x = image->width / 2;
     int center_y = image->height / 2;
-    int offset_x = rand() % image->width;
-    int offset_y = rand() % image->height;
+    int offset_x = rand_int_range(r_state, 0, image->width);
+    int offset_y = rand_int_range(r_state, 0, image->height);
 
     int max_x = offset_x > center_x ? offset_x : center_x * 2 - offset_x;
     int max_y = offset_y > center_y ? offset_y : center_y * 2 - offset_y;
@@ -125,7 +129,7 @@ Font get_quinque_five_font(void) {
 }
 
 InteractiveChallenge i_challenge_generate(void) {
-    srand((unsigned int)time(NULL));
+    void *r_state = rand_state_init();
 
     InteractiveChallenge c;
 
@@ -138,9 +142,9 @@ InteractiveChallenge i_challenge_generate(void) {
     Font f = get_quinque_five_font();
 
     Color text_color = (Color){
-        (unsigned char)(128 + rand() % 128),
-        (unsigned char)(128 + rand() % 128),
-        (unsigned char)(128 + rand() % 128),
+        (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
+        (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
+        (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
         255
     };
 
@@ -158,7 +162,7 @@ InteractiveChallenge i_challenge_generate(void) {
     Image render_image = GenImageColor(max_size, max_size, BLACK);
 
     Image text_image = ImageTextEx(f, text, font_size, 1.0F, text_color);
-    ImageRotate(&text_image, rand() % 360);
+    ImageRotate(&text_image, rand_int_range(r_state, 0, 259));
 
     ImageDraw(
         &render_image,
@@ -171,12 +175,12 @@ InteractiveChallenge i_challenge_generate(void) {
 
     UnloadImage(text_image);
 
-    draw_obscuring_circle(text_color, 10.0F, &render_image);
+    draw_obscuring_circle(text_color, 10.0F, &render_image, r_state);
     draw_obscuring_grid(
         text_color,
         8.0F,
-        8.0F - (float)(rand() % 800 + 1) * 8.0F / 800.0F,
-        8.0F - (float)(rand() % 800 + 1) * 8.0F / 800.0F,
+        8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
+        8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
 
     int size = 0;
@@ -212,6 +216,8 @@ InteractiveChallenge i_challenge_generate(void) {
         }
         MemFree(img_data);
     }
+
+    rand_state_cleanup(r_state);
 
     return c;
 }
