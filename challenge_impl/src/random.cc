@@ -6,10 +6,12 @@ struct RandomState {
     RandomState();
 
     std::default_random_engine re;
+    std::uniform_int_distribution<int> int_dist;
 };
 
 RandomState::RandomState() :
-re(std::random_device{}())
+re(std::random_device{}()),
+int_dist(0, 10)
 {}
 
 void *rand_state_init(void) {
@@ -31,5 +33,7 @@ int rand_int_range(void *state, int min, int max) {
 
     RandomState *r_state = reinterpret_cast<RandomState*>(state);
 
-    return std::uniform_int_distribution<int>(min, max)(r_state->re);
+    decltype(r_state->int_dist)::param_type range(min, max);
+
+    return r_state->int_dist(r_state->re, range);
 }
