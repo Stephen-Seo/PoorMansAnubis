@@ -17,6 +17,8 @@
 // Need to access "internal" functions defined in source file.
 #include "work2.cc"
 
+#include "random.h"
+
 #include <atomic>
 #include <iostream>
 
@@ -339,6 +341,18 @@ int main() {
             CHECK_TRUE(strcmp(b64_ret, "Zero123Four567EightNine10Q==") == 0);
             free(b64_ret);
         }
+    }
+
+    // test random dist.
+    {
+        void *r_state = rand_state_init();
+
+        for (int idx = 0; idx < 10; ++idx) {
+            printf("Random value (0-100): %3d\n",
+                   rand_int_range(r_state, 0, 100));
+        }
+
+        rand_state_cleanup(r_state);
     }
 
     std::cerr << "Passed: " << passed.load() << "\n";
