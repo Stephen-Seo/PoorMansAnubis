@@ -17,6 +17,14 @@
 #ifndef COM_SEODISPARATE_POOR_MANS_ANUBIS_CHALLENGE_RAYLIB_TEST_H_
 #define COM_SEODISPARATE_POOR_MANS_ANUBIS_CHALLENGE_RAYLIB_TEST_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void test_raylib(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

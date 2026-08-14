@@ -46,9 +46,7 @@
 #include "poor_mans_print.h"
 #include "thread_limit.h"
 #include "thread_pool.h"
-extern "C" {
 #include "raylib_test.h"
-}
 
 volatile int interrupt_received = 0;
 
