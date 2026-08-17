@@ -2,6 +2,7 @@
 
 CC=/usr/bin/aarch64-linux-gnu-gcc \
 CXX=/usr/bin/aarch64-linux-gnu-g++ \
+AS=/usr/bin/aarch64-linux-gnu-as \
 AR=/usr/bin/aarch64-linux-gnu-ar \
 RANLIB=/usr/bin/aarch64-linux-gnu-ranlib \
 LD=/usr/bin/aarch64-linux-gnu-ld \
