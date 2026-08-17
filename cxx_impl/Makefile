@@ -159,8 +159,7 @@ ${OBJDIR}/libraylib.a: ${CWD}/bundled/download_cache/raylib-6.0.tar.gz
 ${CWD}/bundled/download_cache/raylib-6.0.tar.gz:
 	@mkdir -p $(dir $@)
 	cd ${CWD}/bundled/download_cache && curl -o raylib-6.0.tar.gz -L https://github.com/raysan5/raylib/archive/refs/tags/6.0.tar.gz
-	cd ${CWD}/bundled && sha256sum -c SHA256SUM-raylib-6.0.tar.gz.txt || (rm -f download_cache/raylib-6.0.tar.gz && false)
-	
+	cd ${CWD}/bundled && sha256sum -c SHA256SUM_raylib-6.0.tar.gz.txt || (rm -f download_cache/raylib-6.0.tar.gz && false)
 
 .PHONY: clean clang-format
 
