@@ -68,25 +68,24 @@ void draw_obscuring_grid(Color color,
     }
     offset_y += interval;
 
-    const float offset_y_orig = offset_y;
     for (; offset_x < (float)image->width + interval; offset_x += interval) {
-        offset_y = offset_y_orig;
-        for (; offset_y < (float)image->height + interval; offset_y += interval) {
-            ImageDrawLine(
-                image,
-                (int)(offset_x + 0.5F),
-                0,
-                (int)(offset_x + 0.5F),
-                image->height,
-                color);
-            ImageDrawLine(
-                image,
-                0,
-                (int)(offset_y + 0.5F),
-                image->width,
-                (int)(offset_y + 0.5F),
-                color);
-        }
+        ImageDrawLine(
+            image,
+            (int)(offset_x + 0.5F),
+            0,
+            (int)(offset_x + 0.5F),
+            image->height,
+            color);
+    }
+
+    for (; offset_y < (float)image->height + interval; offset_y += interval) {
+        ImageDrawLine(
+            image,
+            0,
+            (int)(offset_y + 0.5F),
+            image->width,
+            (int)(offset_y + 0.5F),
+            color);
     }
 }
 
