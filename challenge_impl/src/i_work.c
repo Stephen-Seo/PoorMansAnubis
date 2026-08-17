@@ -197,7 +197,7 @@ InteractiveChallenge i_challenge_generate(void) {
                                           (unsigned long long)size,
                                           &out_size);
         if (b64 && out_size > 0) {
-#define IMG_PNG_B64_OUTPUT_HTML_FMT "<img src=\"data:image/png;base64,%.*s\">"
+#define IMG_PNG_B64_OUTPUT_HTML_FMT "<img src=\"data:image/png;base64,%.*s\" />"
             int html_size = snprintf(
                     NULL,
                     0,
