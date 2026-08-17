@@ -29,6 +29,7 @@
 
 // Local includes.
 #include "base64.h"
+#include "random.h"
 
 typedef struct SDPMAInternalStringPart {
   uint64_t size;
@@ -62,14 +63,7 @@ void work_cleanup_factors(Work_Factors *factors) {
 }
 
 Work_Factors work_generate_target_factors(uint64_t digits) {
-  {
-    unsigned int seed;
-    ssize_t ret = getrandom(&seed, sizeof(unsigned int), 0);
-    if (ret != sizeof(unsigned int)) {
-      fprintf(stderr, "WARNING: Failed to set random seed!\n");
-    }
-    srand(seed);
-  }
+  void *random_state = rand_state_init();
 
   Work_Factors factors;
 
@@ -87,10 +81,7 @@ Work_Factors work_generate_target_factors(uint64_t digits) {
   while ((first_temp && simple_archiver_chunked_array_size(&temp) < digits)
          || (!first_temp && simple_archiver_chunked_array_size(&temp2) < digits)) {
     simple_archiver_chunked_array_clear(first_temp ? &temp2 : &temp);
-    r = rand();
-    if (r < 0) {
-      r = -r;
-    }
+    r = rand_int_range(random_state, 0, 16);
     switch (r % 17) {
       case 0:
         r = 2;
@@ -216,6 +207,8 @@ Work_Factors work_generate_target_factors(uint64_t digits) {
   factors.value = malloc(sizeof(SDArchiverChunkedArr));
   *factors.value = first_temp ? temp : temp2;
   simple_archiver_chunked_array_cleanup(first_temp ? &temp2 : &temp);
+
+  rand_state_cleanup(random_state);
 
   return factors;
 }
