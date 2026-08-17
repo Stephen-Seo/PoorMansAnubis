@@ -44,9 +44,9 @@
 #include "helpers.h"
 #include "http.h"
 #include "poor_mans_print.h"
+#include "raylib_test.h"
 #include "thread_limit.h"
 #include "thread_pool.h"
-#include "raylib_test.h"
 
 volatile int interrupt_received = 0;
 

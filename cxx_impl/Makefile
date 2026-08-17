@@ -1,7 +1,11 @@
 CWD != pwd
 
+OBJDIR := objdir
+OBJDIR_ABS := ${CWD}/${OBJDIR}
+
 LINKER_FLAGS := ${PMA_PRE_LINKER_FLAGS} -lsqlite3 -lblake3 -lcurl -lcrypto ${PMA_POST_LINKER_FLAGS}
 COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
+	-I${OBJDIR_ABS} \
 	-Ibundled/out/include -Ibundled/out/ssl/usr/include \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
@@ -16,6 +20,7 @@ COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../challenge_impl/src -I../
 	-Wbidi-chars=any \
 	-fPIE -pie
 COMMON_CFLAGS := ${PMA_PRE_COMMON_CFLAGS} -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
+	-I${OBJDIR_ABS} \
 	-Ibundled/out/include -Ibundled/out/ssl/usr/include \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
@@ -48,9 +53,6 @@ FINAL_COMMON_FLAGS := -Og -g ${COMMON_FLAGS} -Werror
 FINAL_COMMON_CFLAGS := -Og -g ${COMMON_CFLAGS} -Werror
 endif
 
-OBJDIR := objdir
-OBJDIR_ABS := ${CWD}/${OBJDIR}
-
 SOURCES := \
 	src/main.cc \
 	src/db.cc \
@@ -80,25 +82,29 @@ CHALL_IMPL_SOURCES := \
 	../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c \
 	../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c \
 	../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c \
-	../challenge_impl/src/work2.cc
+	../challenge_impl/src/work2.cc \
+	../challenge_impl/src/random.cc \
+	../challenge_impl/src/raylib_test.c \
+	../challenge_impl/third_party/QuinqueFive.asm
 CHALL_IMPL_OBJECTS := \
 	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .c,.c.o,$(filter %.c,${CHALL_IMPL_SOURCES}))) \
 	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .cc,.cc.o,$(filter %.cc,${CHALL_IMPL_SOURCES}))) \
+	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .asm,.asm.o,$(filter %.asm,${CHALL_IMPL_SOURCES})))
 
 OBJECTS := $(addprefix ${OBJDIR_ABS}/,$(subst .cc,.cc.o,${SOURCES}))
 
 all: cxx_backend_impl test debug_serve debug_client libdb_msql_capi.a debug_test_capi
 
-cxx_backend_impl: ${OBJECTS} ${CHALL_IMPL_OBJECTS}
+cxx_backend_impl: ${OBJECTS} ${CHALL_IMPL_OBJECTS} ${OBJDIR}/libraylib.a
 	${CXX} -o cxx_backend_impl ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-test: ${OBJDIR_ABS}/src/test.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
+test: ${OBJDIR_ABS}/src/test.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS} ${OBJDIR}/libraylib.a
 	${CXX} -o test ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
+debug_serve: ${OBJDIR_ABS}/debug/test_serve.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS} ${OBJDIR}/libraylib.a
 	${CXX} -o debug_serve ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
-debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS}
+debug_client: ${OBJDIR_ABS}/debug/test_client.cc.o $(filter-out ${OBJDIR_ABS}/src/main.cc.o,${OBJECTS}) ${CHALL_IMPL_OBJECTS} ${OBJDIR}/libraylib.a
 	${CXX} -o debug_client ${FINAL_COMMON_FLAGS} $^ ${LINKER_FLAGS}
 
 bundled/out/ssl/usr/lib/libssl.a:
@@ -126,7 +132,7 @@ ${OBJDIR_ABS}/debug/%.cc.o: ${CWD}/debug/%.cc ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
 	${CXX} -o $@ -c ${FINAL_COMMON_FLAGS} $<
 
-${OBJDIR_ABS}/dotdot/%.c.o: ../challenge_impl/%.c ${HEADERS}
+${OBJDIR_ABS}/dotdot/%.c.o: ../challenge_impl/%.c ${HEADERS} ${OBJDIR}/libraylib.a
 	@mkdir -p $(dir $@)
 	${CC} -o $@ -c ${FINAL_COMMON_CFLAGS} $<
 
@@ -137,6 +143,24 @@ ${OBJDIR_ABS}/dotdot/%.cc.o: ../challenge_impl/%.cc ${HEADERS}
 ${OBJDIR}/src/%.c.o: ${CWD}/src/%.c ${HEADERS} | clang-format
 	@mkdir -p $(dir $@)
 	${CC} -o $@ -c ${FINAL_COMMON_CFLAGS} $<
+
+${OBJDIR_ABS}/dotdot/%.asm.o: ../challenge_impl/%.asm
+	@mkdir -p $(dir $@)
+	${AS} -o $@ -I $(dir $<) $<
+
+${OBJDIR}/libraylib.a: ${CWD}/bundled/download_cache/raylib-6.0.tar.gz
+	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)/raylib_out
+	tar -xf ${CWD}/bundled/download_cache/raylib-6.0.tar.gz -C ${OBJDIR}/raylib_out
+	cd ${OBJDIR}/raylib_out/raylib-6.0 && sed -i -e '/^CC/cCC ?= gcc' -e '/^AR/cAR ?= ar' src/Makefile && CC=${CC} AR=${AR} PLATFORM=PLATFORM_MEMORY ${MAKE} -C src
+	install -D -m444 ${OBJDIR}/raylib_out/raylib-6.0/src/libraylib.a ${OBJDIR}/libraylib.a
+	find ${OBJDIR}/raylib_out/raylib-6.0/src -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/{}" ';'
+
+${CWD}/bundled/download_cache/raylib-6.0.tar.gz:
+	@mkdir -p $(dir $@)
+	cd ${CWD}/bundled/download_cache && curl -o raylib-6.0.tar.gz -L https://github.com/raysan5/raylib/archive/refs/tags/6.0.tar.gz
+	cd ${CWD}/bundled && sha256sum -c SHA256SUM-raylib-6.0.tar.gz.txt || (rm -f download_cache/raylib-6.0.tar.gz && false)
+	
 
 .PHONY: clean clang-format
 
