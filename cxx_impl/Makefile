@@ -149,7 +149,6 @@ ${OBJDIR_ABS}/dotdot/%.asm.o: ../challenge_impl/%.asm
 	${AS} -o $@ -I $(dir $<) $<
 
 ${OBJDIR}/libraylib.a: ${CWD}/bundled/download_cache/raylib-6.0.tar.gz
-	@mkdir -p $(dir $@)
 	@mkdir -p $(dir $@)/raylib_out
 	tar -xf ${CWD}/bundled/download_cache/raylib-6.0.tar.gz -C ${OBJDIR}/raylib_out
 	cd ${OBJDIR}/raylib_out/raylib-6.0 && sed -i -e '/^CC/cCC ?= gcc' -e '/^AR/cAR ?= ar' src/Makefile && CC=${CC} AR=${AR} PLATFORM=PLATFORM_MEMORY ${MAKE} -C src
