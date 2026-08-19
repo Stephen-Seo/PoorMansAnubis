@@ -39,6 +39,7 @@
                   color, \
                   (image).format)
 
+#define FONT_SIZE 40.0F
 #define MAX_SIZE_PADDING 10.5F
 #define ROTATION_VARIANCE 35
 
@@ -234,11 +235,9 @@ InteractiveChallenge i_challenge_generate(void) {
         255
     };
 
-    const float font_size = 30.0F;
-
     const char *text = "Apples";
 
-    Vector2 f_size = MeasureTextEx(f, text, font_size, 1.0F);
+    Vector2 f_size = MeasureTextEx(f, text, FONT_SIZE, 1.0F);
     f_size.y *= 2.2F;
 
     const int max_size = f_size.x > f_size.y
@@ -249,7 +248,7 @@ InteractiveChallenge i_challenge_generate(void) {
 
     Image render_image = GenImageColor(max_size, max_size, BLACK);
 
-    Image text_image = ImageTextEx(f, text, font_size, 1.0F, text_color);
+    Image text_image = ImageTextEx(f, text, FONT_SIZE, 1.0F, text_color);
 
     switch (rand_int_range(r_state, 0, 1)) {
     case 0:
