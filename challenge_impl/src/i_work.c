@@ -39,6 +39,7 @@
                   color, \
                   (image).format)
 
+#define MAX_SIZE_PADDING 10.5F
 #define ROTATION_VARIANCE 35
 #define MAX_SIZE_MULTIPLIER_DIAG 0.70710678118654752440F * 0.8F
 
@@ -246,8 +247,8 @@ InteractiveChallenge i_challenge_generate(void) {
     f_size.y *= 2.2F;
 
     const int max_size = f_size.x > f_size.y
-                           ? (int)(f_size.x + 4.5F)
-                           : (int)(f_size.y + 4.5F);
+                           ? (int)(f_size.x + MAX_SIZE_PADDING)
+                           : (int)(f_size.y + MAX_SIZE_PADDING);
 
     const float max_size_diag = (float)max_size * MAX_SIZE_MULTIPLIER_DIAG;
 
