@@ -128,8 +128,29 @@ float sq_lerp(float amt) {
     return amt * amt;
 }
 
+float sin_lerp(float amt) {
+    if (amt < 0.0F) {
+        return 0.0F;
+    } else if (amt > 1.0F) {
+        return 1.0F;
+    }
+
+    return (float)sin(amt * 1.57079632679489661922F);
+}
+
+float inv_sin_lerp(float amt) {
+    if (amt < 0.0F) {
+        return 0.0F;
+    } else if (amt > 1.0F) {
+        return 1.0F;
+    }
+
+    return (float)(sin((amt + 3) * 1.57079632679489661922F) + 1.0F);
+}
+
 /// Flags:
-/// xxxx xxx1 if set use inv_sq_lerp, otherwise use sq_lerp
+/// xxxx xxx1 if set use inv_sq_lerp/sin_lerp, else use sq_lerp/inv_sin_lerp
+/// xxxx xx1x if set use sq_lerps, else use sin_lerps
 void draw_distort_circle(float origin_x,
                          float origin_y,
                          float radius,
@@ -150,7 +171,12 @@ void draw_distort_circle(float origin_x,
             if (magnitude <= radius) {
                 const float amt = magnitude / radius;
                 const float new_amt =
-                    ((flags & 1) != 0) ? inv_sq_lerp(amt) : sq_lerp(amt);
+                    ((flags & 2) != 0)
+                        ? (((flags & 1) != 0)
+                            ? inv_sq_lerp(amt) : sq_lerp(amt))
+                        : (((flags & 1) != 0)
+                            ? sin_lerp(amt) : inv_sin_lerp(amt));
+
                 const float offset_amt = new_amt * radius;
 
                 const float unit_x = diff_x / magnitude;
