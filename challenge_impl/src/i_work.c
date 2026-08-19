@@ -288,15 +288,39 @@ InteractiveChallenge i_challenge_generate(void) {
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
     float half_max_size = (float)max_size / 2.0F;
-    uint_fast32_t distort_circle_flag = 0;
-    if (rand_int_range(r_state, 0, 1)) {
-        distort_circle_flag |= 1;
+    switch (rand_int_range(r_state, 0, 1)) {
+    case 0:
+        draw_distort_circle(half_max_size,
+                            half_max_size,
+                            max_size_diag,
+                            render_image,
+                            rand_int_range(r_state, 0, 1));
+        break;
+    case 1: {
+        const float quarter_max_size = half_max_size / 2.0F;
+        const float q_max_size_diag = half_max_size * MAX_SIZE_MULTIPLIER_DIAG;
+        draw_distort_circle(quarter_max_size,
+                            quarter_max_size,
+                            q_max_size_diag,
+                            render_image,
+                            rand_int_range(r_state, 0, 1));
+        draw_distort_circle(quarter_max_size * 3,
+                            quarter_max_size,
+                            q_max_size_diag,
+                            render_image,
+                            rand_int_range(r_state, 0, 1));
+        draw_distort_circle(quarter_max_size,
+                            quarter_max_size * 3,
+                            q_max_size_diag,
+                            render_image,
+                            rand_int_range(r_state, 0, 1));
+        draw_distort_circle(quarter_max_size * 3,
+                            quarter_max_size * 3,
+                            q_max_size_diag,
+                            render_image,
+                            rand_int_range(r_state, 0, 1));
+    }   break;
     }
-    draw_distort_circle(half_max_size,
-                        half_max_size,
-                        max_size_diag,
-                        render_image,
-                        distort_circle_flag);
 
     int size = 0;
     unsigned char *img_data = ExportImageToMemory(render_image, ".png", &size);
