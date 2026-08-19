@@ -39,6 +39,8 @@
                   color, \
                   (image).format)
 
+#define ROTATION_VARIANCE 35
+
 extern const unsigned char _binary_QuinqueFive_ttf_start[];
 extern const unsigned char _binary_QuinqueFive_ttf_end[];
 
@@ -252,7 +254,23 @@ InteractiveChallenge i_challenge_generate(void) {
     Image render_image = GenImageColor(max_size, max_size, BLACK);
 
     Image text_image = ImageTextEx(f, text, font_size, 1.0F, text_color);
-    ImageRotate(&text_image, rand_int_range(r_state, 0, 259));
+
+    switch (rand_int_range(r_state, 0, 1)) {
+    case 0:
+        ImageRotate(&text_image,
+                    rand_int_range(r_state,
+                                   -ROTATION_VARIANCE,
+                                   ROTATION_VARIANCE)
+                        + 45);
+        break;
+    case 1:
+        ImageRotate(&text_image,
+                    rand_int_range(r_state,
+                                   -ROTATION_VARIANCE,
+                                   ROTATION_VARIANCE)
+                        - 45);
+        break;
+    }
 
     ImageDraw(
         &render_image,
