@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <math.h>
 #include <time.h>
 
@@ -113,11 +114,24 @@ float inv_sq_lerp(float amt) {
     return -((minus_one) * minus_one) + 1.0F;
 }
 
+float sq_lerp(float amt) {
+    if (amt < 0.0F) {
+        return 0.0F;
+    } else if (amt > 1.0F) {
+        return 1.0F;
+    }
+
+    return amt * amt;
+}
+
+/// Flags:
+/// xxxx xxx1 if set use inv_sq_lerp, otherwise use sq_lerp
 void draw_distort_circle(float origin_x,
                          float origin_y,
                          float radius,
                          Image image,
-                         Color oob) {
+                         Color oob,
+                         uint_fast32_t flags) {
     Image copy = ImageCopy(image);
 
     const int px_data_size = GetPixelDataSize(1, 1, copy.format);
@@ -132,7 +146,8 @@ void draw_distort_circle(float origin_x,
 
             if (magnitude <= radius) {
                 const float amt = magnitude / radius;
-                const float new_amt = inv_sq_lerp(amt);
+                const float new_amt =
+                    ((flags & 1) != 0) ? inv_sq_lerp(amt) : sq_lerp(amt);
                 const float offset_amt = new_amt * radius;
 
                 const float unit_x = diff_x / magnitude;
@@ -145,7 +160,8 @@ void draw_distort_circle(float origin_x,
                 const int new_y_int = (int)(new_y + 0.5F);
 
                 Color pixel;
-                if (new_x_int < 0 || new_x_int >= copy.width || new_y_int < 0 || new_y_int >= copy.height) {
+                if (new_x_int < 0 || new_x_int >= copy.width
+                        || new_y_int < 0 || new_y_int >= copy.height) {
                     pixel = oob;
                 } else {
                     pixel = GET_IMAGE_PIXEL(copy,
@@ -257,7 +273,16 @@ InteractiveChallenge i_challenge_generate(void) {
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
     float half_max_size = (float)max_size / 2.0F;
-    draw_distort_circle(half_max_size, half_max_size, max_size_diag, render_image, BLACK);
+    uint_fast32_t distort_circle_flag = 0;
+    if (rand_int_range(r_state, 0, 1)) {
+        distort_circle_flag |= 1;
+    }
+    draw_distort_circle(half_max_size,
+                        half_max_size,
+                        max_size_diag,
+                        render_image,
+                        BLACK,
+                        distort_circle_flag);
 
     int size = 0;
     unsigned char *img_data = ExportImageToMemory(render_image, ".png", &size);
