@@ -26,6 +26,18 @@
 #include "base64.h"
 #include "random.h"
 
+#define GET_IMAGE_PIXEL(image, x, y, pixel_size) \
+    GetPixelColor(((char*)(image).data) \
+                    + ((int)(x)) * pixel_size \
+                    + ((int)(y)) * pixel_size * (image).width, \
+                  (image).format)
+#define SET_IMAGE_PIXEL(image, color, x, y, pixel_size) \
+    SetPixelColor(((char*)(image).data) \
+                    + ((int)(x)) * pixel_size \
+                    + ((int)(y)) * pixel_size * (image).width, \
+                  color, \
+                  (image).format)
+
 extern const unsigned char _binary_QuinqueFive_ttf_start[];
 extern const unsigned char _binary_QuinqueFive_ttf_end[];
 
@@ -89,6 +101,66 @@ void draw_obscuring_grid(Color color,
     }
 }
 
+float inv_sq_lerp(float amt) {
+    if (amt < 0.0F) {
+        return 0.0F;
+    } else if (amt > 1.0F) {
+        return 1.0F;
+    }
+
+    float minus_one = amt - 1.0F;
+
+    return -((minus_one) * minus_one) + 1.0F;
+}
+
+void draw_distort_circle(float origin_x,
+                         float origin_y,
+                         float radius,
+                         Image image,
+                         Color oob) {
+    Image copy = ImageCopy(image);
+
+    const int px_data_size = GetPixelDataSize(1, 1, copy.format);
+
+    for (int y = 0; y < copy.height; ++y) {
+        for (int x = 0; x < copy.width; ++x) {
+            const float diff_x = (float)x - origin_x;
+            const float diff_y = (float)y - origin_y;
+
+            const float magnitude =
+                (float)sqrt(diff_x * diff_x + diff_y * diff_y);
+
+            if (magnitude <= radius) {
+                const float amt = magnitude / radius;
+                const float new_amt = inv_sq_lerp(amt);
+                const float offset_amt = new_amt * radius;
+
+                const float unit_x = diff_x / magnitude;
+                const float unit_y = diff_y / magnitude;
+
+                const float new_x = origin_x + unit_x * offset_amt;
+                const float new_y = origin_y + unit_y * offset_amt;
+
+                const int new_x_int = (int)(new_x + 0.5F);
+                const int new_y_int = (int)(new_y + 0.5F);
+
+                Color pixel;
+                if (new_x_int < 0 || new_x_int >= copy.width || new_y_int < 0 || new_y_int >= copy.height) {
+                    pixel = oob;
+                } else {
+                    pixel = GET_IMAGE_PIXEL(copy,
+                                            new_x + 0.5F,
+                                            new_y + 0.5F,
+                                            px_data_size);
+                }
+                SET_IMAGE_PIXEL(image, pixel, x, y, px_data_size);
+            }
+        }
+    }
+
+    UnloadImage(copy);
+}
+
 Font get_quinque_five_font(void) {
     Font f = { 0 };
     {
@@ -140,7 +212,7 @@ InteractiveChallenge i_challenge_generate(void) {
 
     Font f = get_quinque_five_font();
 
-    Color text_color = (Color){
+    const Color text_color = (Color){
         (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
         (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
         (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
@@ -154,9 +226,11 @@ InteractiveChallenge i_challenge_generate(void) {
     Vector2 f_size = MeasureTextEx(f, text, font_size, 1.0F);
     f_size.y *= 2.2F;
 
-    int max_size = f_size.x > f_size.y
+    const int max_size = f_size.x > f_size.y
                    ? (int)(f_size.x + 4.5F)
                    : (int)(f_size.y + 4.5F);
+
+    const float max_size_diag = (float)max_size * 0.70710678118654752440F;
 
     Image render_image = GenImageColor(max_size, max_size, BLACK);
 
@@ -181,6 +255,8 @@ InteractiveChallenge i_challenge_generate(void) {
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
+    float half_max_size = (float)max_size / 2.0F;
+    draw_distort_circle(half_max_size, half_max_size, max_size_diag, render_image, BLACK);
 
     int size = 0;
     unsigned char *img_data = ExportImageToMemory(render_image, ".png", &size);
