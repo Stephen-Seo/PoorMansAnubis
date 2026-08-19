@@ -40,6 +40,7 @@
                   (image).format)
 
 #define ROTATION_VARIANCE 35
+#define MAX_SIZE_MULTIPLIER_DIAG 0.70710678118654752440F * 0.8F
 
 extern const unsigned char _binary_QuinqueFive_ttf_start[];
 extern const unsigned char _binary_QuinqueFive_ttf_end[];
@@ -248,8 +249,7 @@ InteractiveChallenge i_challenge_generate(void) {
                            ? (int)(f_size.x + 4.5F)
                            : (int)(f_size.y + 4.5F);
 
-    const float max_size_diag =
-        (float)max_size * 0.70710678118654752440F * 0.9F;
+    const float max_size_diag = (float)max_size * MAX_SIZE_MULTIPLIER_DIAG;
 
     Image render_image = GenImageColor(max_size, max_size, BLACK);
 
