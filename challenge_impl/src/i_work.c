@@ -134,7 +134,6 @@ void draw_distort_circle(float origin_x,
                          float origin_y,
                          float radius,
                          Image image,
-                         Color oob,
                          uint_fast32_t flags) {
     Image copy = ImageCopy(image);
 
@@ -163,17 +162,14 @@ void draw_distort_circle(float origin_x,
                 const int new_x_int = (int)(new_x + 0.5F);
                 const int new_y_int = (int)(new_y + 0.5F);
 
-                Color pixel;
-                if (new_x_int < 0 || new_x_int >= copy.width
-                        || new_y_int < 0 || new_y_int >= copy.height) {
-                    pixel = oob;
-                } else {
-                    pixel = GET_IMAGE_PIXEL(copy,
+                if (new_x_int >= 0 && new_x_int < copy.width
+                        && new_y_int >= 0 && new_y_int < copy.height) {
+                    Color pixel = GET_IMAGE_PIXEL(copy,
                                             new_x + 0.5F,
                                             new_y + 0.5F,
                                             px_data_size);
+                    SET_IMAGE_PIXEL(image, pixel, x, y, px_data_size);
                 }
-                SET_IMAGE_PIXEL(image, pixel, x, y, px_data_size);
             }
         }
     }
@@ -300,7 +296,6 @@ InteractiveChallenge i_challenge_generate(void) {
                         half_max_size,
                         max_size_diag,
                         render_image,
-                        BLACK,
                         distort_circle_flag);
 
     int size = 0;
