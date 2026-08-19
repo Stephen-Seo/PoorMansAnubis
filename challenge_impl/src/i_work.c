@@ -41,7 +41,6 @@
 
 #define MAX_SIZE_PADDING 10.5F
 #define ROTATION_VARIANCE 35
-#define MAX_SIZE_MULTIPLIER_DIAG 0.70710678118654752440F * 0.8F
 
 extern const unsigned char _binary_QuinqueFive_ttf_start[];
 extern const unsigned char _binary_QuinqueFive_ttf_end[];
@@ -246,7 +245,7 @@ InteractiveChallenge i_challenge_generate(void) {
                            ? (int)(f_size.x + MAX_SIZE_PADDING)
                            : (int)(f_size.y + MAX_SIZE_PADDING);
 
-    const float max_size_diag = (float)max_size * MAX_SIZE_MULTIPLIER_DIAG;
+    const float max_size_half = (float)max_size / 2.0F;
 
     Image render_image = GenImageColor(max_size, max_size, BLACK);
 
@@ -287,38 +286,36 @@ InteractiveChallenge i_challenge_generate(void) {
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
-    float half_max_size = (float)max_size / 2.0F;
     switch (rand_int_range(r_state, 0, 1)) {
     case 0:
-        draw_distort_circle(half_max_size,
-                            half_max_size,
-                            max_size_diag,
+        draw_distort_circle(max_size_half,
+                            max_size_half,
+                            max_size_half,
                             render_image,
-                            rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
         break;
     case 1: {
-        const float quarter_max_size = half_max_size / 2.0F;
-        const float q_max_size_diag = half_max_size * MAX_SIZE_MULTIPLIER_DIAG;
+        const float quarter_max_size = max_size_half / 2.0F;
         draw_distort_circle(quarter_max_size,
                             quarter_max_size,
-                            q_max_size_diag,
+                            quarter_max_size,
                             render_image,
-                            rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
         draw_distort_circle(quarter_max_size * 3,
                             quarter_max_size,
-                            q_max_size_diag,
+                            quarter_max_size,
                             render_image,
-                            rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
         draw_distort_circle(quarter_max_size,
                             quarter_max_size * 3,
-                            q_max_size_diag,
+                            quarter_max_size,
                             render_image,
-                            rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
         draw_distort_circle(quarter_max_size * 3,
                             quarter_max_size * 3,
-                            q_max_size_diag,
+                            quarter_max_size,
                             render_image,
-                            rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
     }   break;
     }
 
