@@ -227,10 +227,11 @@ InteractiveChallenge i_challenge_generate(void) {
     f_size.y *= 2.2F;
 
     const int max_size = f_size.x > f_size.y
-                   ? (int)(f_size.x + 4.5F)
-                   : (int)(f_size.y + 4.5F);
+                           ? (int)(f_size.x + 4.5F)
+                           : (int)(f_size.y + 4.5F);
 
-    const float max_size_diag = (float)max_size * 0.70710678118654752440F;
+    const float max_size_diag =
+        (float)max_size * 0.70710678118654752440F * 0.9F;
 
     Image render_image = GenImageColor(max_size, max_size, BLACK);
 
