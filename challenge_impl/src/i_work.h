@@ -32,6 +32,8 @@ InteractiveChallenge i_challenge_generate(void);
 void i_challenge_cleanup(InteractiveChallenge challenge);
 void i_challenge_cleanup_ptr(InteractiveChallenge *challenge);
 
+void i_challenge_debug_quick_print(void);
+
 #ifdef __cplusplus
 }
 #endif

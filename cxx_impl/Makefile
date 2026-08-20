@@ -5,7 +5,7 @@ OBJDIR_ABS := ${CWD}/${OBJDIR}
 
 LINKER_FLAGS := ${PMA_PRE_LINKER_FLAGS} -lsqlite3 -lblake3 -lcurl -lcrypto ${PMA_POST_LINKER_FLAGS}
 COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
-	-I${OBJDIR_ABS} \
+	-I${OBJDIR_ABS}/raylib_include \
 	-Ibundled/out/include -Ibundled/out/ssl/usr/include \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
@@ -20,7 +20,7 @@ COMMON_FLAGS := ${PMA_PRE_COMMON_FLAGS} -std=c++20 -I../challenge_impl/src -I../
 	-Wbidi-chars=any \
 	-fPIE -pie
 COMMON_CFLAGS := ${PMA_PRE_COMMON_CFLAGS} -I../challenge_impl/src -I../challenge_impl/third_party/SimpleArchiver/src \
-	-I${OBJDIR_ABS} \
+	-I${OBJDIR_ABS}/raylib_include \
 	-Ibundled/out/include -Ibundled/out/ssl/usr/include \
 	-Wall -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 	-Werror=format-security \
@@ -85,6 +85,7 @@ CHALL_IMPL_SOURCES := \
 	../challenge_impl/src/work2.cc \
 	../challenge_impl/src/random.cc \
 	../challenge_impl/src/raylib_test.c \
+	../challenge_impl/src/i_work.c \
 	../challenge_impl/third_party/QuinqueFive.asm
 CHALL_IMPL_OBJECTS := \
 	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .c,.c.o,$(filter %.c,${CHALL_IMPL_SOURCES}))) \
@@ -153,7 +154,8 @@ ${OBJDIR}/libraylib.a: ${CWD}/bundled/download_cache/raylib-6.0.tar.gz
 	tar -xf ${CWD}/bundled/download_cache/raylib-6.0.tar.gz -C ${OBJDIR}/raylib_out
 	cd ${OBJDIR}/raylib_out/raylib-6.0 && sed -i -e '/^CC/cCC ?= gcc' -e '/^AR/cAR ?= ar' src/Makefile && CC=${CC} AR=${AR} PLATFORM=PLATFORM_MEMORY ${MAKE} -C src
 	install -D -m444 ${OBJDIR}/raylib_out/raylib-6.0/src/libraylib.a ${OBJDIR}/libraylib.a
-	find ${OBJDIR}/raylib_out/raylib-6.0/src -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/{}" ';'
+	find ${OBJDIR}/raylib_out/raylib-6.0/src -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/raylib_include/{}" ';'
+	find ${OBJDIR}/raylib_out/raylib-6.0/src/external -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/raylib_include/external/{}" ';'
 
 ${CWD}/bundled/download_cache/raylib-6.0.tar.gz:
 	@mkdir -p $(dir $@)

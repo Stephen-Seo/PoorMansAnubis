@@ -43,6 +43,7 @@
 #include "db_msql.h"
 #include "helpers.h"
 #include "http.h"
+#include "i_work.h"
 #include "poor_mans_print.h"
 #include "raylib_test.h"
 #include "thread_limit.h"
@@ -1868,6 +1869,9 @@ int main(int argc, char **argv) {
     return 3;
   } else if (args.flags.test(8)) {
     test_raylib();
+    return 0;
+  } else if (args.flags.test(9)) {
+    i_challenge_debug_quick_print();
     return 0;
   }
 
