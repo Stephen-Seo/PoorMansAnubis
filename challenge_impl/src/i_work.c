@@ -317,7 +317,7 @@ InteractiveChallenge i_challenge_generate(void) {
                             max_size_half,
                             max_size_half,
                             render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
         break;
     case 1: {
         const float quarter_max_size = max_size_half / 2.0F;
@@ -325,22 +325,22 @@ InteractiveChallenge i_challenge_generate(void) {
                             quarter_max_size,
                             quarter_max_size,
                             render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
         draw_distort_circle(quarter_max_size * 3,
                             quarter_max_size,
                             quarter_max_size,
                             render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
         draw_distort_circle(quarter_max_size,
                             quarter_max_size * 3,
                             quarter_max_size,
                             render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
         draw_distort_circle(quarter_max_size * 3,
                             quarter_max_size * 3,
                             quarter_max_size,
                             render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 1));
+                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
     }   break;
     }
 
