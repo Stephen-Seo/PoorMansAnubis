@@ -20,9 +20,13 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
+#include <string.h>
 #include <time.h>
 
 #include <raylib.h>
+#include <external/stb_image_write.h>
+
+#include <data_structures/linked_list.h>
 
 #include "base64.h"
 #include "random.h"
@@ -42,9 +46,114 @@
 #define FONT_SIZE 40.0F
 #define MAX_SIZE_PADDING 10.5F
 #define ROTATION_VARIANCE 35
+#define JPG_QUALITY 20
 
 extern const unsigned char _binary_QuinqueFive_ttf_start[];
 extern const unsigned char _binary_QuinqueFive_ttf_end[];
+
+typedef struct jpg_export_part {
+    void *data;
+    uint64_t size;
+} jpg_export_part;
+
+void jpg_export_part_free(void *ptr) {
+    if (!ptr) {
+        return;
+    }
+
+    jpg_export_part *part = (jpg_export_part*)ptr;
+    if (part->data) {
+        free(part->data);
+        part->data = NULL;
+    }
+    free(part);
+}
+
+void jpg_export_part_fn(void *ctx, void *data, int size) {
+    if (size <= 0 || !data) {
+        return;
+    }
+
+    SDArchiverLinkedList *parts = (SDArchiverLinkedList*)ctx;
+
+    jpg_export_part *part = malloc(sizeof(jpg_export_part));
+    *part = (jpg_export_part){
+        malloc((size_t)size),
+        (uint64_t)size
+    };
+
+    memcpy(part->data, data, (size_t)size);
+
+    simple_archiver_list_add(parts, part, jpg_export_part_free);
+}
+
+/// Returns part.data == NULL on error. Returned data must be FREE'd.
+jpg_export_part image_to_jpg_memory(Image image) {
+    // Some code adapted from Raylib's rtextures.c .
+    int channels = 4;
+    uint8_t *data = (uint8_t*)image.data;
+    int_fast8_t data_allocated = 0;
+    if (image.format == PIXELFORMAT_UNCOMPRESSED_GRAYSCALE) {
+        channels = 1;
+    } else if (image.format == PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA) {
+        channels = 2;
+    } else if (image.format == PIXELFORMAT_UNCOMPRESSED_R8G8B8) {
+        channels = 3;
+    } else if (image.format == PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
+        channels = 4;
+    } else {
+        data = (uint8_t*)LoadImageColors(image);
+        data_allocated = 1;
+    }
+
+    __attribute__((cleanup(simple_archiver_list_free)))
+    SDArchiverLinkedList *parts = simple_archiver_list_init();
+
+    stbi_write_jpg_to_func(jpg_export_part_fn,
+                           parts,
+                           image.width,
+                           image.height,
+                           channels,
+                           data,
+                           JPG_QUALITY);
+
+    if (data_allocated) {
+        RL_FREE(data);
+    }
+
+    // combine parts of jpg data.
+    size_t final_size = 0;
+
+    for (SDArchiverLLNode *node = parts->head->next;
+         node != parts->tail;
+         node = node->next) {
+        jpg_export_part *part = (jpg_export_part*)node->data;
+        if (!part || part->size == 0) {
+            fprintf(stderr, "to_jpg_memory: Invalid jpg part!\n");
+            return (jpg_export_part){NULL, 0};
+        }
+        final_size += (size_t)part->size;
+    }
+
+    if (final_size == 0) {
+        fprintf(stderr, "to_jpg_memory: final_size is zero!\n");
+        return (jpg_export_part){NULL, 0};
+    }
+
+    void *final_data = malloc(final_size);
+    size_t idx = 0;
+    for (SDArchiverLLNode *node = parts->head->next;
+         node != parts->tail;
+         node = node->next) {
+        jpg_export_part *part = (jpg_export_part*)node->data;
+        memcpy(((char*)final_data) + idx,
+               part->data,
+               part->size);
+        idx += (size_t)part->size;
+    }
+
+    return (jpg_export_part){final_data, (uint64_t)final_size};
+}
 
 void draw_obscuring_circle(Color color,
                            float interval,
@@ -344,8 +453,7 @@ InteractiveChallenge i_challenge_generate(void) {
     }   break;
     }
 
-    int size = 0;
-    unsigned char *img_data = ExportImageToMemory(render_image, ".png", &size);
+    jpg_export_part img_data = image_to_jpg_memory(render_image);
 
     UnloadImage(render_image);
 
@@ -353,29 +461,29 @@ InteractiveChallenge i_challenge_generate(void) {
 
     CloseWindow();
 
-    if (img_data && size > 0) {
+    if (img_data.data && img_data.size > 0) {
         unsigned long long out_size = 0;
-        char *b64 = base64_data_to_base64((const char*)img_data,
-                                          (unsigned long long)size,
+        char *b64 = base64_data_to_base64((const char*)img_data.data,
+                                          (unsigned long long)img_data.size,
                                           &out_size);
         if (b64 && out_size > 0) {
-#define IMG_PNG_B64_OUTPUT_HTML_FMT "<img src=\"data:image/png;base64,%.*s\" />"
+#define IMG_JPG_B64_OUTPUT_HTML_FMT "<img src=\"data:image/jpg;base64,%.*s\" />"
             int html_size = snprintf(
                     NULL,
                     0,
-                    IMG_PNG_B64_OUTPUT_HTML_FMT,
+                    IMG_JPG_B64_OUTPUT_HTML_FMT,
                     (int)out_size,
                     b64);
             c.challenge_html = malloc((size_t)(html_size + 1));
             snprintf(c.challenge_html,
                      (size_t)(html_size + 1),
-                     IMG_PNG_B64_OUTPUT_HTML_FMT,
+                     IMG_JPG_B64_OUTPUT_HTML_FMT,
                      (int)out_size,
                      b64);
 
             free(b64);
         }
-        MemFree(img_data);
+        free(img_data.data);
     }
 
     rand_state_cleanup(r_state);
