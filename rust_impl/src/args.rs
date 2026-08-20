@@ -37,6 +37,7 @@ pub struct Args {
     pub enable_override_dest_url: bool,
     pub mysql_has_priority: bool,
     pub test_raylib: bool,
+    pub i_challenge: bool,
 }
 
 pub fn print_args() {
@@ -100,6 +101,7 @@ pub fn parse_args() -> Result<Args, Error> {
         enable_override_dest_url: false,
         mysql_has_priority: true,
         test_raylib: false,
+        i_challenge: false,
     };
 
     let p_args = args_fn();
@@ -173,6 +175,8 @@ pub fn parse_args() -> Result<Args, Error> {
             unknown_arg_error = true;
         } else if arg == "--test-raylib" {
             args.test_raylib = true;
+        } else if arg == "--i-challenge" {
+            args.i_challenge = true;
         } else {
             unknown_args.push_back(arg);
         }

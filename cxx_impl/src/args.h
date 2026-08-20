@@ -59,6 +59,7 @@ struct Args {
   // 6 - enable thread-limit
   // 7 - error on unknown args
   // 8 - test raylib
+  // 9 - test interactive challenge
   std::bitset<32> flags;
   uint32_t challenge_timeout;
   uint32_t allowed_timeout;

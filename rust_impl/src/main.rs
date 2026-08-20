@@ -203,6 +203,8 @@ impl ClientWrapper {
 
 unsafe extern "C" {
     fn test_raylib();
+
+    fn i_challenge_debug_quick_print();
 }
 
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
@@ -1341,6 +1343,11 @@ async fn main() {
     if parsed_args.test_raylib {
         unsafe {
             test_raylib();
+        }
+        return;
+    } else if parsed_args.i_challenge {
+        unsafe {
+            i_challenge_debug_quick_print();
         }
         return;
     }
