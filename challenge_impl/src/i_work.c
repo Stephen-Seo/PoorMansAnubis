@@ -510,3 +510,19 @@ void i_challenge_cleanup_ptr(InteractiveChallenge *challenge) {
     challenge->client_resp_html = NULL;
     challenge->answer = NULL;
 }
+
+void i_challenge_debug_quick_print(void) {
+    InteractiveChallenge challenge = i_challenge_generate();
+
+    if (challenge.challenge_html) {
+        printf("challenge_html: %s\n", challenge.challenge_html);
+    }
+    if (challenge.client_resp_html) {
+        printf("client_resp_html: %s\n", challenge.client_resp_html);
+    }
+    if (challenge.answer) {
+        printf("answer: %s\n", challenge.answer);
+    }
+
+    i_challenge_cleanup_ptr(&challenge);
+}

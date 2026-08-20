@@ -191,13 +191,7 @@ int main(int argc, char **argv) {
   } else if (raylib) {
     test_raylib();
   } else if (i_challenge) {
-    InteractiveChallenge c = i_challenge_generate();
-
-    if (c.challenge_html) {
-      printf("%s\n", c.challenge_html);
-    }
-
-    i_challenge_cleanup_ptr(&c);
+    i_challenge_debug_quick_print();
   } else {
     print_help();
     return 1;
