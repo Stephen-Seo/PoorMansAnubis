@@ -168,8 +168,8 @@ void draw_obscuring_circle(Color color,
     int max_x = offset_x > center_x ? offset_x : center_x * 2 - offset_x;
     int max_y = offset_y > center_y ? offset_y : center_y * 2 - offset_y;
 
-    float max_size = (float)sqrt((float)(max_x * max_x * 4)
-                                 + (float)(max_y * max_y * 4));
+    float max_size = sqrtf((float)(max_x * max_x * 4)
+                           + (float)(max_y * max_y * 4));
 
     for (;max_size >= 4.0F; max_size -= interval) {
         ImageDrawCircleLines(
@@ -275,8 +275,7 @@ void draw_distort_circle(float origin_x,
             const float diff_x = (float)x - origin_x;
             const float diff_y = (float)y - origin_y;
 
-            const float magnitude =
-                (float)sqrt(diff_x * diff_x + diff_y * diff_y);
+            const float magnitude = sqrtf(diff_x * diff_x + diff_y * diff_y);
 
             if (magnitude <= radius) {
                 const float amt = magnitude / radius;
@@ -301,9 +300,75 @@ void draw_distort_circle(float origin_x,
                 if (new_x_int >= 0 && new_x_int < copy.width
                         && new_y_int >= 0 && new_y_int < copy.height) {
                     Color pixel = GET_IMAGE_PIXEL(copy,
-                                            new_x + 0.5F,
-                                            new_y + 0.5F,
-                                            px_data_size);
+                                                  new_x_int,
+                                                  new_y_int,
+                                                  px_data_size);
+                    SET_IMAGE_PIXEL(image, pixel, x, y, px_data_size);
+                }
+            }
+        }
+    }
+
+    UnloadImage(copy);
+}
+
+/// Flags:
+/// xxxx xxx1 if set use inv_sq_lerp/sin_lerp, else use sq_lerp/inv_sin_lerp
+/// xxxx xx1x if set use sq_lerps, else use sin_lerps
+void draw_distort_ellipse(float origin_x,
+                          float origin_y,
+                          float radius_x,
+                          float radius_y,
+                          Image image,
+                          uint_fast32_t flags) {
+    Image copy = ImageCopy(image);
+
+    const int px_data_size = GetPixelDataSize(1, 1, copy.format);
+
+    for (int y = 0; y < copy.height; ++y) {
+        for (int x = 0; x < copy.width; ++x) {
+            const float diff_x = (float)x - origin_x;
+            const float diff_y = (float)y - origin_y;
+
+            const float magnitude = sqrtf(diff_x * diff_x + diff_y * diff_y);
+
+            const float c = diff_y / diff_x;
+            //const float d = 0.0F;
+
+            const float a_sq = radius_x * radius_x;
+            const float b_sq = radius_y * radius_y;
+
+            const float x1 = sqrtf(1.0F / (1.0F / a_sq + c * c / b_sq));
+            const float y1 = sqrtf(b_sq - (b_sq * x1 * x1 / a_sq));
+
+            const float ell_magnitude = sqrtf(x1 * x1 + y1 * y1);
+
+            if (magnitude <= ell_magnitude) {
+                const float amt = magnitude / ell_magnitude;
+                const float new_amt =
+                    ((flags & 2) != 0)
+                        ? (((flags & 1) != 0)
+                            ? inv_sq_lerp(amt) : sq_lerp(amt))
+                        : (((flags & 1) != 0)
+                            ? sin_lerp(amt) : inv_sin_lerp(amt));
+
+                const float offset_amt = new_amt * ell_magnitude;
+
+                const float unit_x = diff_x / magnitude;
+                const float unit_y = diff_y / magnitude;
+
+                const float new_x = origin_x + unit_x * offset_amt;
+                const float new_y = origin_y + unit_y * offset_amt;
+
+                const int new_x_int = (int)(new_x + 0.5F);
+                const int new_y_int = (int)(new_y + 0.5F);
+
+                if (new_x_int >= 0 && new_x_int < copy.width
+                        && new_y_int >= 0 && new_y_int < copy.height) {
+                    Color pixel = GET_IMAGE_PIXEL(copy,
+                                                  new_x_int,
+                                                  new_y_int,
+                                                  px_data_size);
                     SET_IMAGE_PIXEL(image, pixel, x, y, px_data_size);
                 }
             }
@@ -394,14 +459,14 @@ InteractiveChallenge i_challenge_generate(void) {
                     rand_int_range(r_state,
                                    -ROTATION_VARIANCE,
                                    ROTATION_VARIANCE)
-                        + ROTATION_BASE);
+                    + ROTATION_BASE);
         break;
     case 1:
         ImageRotate(&text_image,
                     rand_int_range(r_state,
                                    -ROTATION_VARIANCE,
                                    ROTATION_VARIANCE)
-                        - ROTATION_BASE);
+                    - ROTATION_BASE);
         break;
     }
 
@@ -425,16 +490,22 @@ InteractiveChallenge i_challenge_generate(void) {
         &render_image);
 
     const float quarter_max_size = max_size_half / 2.0F;
-    draw_distort_circle(quarter_max_size,
-                        quarter_max_size,
-                        quarter_max_size,
-                        render_image,
-                        (uint_fast32_t)rand_int_range(r_state, 0, 3));
-    draw_distort_circle(quarter_max_size * 3,
-                        quarter_max_size,
-                        quarter_max_size,
-                        render_image,
-                        (uint_fast32_t)rand_int_range(r_state, 0, 3));
+    //draw_distort_circle(quarter_max_size,
+    //                    quarter_max_size,
+    //                    quarter_max_size,
+    //                    render_image,
+    //                    (uint_fast32_t)rand_int_range(r_state, 0, 3));
+    //draw_distort_circle(quarter_max_size * 3,
+    //                    quarter_max_size,
+    //                    quarter_max_size,
+    //                    render_image,
+    //                    (uint_fast32_t)rand_int_range(r_state, 0, 3));
+    draw_distort_ellipse(max_size_half,
+                         quarter_max_size,
+                         max_size_half,
+                         quarter_max_size,
+                         render_image,
+                         (uint_fast32_t)rand_int_range(r_state, 0, 3));
 
     jpg_export_part img_data = image_to_jpg_memory(render_image);
 
