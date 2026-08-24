@@ -86,7 +86,7 @@ CHALL_IMPL_SOURCES := \
 	../challenge_impl/src/random.cc \
 	../challenge_impl/src/raylib_test.c \
 	../challenge_impl/src/i_work.c \
-	../challenge_impl/third_party/QuinqueFive.asm
+	../challenge_impl/third_party/Jupiteroid-Bold.asm
 CHALL_IMPL_OBJECTS := \
 	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .c,.c.o,$(filter %.c,${CHALL_IMPL_SOURCES}))) \
 	$(subst ../challenge_impl,${OBJDIR_ABS}/dotdot,$(subst .cc,.cc.o,$(filter %.cc,${CHALL_IMPL_SOURCES}))) \
