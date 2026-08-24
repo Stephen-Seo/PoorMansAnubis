@@ -45,7 +45,7 @@
 
 #define FONT_SIZE 40.0F
 #define MAX_SIZE_PADDING 10.5F
-#define ROTATION_VARIANCE 35
+#define ROTATION_VARIANCE 25
 #define JPG_QUALITY 20
 
 extern const unsigned char _binary_QuinqueFive_ttf_start[];
@@ -381,7 +381,9 @@ InteractiveChallenge i_challenge_generate(void) {
 
     const float max_size_half = (float)max_size / 2.0F;
 
-    Image render_image = GenImageColor(max_size, max_size, BLACK);
+    Image render_image = GenImageColor(max_size,
+                                       (int)(max_size_half + 0.5F),
+                                       BLACK);
 
     Image text_image = ImageTextEx(f, text, FONT_SIZE, 1.0F, text_color);
 
@@ -420,38 +422,18 @@ InteractiveChallenge i_challenge_generate(void) {
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
-    switch (rand_int_range(r_state, 0, 1)) {
-    case 0:
-        draw_distort_circle(max_size_half,
-                            max_size_half,
-                            max_size_half,
-                            render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
-        break;
-    case 1: {
-        const float quarter_max_size = max_size_half / 2.0F;
-        draw_distort_circle(quarter_max_size,
-                            quarter_max_size,
-                            quarter_max_size,
-                            render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
-        draw_distort_circle(quarter_max_size * 3,
-                            quarter_max_size,
-                            quarter_max_size,
-                            render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
-        draw_distort_circle(quarter_max_size,
-                            quarter_max_size * 3,
-                            quarter_max_size,
-                            render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
-        draw_distort_circle(quarter_max_size * 3,
-                            quarter_max_size * 3,
-                            quarter_max_size,
-                            render_image,
-                            (uint_fast32_t)rand_int_range(r_state, 0, 3));
-    }   break;
-    }
+
+    const float quarter_max_size = max_size_half / 2.0F;
+    draw_distort_circle(quarter_max_size,
+                        quarter_max_size,
+                        quarter_max_size,
+                        render_image,
+                        (uint_fast32_t)rand_int_range(r_state, 0, 3));
+    draw_distort_circle(quarter_max_size * 3,
+                        quarter_max_size,
+                        quarter_max_size,
+                        render_image,
+                        (uint_fast32_t)rand_int_range(r_state, 0, 3));
 
     jpg_export_part img_data = image_to_jpg_memory(render_image);
 
