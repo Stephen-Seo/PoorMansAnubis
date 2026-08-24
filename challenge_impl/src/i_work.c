@@ -43,13 +43,14 @@
                   color, \
                   (image).format)
 
-#define FONT_SIZE 40.0F
+#define FONT_SIZE 80.0F
 #define MAX_SIZE_PADDING 10.5F
+#define ROTATION_BASE 30
 #define ROTATION_VARIANCE 25
 #define JPG_QUALITY 20
 
-extern const unsigned char _binary_QuinqueFive_ttf_start[];
-extern const unsigned char _binary_QuinqueFive_ttf_end[];
+extern const unsigned char _binary_Jupiteroid_ttf_start[];
+extern const unsigned char _binary_Jupiteroid_ttf_end[];
 
 typedef struct jpg_export_part {
     void *data;
@@ -312,18 +313,18 @@ void draw_distort_circle(float origin_x,
     UnloadImage(copy);
 }
 
-Font get_quinque_five_font(void) {
+Font get_jupiteroid_font(void) {
     Font f = { 0 };
     {
         const size_t font_size =
-            (size_t)(_binary_QuinqueFive_ttf_end
-                     - _binary_QuinqueFive_ttf_start);
+            (size_t)(_binary_Jupiteroid_ttf_end
+                     - _binary_Jupiteroid_ttf_start);
         // Font loading adapted from raylib's rtext.c "LoadFontFromMemory"
         // to load without anti-aliasing.
         f.baseSize = 40;
         f.glyphPadding = 1;
         f.glyphs = LoadFontData(
-            _binary_QuinqueFive_ttf_start,
+            _binary_Jupiteroid_ttf_start,
             (int)font_size,
             f.baseSize,
             NULL,
@@ -361,7 +362,7 @@ InteractiveChallenge i_challenge_generate(void) {
 
     InitWindow(50, 50, "rendering_window");
 
-    Font f = get_quinque_five_font();
+    Font f = get_jupiteroid_font();
 
     const Color text_color = (Color){
         (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
@@ -393,14 +394,14 @@ InteractiveChallenge i_challenge_generate(void) {
                     rand_int_range(r_state,
                                    -ROTATION_VARIANCE,
                                    ROTATION_VARIANCE)
-                        + 45);
+                        + ROTATION_BASE);
         break;
     case 1:
         ImageRotate(&text_image,
                     rand_int_range(r_state,
                                    -ROTATION_VARIANCE,
                                    ROTATION_VARIANCE)
-                        - 45);
+                        - ROTATION_BASE);
         break;
     }
 
@@ -497,13 +498,13 @@ void i_challenge_debug_quick_print(void) {
     InteractiveChallenge challenge = i_challenge_generate();
 
     if (challenge.challenge_html) {
-        printf("challenge_html: %s\n", challenge.challenge_html);
+        printf("challenge_html:\n%s\n", challenge.challenge_html);
     }
     if (challenge.client_resp_html) {
-        printf("client_resp_html: %s\n", challenge.client_resp_html);
+        printf("client_resp_html:\n%s\n", challenge.client_resp_html);
     }
     if (challenge.answer) {
-        printf("answer: %s\n", challenge.answer);
+        printf("answer:\n%s\n", challenge.answer);
     }
 
     i_challenge_cleanup_ptr(&challenge);

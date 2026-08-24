@@ -177,25 +177,25 @@ target_include_directories(PMA_Challenge PUBLIC
     "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
 )
 
-add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a"
-    COMMAND $ENV{AS} -I "${CMAKE_CURRENT_SOURCE_DIR}/third_party" -o "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.o" "${CMAKE_CURRENT_SOURCE_DIR}/third_party/QuinqueFive.asm"
-    COMMAND $ENV{AR} rcs "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a" "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.o"
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a"
+    COMMAND $ENV{AS} -I "${CMAKE_CURRENT_SOURCE_DIR}/third_party" -o "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.o" "${CMAKE_CURRENT_SOURCE_DIR}/third_party/Jupiteroid-Bold.asm"
+    COMMAND $ENV{AR} rcs "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a" "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.o"
     VERBATIM)
-add_custom_target(QUINQUEFIVE_FONT_EMBED DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a")
-set_target_properties(QUINQUEFIVE_FONT_EMBED PROPERTIES
-    ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a;${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.o"
+add_custom_target(JUPITEROID_FONT_EMBED DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a")
+set_target_properties(JUPITEROID_FONT_EMBED PROPERTIES
+    ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a;${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.o"
 )
 
-add_dependencies(PoorMansAnubis QUINQUEFIVE_FONT_EMBED)
-add_dependencies(UnitTest QUINQUEFIVE_FONT_EMBED)
-add_dependencies(PMA_Challenge QUINQUEFIVE_FONT_EMBED)
+add_dependencies(PoorMansAnubis JUPITEROID_FONT_EMBED)
+add_dependencies(UnitTest JUPITEROID_FONT_EMBED)
+add_dependencies(PMA_Challenge JUPITEROID_FONT_EMBED)
 
-target_link_libraries(PoorMansAnubis "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a")
-target_link_libraries(UnitTest "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a")
-target_link_libraries(PMA_Challenge "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a")
+target_link_libraries(PoorMansAnubis "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a")
+target_link_libraries(UnitTest "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a")
+target_link_libraries(PMA_Challenge "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a")
 
 install(TARGETS PMA_Challenge)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a"
     TYPE LIB)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libQuinqueFive_ttf.a"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a"
     TYPE LIB)
