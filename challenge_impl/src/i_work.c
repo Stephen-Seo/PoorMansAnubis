@@ -45,8 +45,8 @@
 
 #define FONT_SIZE 80.0F
 #define MAX_SIZE_PADDING 10.5F
-#define ROTATION_BASE 30
-#define ROTATION_VARIANCE 25
+#define ROTATION_BASE 20
+#define ROTATION_VARIANCE 15
 #define JPG_QUALITY 20
 
 extern const unsigned char _binary_Jupiteroid_ttf_start[];
@@ -439,7 +439,6 @@ InteractiveChallenge i_challenge_generate(void) {
     const char *text = "Apples";
 
     Vector2 f_size = MeasureTextEx(f, text, FONT_SIZE, 1.0F);
-    f_size.y *= 2.2F;
 
     const int max_size = f_size.x > f_size.y
                            ? (int)(f_size.x + MAX_SIZE_PADDING)
@@ -447,9 +446,12 @@ InteractiveChallenge i_challenge_generate(void) {
 
     const float max_size_half = (float)max_size / 2.0F;
 
-    Image render_image = GenImageColor(max_size,
-                                       (int)(max_size_half + 0.5F),
-                                       BLACK);
+    Image render_image =
+        GenImageColor(max_size,
+                      f_size.x > 2.0F * f_size.y
+                        ? (int)(max_size_half + 0.5F)
+                        : max_size,
+                      BLACK);
 
     Image text_image = ImageTextEx(f, text, FONT_SIZE, 1.0F, text_color);
 
