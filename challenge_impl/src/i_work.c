@@ -416,19 +416,13 @@ Font get_jupiteroid_font(void) {
     return f;
 }
 
-InteractiveChallenge i_challenge_generate(void) {
-    void *r_state = rand_state_init();
-
-    InteractiveChallenge c;
-
-    c.challenge_html = NULL;
-    c.client_resp_html = NULL;
-    c.answer = NULL;
-
-    InitWindow(50, 50, "rendering_window");
-
-    Font f = get_jupiteroid_font();
-
+Image text_to_image(Font f,
+                    const char *text,
+                    void *r_state,
+                    int *width_out,
+                    int *height_out,
+                    int *max_size_out,
+                    Color *color_out) {
     const Color text_color = (Color){
         (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
         (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
@@ -436,13 +430,19 @@ InteractiveChallenge i_challenge_generate(void) {
         255
     };
 
-    const char *text = "Apples";
+    if (color_out) {
+        *color_out = text_color;
+    }
 
     Vector2 f_size = MeasureTextEx(f, text, FONT_SIZE, 1.0F);
 
     const int max_size = f_size.x > f_size.y
                            ? (int)(f_size.x + MAX_SIZE_PADDING)
                            : (int)(f_size.y + MAX_SIZE_PADDING);
+
+    if (max_size_out) {
+        *max_size_out = max_size;
+    }
 
     const float max_size_half = (float)max_size / 2.0F;
 
@@ -453,8 +453,12 @@ InteractiveChallenge i_challenge_generate(void) {
                         : max_size,
                       BLACK);
 
-    const int image_width = render_image.width;
-    const int image_height = render_image.height;
+    if (width_out) {
+        *width_out = render_image.width;
+    }
+    if (height_out) {
+        *height_out = render_image.height;
+    }
 
     Image text_image = ImageTextEx(f, text, FONT_SIZE, 1.0F, text_color);
 
@@ -485,6 +489,35 @@ InteractiveChallenge i_challenge_generate(void) {
         WHITE);
 
     UnloadImage(text_image);
+
+    return render_image;
+}
+
+InteractiveChallenge i_challenge_generate(void) {
+    void *r_state = rand_state_init();
+
+    InteractiveChallenge c;
+
+    c.challenge_html = NULL;
+    c.client_resp_html = NULL;
+    c.answer = NULL;
+
+    InitWindow(50, 50, "rendering_window");
+
+    Font f = get_jupiteroid_font();
+
+    int image_width = 0;
+    int image_height = 0;
+    Color text_color = WHITE;
+    int max_size = 0;
+    Image render_image = text_to_image(f,
+                                       "Apples",
+                                       r_state,
+                                       &image_width,
+                                       &image_height,
+                                       &max_size,
+                                       &text_color);
+    const float max_size_half = (float)max_size / 2.0F;
 
     draw_obscuring_circle(text_color, 10.0F, &render_image, r_state);
     draw_obscuring_grid(
