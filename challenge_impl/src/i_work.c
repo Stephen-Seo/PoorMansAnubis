@@ -453,6 +453,9 @@ InteractiveChallenge i_challenge_generate(void) {
                         : max_size,
                       BLACK);
 
+    const int image_width = render_image.width;
+    const int image_height = render_image.height;
+
     Image text_image = ImageTextEx(f, text, FONT_SIZE, 1.0F, text_color);
 
     switch (rand_int_range(r_state, 0, 1)) {
@@ -523,17 +526,21 @@ InteractiveChallenge i_challenge_generate(void) {
                                           (unsigned long long)img_data.size,
                                           &out_size);
         if (b64 && out_size > 0) {
-#define IMG_JPG_B64_OUTPUT_HTML_FMT "<img src=\"data:image/jpg;base64,%.*s\" />"
+#define IMG_JPG_B64_OUTPUT_HTML_FMT "<img width=\"%d\" height=\"%d\" src=\"data:image/jpg;base64,%.*s\" />"
             int html_size = snprintf(
                     NULL,
                     0,
                     IMG_JPG_B64_OUTPUT_HTML_FMT,
+                    image_width,
+                    image_height,
                     (int)out_size,
                     b64);
             c.challenge_html = malloc((size_t)(html_size + 1));
             snprintf(c.challenge_html,
                      (size_t)(html_size + 1),
                      IMG_JPG_B64_OUTPUT_HTML_FMT,
+                     image_width,
+                     image_height,
                      (int)out_size,
                      b64);
 
