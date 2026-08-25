@@ -30,6 +30,7 @@
 
 #include "base64.h"
 #include "random.h"
+#include "../third_party/nouns.h"
 
 #define GET_IMAGE_PIXEL(image, x, y, pixel_size) \
     GetPixelColor(((char*)(image).data) \
@@ -448,9 +449,13 @@ Image text_to_image(Font f,
 
     Image render_image =
         GenImageColor(max_size,
-                      f_size.x > 2.0F * f_size.y
-                        ? (int)(max_size_half + 0.5F)
-                        : max_size,
+                      f_size.x > 4.0F * f_size.y
+                        ? (int)((float)max_size / 4.0F + 0.5F)
+                        : f_size.x > 3.0F * f_size.y
+                          ? (int)((float)max_size / 3.0F + 0.5F)
+                          : f_size.x > 2.0F * f_size.y
+                            ? (int)(max_size_half + 0.5F)
+                            : max_size,
                       BLACK);
 
     if (width_out) {
@@ -493,6 +498,12 @@ Image text_to_image(Font f,
     return render_image;
 }
 
+const char *get_random_word(void *r_state) {
+    return third_party_nouns[rand_int_range(r_state,
+                                            0,
+                                            third_party_nouns_size - 1)];
+}
+
 InteractiveChallenge i_challenge_generate(void) {
     void *r_state = rand_state_init();
 
@@ -510,14 +521,18 @@ InteractiveChallenge i_challenge_generate(void) {
     int image_height = 0;
     Color text_color = WHITE;
     int max_size = 0;
+    const char *text = get_random_word(r_state);
+#ifndef NDEBUG
+    fprintf(stderr, "Random word: %s\n", text);
+#endif
     Image render_image = text_to_image(f,
-                                       "Apples",
+                                       text,
                                        r_state,
                                        &image_width,
                                        &image_height,
                                        &max_size,
                                        &text_color);
-    const float max_size_half = (float)max_size / 2.0F;
+    //const float max_size_half = (float)max_size / 2.0F;
 
     draw_obscuring_circle(text_color, 10.0F, &render_image, r_state);
     draw_obscuring_grid(
@@ -527,7 +542,7 @@ InteractiveChallenge i_challenge_generate(void) {
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
 
-    const float quarter_max_size = max_size_half / 2.0F;
+    //const float quarter_max_size = max_size_half / 2.0F;
     //draw_distort_circle(quarter_max_size,
     //                    quarter_max_size,
     //                    quarter_max_size,
@@ -538,10 +553,10 @@ InteractiveChallenge i_challenge_generate(void) {
     //                    quarter_max_size,
     //                    render_image,
     //                    (uint_fast32_t)rand_int_range(r_state, 0, 3));
-    draw_distort_ellipse(max_size_half,
-                         quarter_max_size,
-                         max_size_half,
-                         quarter_max_size,
+    draw_distort_ellipse((float)image_width / 2.0F,
+                         (float)image_height / 2.0F,
+                         (float)image_width / 2.0F,
+                         (float)image_height / 2.0F,
                          render_image,
                          (uint_fast32_t)rand_int_range(r_state, 0, 3));
 
