@@ -422,7 +422,6 @@ Image text_to_image(Font f,
                     void *r_state,
                     int *width_out,
                     int *height_out,
-                    int *max_size_out,
                     Color *color_out) {
     const Color text_color = (Color){
         (unsigned char)(128 + rand_int_range(r_state, 0, 127)),
@@ -437,26 +436,51 @@ Image text_to_image(Font f,
 
     Vector2 f_size = MeasureTextEx(f, text, FONT_SIZE, 1.0F);
 
-    const int max_size = f_size.x > f_size.y
+    int max_size = f_size.x > f_size.y
                            ? (int)(f_size.x + MAX_SIZE_PADDING)
                            : (int)(f_size.y + MAX_SIZE_PADDING);
 
-    if (max_size_out) {
-        *max_size_out = max_size;
+    Image render_image = {0};
+
+    if (f_size.x > 4.0F * f_size.y) {
+        int x = max_size;
+        int y = max_size / 4;
+
+        const int prev_area = max_size * max_size;
+        int area = x * y;
+        while (area < prev_area) {
+            ++x;
+            ++y;
+            area = x * y;
+        }
+        render_image = GenImageColor(x, y, BLACK);
+    } else if (f_size.x > 3.0F * f_size.y) {
+        int x = max_size;
+        int y = max_size / 3;
+
+        const int prev_area = max_size * max_size;
+        int area = x * y;
+        while (area < prev_area) {
+            ++x;
+            ++y;
+            area = x * y;
+        }
+        render_image = GenImageColor(x, y, BLACK);
+    } else if (f_size.x > 2.0F * f_size.y) {
+        int x = max_size;
+        int y = max_size / 2;
+
+        const int prev_area = max_size * max_size;
+        int area = x * y;
+        while (area < prev_area) {
+            ++x;
+            ++y;
+            area = x * y;
+        }
+        render_image = GenImageColor(x, y, BLACK);
+    } else {
+        render_image = GenImageColor(max_size, max_size, BLACK);
     }
-
-    const float max_size_half = (float)max_size / 2.0F;
-
-    Image render_image =
-        GenImageColor(max_size,
-                      f_size.x > 4.0F * f_size.y
-                        ? (int)((float)max_size / 4.0F + 0.5F)
-                        : f_size.x > 3.0F * f_size.y
-                          ? (int)((float)max_size / 3.0F + 0.5F)
-                          : f_size.x > 2.0F * f_size.y
-                            ? (int)(max_size_half + 0.5F)
-                            : max_size,
-                      BLACK);
 
     if (width_out) {
         *width_out = render_image.width;
@@ -520,7 +544,6 @@ InteractiveChallenge i_challenge_generate(void) {
     int image_width = 0;
     int image_height = 0;
     Color text_color = WHITE;
-    int max_size = 0;
     const char *text = get_random_word(r_state);
 #ifndef NDEBUG
     fprintf(stderr, "Random word: %s\n", text);
@@ -530,7 +553,6 @@ InteractiveChallenge i_challenge_generate(void) {
                                        r_state,
                                        &image_width,
                                        &image_height,
-                                       &max_size,
                                        &text_color);
     //const float max_size_half = (float)max_size / 2.0F;
 
