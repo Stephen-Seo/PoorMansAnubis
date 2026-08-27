@@ -9,6 +9,7 @@ set(PoorMansAnubis_SOURCES
     src/raylib_test.c
     src/i_work.c
     src/random.cc
+    src/third_party_impl.c
     third_party/SimpleArchiver/src/data_structures/linked_list.c
     third_party/SimpleArchiver/src/data_structures/chunked_array.c
     third_party/SimpleArchiver/src/data_structures/priority_heap.c

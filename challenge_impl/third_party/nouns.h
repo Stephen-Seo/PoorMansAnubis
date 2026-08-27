@@ -1,8 +1,10 @@
 #ifndef COM_SEODISPARATE_POOR_MANS_ANUBIS_CHALLENGE_THIRD_PARTY_NOUNS_H_
 #define COM_SEODISPARATE_POOR_MANS_ANUBIS_CHALLENGE_THIRD_PARTY_NOUNS_H_
 
-static int third_party_nouns_size = 3198;
-static const char *third_party_nouns[] = {
+# ifdef COM_SEODISPARATE_POOR_MANS_ANUBIS_CHALLENGE_THIRD_PARTY_NOUNS_IMPL
+
+const int third_party_nouns_size = 3198;
+const char *third_party_nouns[] = {
     "ATM",
     "CD",
     "SUV",
@@ -3202,5 +3204,11 @@ static const char *third_party_nouns[] = {
     "zoo",
     "zoology"
 };
+# else
+
+extern const int third_party_nouns_size;
+extern const char *third_party_nouns[];
+
+# endif
 
 #endif
