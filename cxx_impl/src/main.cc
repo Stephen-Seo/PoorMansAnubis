@@ -1009,8 +1009,11 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
               return;
             }
 
-            if (status.ends_with("304")) {
-              // PMA_EPrintln("DEBUG: 304");
+            if (status.ends_with("301")
+                || status.ends_with("302")
+                || status.ends_with("303")
+                || status.ends_with("304")) {
+              // PMA_EPrintln("DEBUG: 301 or 302 or 303 or 304");
               forward_flags.set(1);
             }
           } else if (idx < skip_before_idx) {
@@ -1397,7 +1400,7 @@ void thread_handle_connection_fn(void *ud) {
         }
 
         // 0 - remote content-type: chunked
-        // 1 - 304 response
+        // 1 - 301/302/303/304 response
         // 2 - using forwarding
         std::bitset<32> forward_flags;
 
