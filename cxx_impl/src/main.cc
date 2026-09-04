@@ -1013,7 +1013,7 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
                 || status.ends_with("302")
                 || status.ends_with("303")
                 || status.ends_with("304")) {
-              // PMA_EPrintln("DEBUG: 304");
+              // PMA_EPrintln("DEBUG: 301 or 302 or 303 or 304");
               forward_flags.set(1);
             }
           } else if (idx < skip_before_idx) {
