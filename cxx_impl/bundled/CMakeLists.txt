@@ -304,14 +304,14 @@ add_custom_target(LIBZ_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.3.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.3.tar.gz" -L "https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.3.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_xz_v5.8.3.tar.gz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.4.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.4.tar.gz" -L "https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.4.tar.gz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_xz_v5.8.4.tar.gz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.3.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.3" && ./autogen.sh --no-po4a && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-shared --enable-static
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.3"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.3/src/liblzma/.libs/liblzma.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.3/src/liblzma/api" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.4.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4" && ./autogen.sh --no-po4a && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-shared --enable-static
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4/src/liblzma/.libs/liblzma.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4/src/liblzma/api" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
     VERBATIM
 )
 add_custom_target(LIBLZMA_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a")
