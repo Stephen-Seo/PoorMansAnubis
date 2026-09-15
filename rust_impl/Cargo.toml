@@ -18,5 +18,5 @@ getrandom = "0.4"
 msql_ffi = { path = "msql_ffi" }
 
 [build-dependencies]
-bindgen = "0.72"
+bindgen = "0.73"
 cc = "1.4"
