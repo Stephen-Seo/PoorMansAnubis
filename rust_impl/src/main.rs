@@ -1345,7 +1345,9 @@ async fn main() {
         return;
     } else if parsed_args.i_challenge {
         let challenge = crate::ffi::InteractiveChallengeWrapper::new();
-        let challenge_html = challenge.get_challenge_html();
+        let challenge_html = challenge
+            .get_challenge_html()
+            .expect(r#"Interactive Challenge: Should have "challenge_html""#);
         if let Ok(s) = challenge_html.to_str() {
             println!("{}", s);
         } else {
