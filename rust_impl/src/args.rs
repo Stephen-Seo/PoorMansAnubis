@@ -114,7 +114,7 @@ pub fn parse_args() -> Result<Args, Error> {
     for mut arg in p_args.skip(1) {
         if arg == "-h" || arg == "--help" {
             print_args();
-            return Err("Printed help text".into());
+            return Err(Error::as_str("Printed help text"));
         } else if arg.starts_with("--factors=") {
             let end = arg.split_off(10);
             args.factors = end.parse().ok();
@@ -183,9 +183,9 @@ pub fn parse_args() -> Result<Args, Error> {
     }
 
     if args.enable_override_dest_url && !override_dest_url_warning_read {
-        return Err(
-            "--enable-override-dest-url Requires --important-warning-has-been-read , it is highly recommended to have a firewall configured if you insist on using this feature! Maybe consider using \"--addr-port=\" and \"--port-to-dest-url=\" instead?".into(),
-        );
+        return Err(Error::as_str(
+            r#"--enable-override-dest-url Requires --important-warning-has-been-read , it is highly recommended to have a firewall configured if you insist on using this feature! Maybe consider using "--addr-port=" and "--port-to-dest-url=" instead?"#,
+        ));
     }
 
     if !unknown_args.is_empty() {
@@ -203,7 +203,7 @@ pub fn parse_args() -> Result<Args, Error> {
                     eprintln!("  {}", arg);
                 }
             }
-            return Err("Unknown arg(s) was given".into());
+            return Err(Error::as_str("Unknown arg(s) was given"));
         } else {
             if unknown_args.len() == 1 {
                 eprintln!(

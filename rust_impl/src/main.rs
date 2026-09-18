@@ -125,7 +125,7 @@ impl CachedAllow {
 
     pub fn get_allowed(&self, addr_port: &str, timeout: Duration) -> Result<bool, Error> {
         let l = self.allowed.lock();
-        let l = l.map_err(|_| Error::Generic("Failed to lock CachedAllow".into()))?;
+        let l = l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
         let mut b = l.borrow_mut();
         {
             let entry = b.get(addr_port);
@@ -142,7 +142,7 @@ impl CachedAllow {
 
     pub fn add_allowed(&self, addr_port: &str) -> Result<(), Error> {
         let l = self.allowed.lock();
-        l.map_err(|_| Error::Generic("Failed to lock CachedAllow".into()))?
+        l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?
             .borrow_mut()
             .insert(addr_port.to_owned(), Instant::now());
 
@@ -151,11 +151,11 @@ impl CachedAllow {
 
     pub fn check_cleanup(&self) -> Result<(), Error> {
         let il = self.inst.lock();
-        let il = il.map_err(|_| Error::Generic("Failed to lock CachedAllow.inst".into()))?;
+        let il = il.map_err(|_| Error::as_str("Failed to lock CachedAllow.inst"))?;
         if il.get().elapsed() > CACHED_CLEANUP_TIMEOUT {
             il.set(Instant::now());
             let l = self.allowed.lock();
-            let l = l.map_err(|_| Error::Generic("Failed to lock CachedAllow".into()))?;
+            let l = l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
             l.borrow_mut().clear();
         }
 
@@ -192,7 +192,7 @@ impl ClientWrapper {
             .read()
             .await
             .get(dest)
-            .ok_or(Into::<error::Error>::into(
+            .ok_or(Error::as_str(
                 "ClientWrapper::get_client failed: no matching dest!",
             ))?
             .read()
@@ -247,7 +247,7 @@ async fn get_mysql_db_conn(args: &args::Args) -> Result<MSQLWrapper, Error> {
         .map_err(|_| "Failed to create msql connection")?;
         Ok(msql_conn)
     } else {
-        Err(String::from("Prioritizing sqlite over msql").into())
+        Err(Error::as_str("Prioritizing sqlite over msql"))
     }
 }
 
@@ -371,7 +371,7 @@ async fn req_to_url(
             value += &req
                 .remote_addr()
                 .ip()
-                .ok_or(Error::from("Failed to get connected-client addr!"))?
+                .ok_or(Error::as_str("Failed to get connected-client addr!"))?
                 .to_string();
             //eprintln!("x-forwarded-for Header {:?} -> {:?}", k, &value);
             req_builder = req_builder.header(k, value);
@@ -412,7 +412,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIP
     {
         addr_string = real_ip_h.to_str().map_err(Error::from)?.to_owned();
         if addr_string.is_empty() {
-            return Err("Failed to get client addr (invalid header)".into());
+            return Err(Error::as_str("Failed to get client addr (invalid header)"));
         }
 
         if let Some(ipv4) = req.local_addr().as_ipv4() {
@@ -449,7 +449,7 @@ async fn get_client_ip_addr(depot: &Depot, req: &mut Request) -> Result<ClientIP
             addr_string = format!("{}", ipv6.ip());
             remote_port = Some(ipv6.port());
         } else {
-            return Err("Failed to get client addr".into());
+            return Err(Error::as_str("Failed to get client addr"));
         }
     }
 
@@ -485,9 +485,7 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
             MSQLValueEnum::Int64(i) => i as u64,
             MSQLValueEnum::UInt64(u) => u,
             _ => {
-                return Err(Error::Generic(String::from(
-                    "Failed to get ID from SEQ_ID table!",
-                )));
+                return Err(Error::as_str("Failed to get ID from SEQ_ID table!"));
             }
         };
 
@@ -495,9 +493,7 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
             MSQLValueEnum::Int64(i) => seq = i as u64,
             MSQLValueEnum::UInt64(u) => seq = u,
             _ => {
-                return Err(Error::Generic(String::from(
-                    "Failed to get SEQ from SEQ_ID table!",
-                )));
+                return Err(Error::as_str("Failed to get SEQ from SEQ_ID table!"));
             }
         }
 
@@ -702,7 +698,7 @@ fn get_local_port_from_req(req: &Request) -> Result<u16, Error> {
     } else if local.is_ipv6() {
         Ok(local.as_ipv6().unwrap().port())
     } else {
-        Err("Failed to get local port, not ipv4 or ipv6!".into())
+        Err(Error::as_str("Failed to get local port, not ipv4 or ipv6!"))
     }
 }
 
@@ -745,9 +741,7 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
                 MSQLValueEnum::Int64(i) => port = Some(i as u16),
                 MSQLValueEnum::UInt64(u) => port = Some(u as u16),
                 _ => {
-                    return Err(Error::Generic(String::from(
-                        "Failed to get port from id-to-port",
-                    )));
+                    return Err(Error::as_str("Failed to get port from id-to-port"));
                 }
             }
         }
@@ -759,9 +753,7 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
             .map_err(|e| e.to_owned())?;
     }
 
-    port.ok_or(Error::Generic(String::from(
-        "gen challenge, failed to get port",
-    )))
+    port.ok_or(Error::as_str("gen challenge, failed to get port"))
 }
 
 async fn challenge_port_sqlite(args: &args::Args, id: &str) -> Result<u16, Error> {
@@ -786,12 +778,12 @@ async fn factors_js_fn(
 ) -> salvo::Result<()> {
     let args = depot.get_typed::<args::Args>().unwrap();
     let client_info_ret = get_client_ip_addr(depot, req).await?;
-    let id: String = req.query("id").ok_or(crate::Error::Generic(
-        "No id passed to factors_js url!".to_owned(),
-    ))?;
+    let id: String = req
+        .query("id")
+        .ok_or(Error::as_str("No id passed to factors_js url!"))?;
 
     #[allow(unused_assignments)]
-    let mut port: Result<u16, Error> = Err(Error::Generic("port uninitialized".into()));
+    let mut port: Result<u16, Error> = Err(Error::as_str("port uninitialized"));
     if args.mysql_has_priority {
         port = challenge_port_mysql(depot, &id).await;
     } else {
@@ -871,7 +863,7 @@ async fn validate_client_mysql(
             let client_addr: String = match &rows[0][0] {
                 MSQLValueEnum::String(s) => s.to_owned(),
                 _ => {
-                    return Err(Error::Generic(String::from("No IP from ChallengeFactors")));
+                    return Err(Error::as_str("No IP from ChallengeFactors"));
                 }
             };
 
@@ -880,9 +872,7 @@ async fn validate_client_mysql(
                     MSQLValueEnum::Int64(i) => i as u16,
                     MSQLValueEnum::UInt64(u) => u as u16,
                     _ => {
-                        return Err(Error::Generic(String::from(
-                            "No Port from ChallengeFactors",
-                        )));
+                        return Err(Error::as_str("No Port from ChallengeFactors"));
                     }
                 };
                 correct = true;
@@ -918,7 +908,7 @@ async fn validate_client_mysql(
 
         Ok(port)
     } else {
-        Err(String::from("Incorrect").into())
+        Err(Error::as_str("Incorrect"))
     }
 }
 
@@ -951,10 +941,10 @@ async fn validate_client_sqlite(
             )?;
             Ok(port)
         } else {
-            Err(String::from("Invalid entries from ChallengeFactor").into())
+            Err(Error::as_str("Invalid entries from ChallengeFactor"))
         }
     } else {
-        Err(String::from("Incorrect").into())
+        Err(Error::as_str("Incorrect"))
     }
 }
 
@@ -971,7 +961,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     helpers::validate_client_response(&factors_response.factors)?;
 
     #[allow(unused_assignments)]
-    let mut validate_result: Result<u16, Error> = Err(String::from("Invalid state").into());
+    let mut validate_result: Result<u16, Error> = Err(Error::as_str("Invalid state"));
     if args.mysql_has_priority {
         validate_result =
             validate_client_mysql(args, &factors_response, &client_info_ret.addr).await;
@@ -1121,9 +1111,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
             let id: String = match &rows[0][0] {
                 MSQLValueEnum::String(s) => s.to_owned(),
                 _ => {
-                    return Err(Error::Generic(String::from(
-                        "Failed to fetch ID from id-to-port",
-                    )));
+                    return Err(Error::as_str("Failed to fetch ID from id-to-port"));
                 }
             };
 
@@ -1204,10 +1192,10 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .get_client(
                 args.port_to_dest_urls
                     .get(&req.local_addr().port().ok_or(Into::<salvo::Error>::into(
-                        Error::from("Failed to get local port"),
+                        Error::as_str("Failed to get local port"),
                     ))?)
                     .or(Some(&args.dest_url))
-                    .ok_or(Into::<salvo::Error>::into(Error::from(
+                    .ok_or(Into::<salvo::Error>::into(Error::as_str(
                         "Failed to get default dest url",
                     )))?,
             )
@@ -1215,9 +1203,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
     let client_info_ret = get_client_ip_addr(depot, req).await?;
 
-    let port: u16 = client_info_ret.local_port.ok_or(crate::Error::Generic(
-        "Should have port from request!".to_owned(),
-    ))?;
+    let port: u16 = client_info_ret
+        .local_port
+        .ok_or(Error::as_str("Should have port from request!"))?;
 
     let mut is_allowed: bool =
         cached_allow.get_allowed(&req.remote_addr().to_string(), CACHED_TIMEOUT)?;
