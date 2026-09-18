@@ -21,6 +21,8 @@
 
 use std::ffi::{CStr, c_void};
 
+use crate::error::Error;
+
 include!(concat!(env!("OUT_DIR"), "/work_bindings.rs"));
 
 pub struct WorkFactorsWrapper {
@@ -91,25 +93,25 @@ impl InteractiveChallengeWrapper {
         }
     }
 
-    pub fn get_challenge_html(&self) -> Result<&CStr, &str> {
+    pub fn get_challenge_html(&self) -> Result<&CStr, Error> {
         if self.challenge_value.challenge_html.is_null() {
-            Err(r#""challenge_html" is NULL"#)
+            Err(Error::as_str(r#""challenge_html" is NULL"#))
         } else {
             unsafe { Ok(CStr::from_ptr(self.challenge_value.challenge_html)) }
         }
     }
 
-    pub fn get_client_resp_html(&self) -> Result<&CStr, &str> {
+    pub fn get_client_resp_html(&self) -> Result<&CStr, Error> {
         if self.challenge_value.client_resp_html.is_null() {
-            Err(r#""client_resp" is NULL"#)
+            Err(Error::as_str(r#""client_resp" is NULL"#))
         } else {
             unsafe { Ok(CStr::from_ptr(self.challenge_value.client_resp_html)) }
         }
     }
 
-    pub fn get_answer(&self) -> Result<&CStr, &str> {
+    pub fn get_answer(&self) -> Result<&CStr, Error> {
         if self.challenge_value.answer.is_null() {
-            Err(r#""answer" is NULL"#)
+            Err(Error::as_str(r#""answer" is NULL"#))
         } else {
             unsafe { Ok(CStr::from_ptr(self.challenge_value.answer)) }
         }
