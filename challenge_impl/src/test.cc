@@ -343,6 +343,27 @@ int main() {
         }
     }
 
+    {
+        // Handle final 2 base64 values as regular and alt values.
+        const char *b64_str = "+/-_";
+        unsigned long long size = 0;
+        unsigned char *b64_ret = base64_base64_to_data(b64_str, 4, &size);
+        CHECK_TRUE(size == 3);
+        CHECK_TRUE(b64_ret);
+        if (b64_ret) {
+            unsigned long long bsize = 0;
+            char *b64_ret2 = base64_data_to_base64(
+                    reinterpret_cast<const char*>(b64_ret), size, &bsize);
+            CHECK_TRUE(bsize == 4);
+            CHECK_TRUE(b64_ret2);
+            if (b64_ret2) {
+                CHECK_TRUE(strcmp(b64_ret2, "+/+/") == 0);
+                free(b64_ret2);
+            }
+            free(b64_ret);
+        }
+    }
+
     // test random dist.
     {
         void *r_state = rand_state_init();
