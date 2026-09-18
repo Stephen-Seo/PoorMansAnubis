@@ -33,22 +33,20 @@ pub fn validate_client_response(resp: &str) -> Result<(), Error> {
             State::Num => {
                 if c.is_ascii_digit() {
                     num = num * 10
-                        + c.to_digit(10).ok_or(Error::Generic(
-                            "Failed to parse digit in client response".into(),
-                        ))? as u64;
+                        + c.to_digit(10)
+                            .ok_or(Error::as_str("Failed to parse digit in client response"))?
+                            as u64;
                 } else if c == 'x' {
                     if max_num >= num {
-                        return Err(Error::Generic(
-                            "Invalid client response, numbers out of order".into(),
+                        return Err(Error::as_str(
+                            "Invalid client response, numbers out of order",
                         ));
                     }
                     max_num = num;
                     num = 0;
                     state = State::Amt;
                 } else {
-                    return Err(Error::Generic(
-                        "Invalid state parsing client response".into(),
-                    ));
+                    return Err(Error::as_str("Invalid state parsing client response"));
                 }
             }
             State::Amt => {
@@ -57,9 +55,7 @@ pub fn validate_client_response(resp: &str) -> Result<(), Error> {
                 } else if c.is_whitespace() {
                     state = State::Whitespace;
                 } else {
-                    return Err(Error::Generic(
-                        "Invalid state parsing client response".into(),
-                    ));
+                    return Err(Error::as_str("Invalid state parsing client response"));
                 }
             }
             State::Whitespace => {
@@ -67,21 +63,18 @@ pub fn validate_client_response(resp: &str) -> Result<(), Error> {
                     // Intentionally left blank.
                 } else if c.is_ascii_digit() {
                     state = State::Num;
-                    num = c.to_digit(10).ok_or(Error::Generic(
-                        "Failed to parse digit in client response".into(),
-                    ))? as u64;
+                    num = c
+                        .to_digit(10)
+                        .ok_or(Error::as_str("Failed to parse digit in client response"))?
+                        as u64;
                 } else {
-                    return Err(Error::Generic(
-                        "Invalid state parsing client response".into(),
-                    ));
+                    return Err(Error::as_str("Invalid state parsing client response"));
                 }
             }
         }
     }
     if state != State::Amt {
-        return Err(Error::Generic(
-            "Invalid end state parsing client response".into(),
-        ));
+        return Err(Error::as_str("Invalid end state parsing client response"));
     }
 
     Ok(())
