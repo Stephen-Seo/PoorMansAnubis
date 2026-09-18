@@ -23,7 +23,7 @@ use std::ffi::{CStr, c_void};
 
 include!(concat!(env!("OUT_DIR"), "/work_bindings.rs"));
 
-struct WorkFactorsWrapper {
+pub struct WorkFactorsWrapper {
     w_factors: Work_Factors,
 }
 
@@ -70,4 +70,50 @@ impl Drop for WorkFactorsWrapper {
 pub fn generate_value_and_factors_strings2(digits: u64) -> (String, String) {
     let wf = WorkFactorsWrapper::new(digits);
     (wf.get_value2(), wf.get_factors2())
+}
+
+pub struct InteractiveChallengeWrapper {
+    challenge_value: InteractiveChallenge,
+    cstr_default: Box<CStr>,
+}
+
+impl Drop for InteractiveChallengeWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            i_challenge_cleanup(self.challenge_value);
+        }
+    }
+}
+
+impl InteractiveChallengeWrapper {
+    pub fn new() -> Self {
+        Self {
+            challenge_value: unsafe { i_challenge_generate() },
+            cstr_default: Box::default(),
+        }
+    }
+
+    pub fn get_challenge_html(&self) -> &CStr {
+        if self.challenge_value.challenge_html.is_null() {
+            &self.cstr_default
+        } else {
+            unsafe { CStr::from_ptr(self.challenge_value.challenge_html) }
+        }
+    }
+
+    pub fn get_client_resp_html(&self) -> &CStr {
+        if self.challenge_value.client_resp_html.is_null() {
+            &self.cstr_default
+        } else {
+            unsafe { CStr::from_ptr(self.challenge_value.client_resp_html) }
+        }
+    }
+
+    pub fn get_answer(&self) -> &CStr {
+        if self.challenge_value.answer.is_null() {
+            &self.cstr_default
+        } else {
+            unsafe { CStr::from_ptr(self.challenge_value.answer) }
+        }
+    }
 }
