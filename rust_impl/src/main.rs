@@ -203,8 +203,6 @@ impl ClientWrapper {
 
 unsafe extern "C" {
     fn test_raylib();
-
-    fn i_challenge_debug_quick_print();
 }
 
 async fn parse_db_conf(config: &Path) -> Result<HashMap<String, String>, Error> {
@@ -1346,8 +1344,12 @@ async fn main() {
         }
         return;
     } else if parsed_args.i_challenge {
-        unsafe {
-            i_challenge_debug_quick_print();
+        let challenge = crate::ffi::InteractiveChallengeWrapper::new();
+        let challenge_html = challenge.get_challenge_html();
+        if let Ok(s) = challenge_html.to_str() {
+            println!("{}", s);
+        } else {
+            println!("{:?}", challenge_html);
         }
         return;
     }

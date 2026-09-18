@@ -17,6 +17,9 @@ fn main() {
             "-I{cargo_manifest_dir}/../challenge_impl/third_party/SimpleArchiver/src"
         ))
         .header(format!("{cargo_manifest_dir}/../challenge_impl/src/work.h"))
+        .header(format!(
+            "{cargo_manifest_dir}/../challenge_impl/src/i_work.h"
+        ))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings for \"work.h\"");
