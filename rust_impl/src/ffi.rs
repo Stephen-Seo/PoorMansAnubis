@@ -74,7 +74,6 @@ pub fn generate_value_and_factors_strings2(digits: u64) -> (String, String) {
 
 pub struct InteractiveChallengeWrapper {
     challenge_value: InteractiveChallenge,
-    cstr_default: Box<CStr>,
 }
 
 impl Drop for InteractiveChallengeWrapper {
@@ -89,31 +88,30 @@ impl InteractiveChallengeWrapper {
     pub fn new() -> Self {
         Self {
             challenge_value: unsafe { i_challenge_generate() },
-            cstr_default: Box::default(),
         }
     }
 
-    pub fn get_challenge_html(&self) -> &CStr {
+    pub fn get_challenge_html(&self) -> Result<&CStr, &str> {
         if self.challenge_value.challenge_html.is_null() {
-            &self.cstr_default
+            Err(r#""challenge_html" is NULL"#)
         } else {
-            unsafe { CStr::from_ptr(self.challenge_value.challenge_html) }
+            unsafe { Ok(CStr::from_ptr(self.challenge_value.challenge_html)) }
         }
     }
 
-    pub fn get_client_resp_html(&self) -> &CStr {
+    pub fn get_client_resp_html(&self) -> Result<&CStr, &str> {
         if self.challenge_value.client_resp_html.is_null() {
-            &self.cstr_default
+            Err(r#""client_resp" is NULL"#)
         } else {
-            unsafe { CStr::from_ptr(self.challenge_value.client_resp_html) }
+            unsafe { Ok(CStr::from_ptr(self.challenge_value.client_resp_html)) }
         }
     }
 
-    pub fn get_answer(&self) -> &CStr {
+    pub fn get_answer(&self) -> Result<&CStr, &str> {
         if self.challenge_value.answer.is_null() {
-            &self.cstr_default
+            Err(r#""answer" is NULL"#)
         } else {
-            unsafe { CStr::from_ptr(self.challenge_value.answer) }
+            unsafe { Ok(CStr::from_ptr(self.challenge_value.answer)) }
         }
     }
 }
