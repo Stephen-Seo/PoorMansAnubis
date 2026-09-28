@@ -62,7 +62,7 @@ std::tuple<ErrorT, std::string, int> connect_ipv4_socket_client(
     std::string server_addr, std::string client_addr, uint16_t port);
 
 struct Request {
-  std::unordered_map<std::string, std::string> queries;
+  std::unordered_multimap<std::string, std::string> queries;
   std::unordered_multimap<std::string, std::string> headers;
   std::string url_or_err_msg;
   std::string full_url;

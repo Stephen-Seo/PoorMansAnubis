@@ -1147,7 +1147,7 @@ PMA_HTTP::Request PMA_HTTP::handle_request_parse(std::string req) {
   bool getting_url = false;
   bool fetching_key = false;
   std::string url, full_url, key, val;
-  std::unordered_map<std::string, std::string> query_params;
+  std::unordered_multimap<std::string, std::string> query_params;
   for (size_t idx = 4; idx < req.size(); ++idx) {
     if (req.at(idx) == '\n' || req.at(idx) == '\r') {
       break;
