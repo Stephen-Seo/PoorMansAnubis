@@ -16,12 +16,12 @@
 
 #ifdef __cplusplus
 #include <cstdint>
-#include <cstdlib>
+#include <cstddef>
 
 extern "C" {
 #else
 #include <stdint.h>
-#include <stdlib.h>
+#include <stddef.h>
 #endif
 
 typedef void *MSQL_Connection;
