@@ -30,6 +30,7 @@ use std::time::{Duration, Instant};
 
 use std::path::Path;
 
+use rand::Rng;
 use reqwest::Client;
 use reqwest::redirect::Policy;
 use rusqlite::Connection;
@@ -67,6 +68,16 @@ const MSQL_RUST_CHALLENGE_FACTORS_4_CREATE: &str = r"CREATE TABLE IF NOT EXISTS 
     )";
 
 #[allow(unused)]
+const MSQL_RUST_INTERACTIVE_CHALLENGE_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_INTERACTIVE_CHALLENGE (
+        ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
+        IP VARCHAR(45) NOT NULL,
+        ANSWER CHAR(64) CHARACTER SET ascii NOT NULL,
+        PORT INT UNSIGNED NOT NULL,
+        GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
+    )";
+
+#[allow(unused)]
 const MSQL_RUST_ALLOWED_IPS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ALLOWED_IPS (
         ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
@@ -98,6 +109,14 @@ const SQLITE_ID_TO_PORT_CREATE: &str = r"CREATE TABLE IF NOT EXISTS ID_TO_PORT
 const SQLITE_CHALLENGE_FACTOR_CREATE: &str = r"CREATE TABLE IF NOT EXISTS CHALLENGE_FACTOR
         (ID TEXT NOT NULL PRIMARY KEY,
          FACTORS TEXT NOT NULL,
+         IP TEXT NOT NULL,
+         PORT INT NOT NULL,
+         ON_TIME TEXT DEFAULT ( datetime() ) )";
+
+#[allow(unused)]
+const SQLITE_INTERACTIVE_CHALLENGE_CREATE: &str = r"CREATE TABLE IF NOT EXISTS INTERACTIVE_CHALLENGE
+        (ID TEXT NOT NULL PRIMARY KEY,
+         ANSWER TEXT NOT NULL,
          IP TEXT NOT NULL,
          PORT INT NOT NULL,
          ON_TIME TEXT DEFAULT ( datetime() ) )";
@@ -274,6 +293,8 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
 
     conn.query_drop(MSQL_RUST_ID_TO_PORT_3_CREATE)?;
 
+    conn.query_drop(MSQL_RUST_INTERACTIVE_CHALLENGE_CREATE)?;
+
     Ok(())
 }
 
@@ -308,6 +329,14 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
 
     conn.execute(
         r#"CREATE INDEX IF NOT EXISTS ALLOWED_IP_TIME ON ALLOWED_IP (ON_TIME)"#,
+        (),
+    )?;
+
+    conn.execute(SQLITE_INTERACTIVE_CHALLENGE_CREATE, ())?;
+
+    conn.execute(
+        r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_TIME
+        ON INTERACTIVE_CHALLENGE (ON_TIME)"#,
         (),
     )?;
 
@@ -572,12 +601,49 @@ async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool
     }
 }
 
+async fn has_interactive_challenge_id_msql(depot: &Depot, hash: &str) -> Result<bool, Error> {
+    let args: &args::Args = depot.get_typed().unwrap();
+    let mut conn: MSQLWrapper = get_mysql_db_conn(args).await?;
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(hash)?;
+    let rows_opt = conn.query_with_params_rows(
+        "SELECT ID FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ?",
+        &params,
+    )?;
+
+    if let Some(rows) = rows_opt {
+        if let MSQLValueEnum::String(_) = &rows[0][0] {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    } else {
+        Ok(false)
+    }
+}
+
 async fn has_challenge_factor_id_sqlite(args: &args::Args, hash: &str) -> Result<bool, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    match conn.query_one(r"SELECT ID FROM SEQ_ID WHERE ID = ?1", (hash,), |r| {
-        r.get::<usize, String>(0)
-    }) {
+    match conn.query_one(
+        r"SELECT ID FROM CHALLENGE_FACTOR WHERE ID = ?1",
+        (hash,),
+        |r| r.get::<usize, String>(0),
+    ) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
+async fn has_interactive_challenge_id_sqlite(args: &args::Args, hash: &str) -> Result<bool, Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    match conn.query_one(
+        r"SELECT ID FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+        (hash,),
+        |r| r.get::<usize, String>(0),
+    ) {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
     }
@@ -620,6 +686,41 @@ async fn set_challenge_factor_mysql(
     Ok(())
 }
 
+async fn set_interactive_challenge_msql(
+    depot: &Depot,
+    ip: &str,
+    hash: &str,
+    port: u16,
+    answer_hash: &str,
+) -> Result<(), Error> {
+    let args: &args::Args = depot.get_typed().unwrap();
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
+
+    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+        let mut locked = conn_ref.lock().unwrap();
+        locked
+            .query_drop("UNLOCK TABLES")
+            .expect("Should be able to UNLOCK TABLES in cleanup");
+    });
+
+    let mut locked = conn.lock().unwrap();
+
+    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE WRITE")?;
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(hash)?;
+    params.append_str(ip)?;
+    params.append_uint64(port as u64);
+    params.append_str(answer_hash)?;
+
+    locked.query_with_params_drop(
+        "INSERT INTO RUST_INTERACTIVE_CHALLENGE (ID, IP, PORT, ANSWER) VALUES (?, ?, ?, ?)",
+        &params,
+    )?;
+
+    Ok(())
+}
+
 async fn set_challenge_factor_sqlite(
     args: &args::Args,
     ip: &str,
@@ -632,6 +733,23 @@ async fn set_challenge_factor_sqlite(
     conn.execute(
         r"INSERT INTO CHALLENGE_FACTOR (ID, FACTORS, IP, PORT) VALUES (?1, ?2, ?3, ?4)",
         (hash, factors_hash, ip, port),
+    )?;
+
+    Ok(())
+}
+
+async fn set_interactive_challenge_sqlite(
+    args: &args::Args,
+    ip: &str,
+    hash: &str,
+    port: u16,
+    answer_hash: &str,
+) -> Result<(), Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    conn.execute(
+        r"INSERT INTO INTERACTIVE_CHALLENGE (ID, ANSWER, IP, PORT) VALUES (?1, ?2, ?3, ?4)",
+        (hash, answer_hash, ip, port),
     )?;
 
     Ok(())
@@ -689,6 +807,100 @@ async fn set_up_factors_challenge(
     }
 
     Ok((value, hash))
+}
+
+async fn set_up_interactive_challenge(
+    depot: &Depot,
+    ip: &str,
+    port: u16,
+) -> Result<(String, String, String, String), Error> {
+    let args = depot.get_typed::<args::Args>().unwrap();
+
+    let mut hash: String;
+
+    #[allow(clippy::needless_late_init)]
+    let seq: u64;
+
+    if args.mysql_has_priority {
+        seq = get_next_seq_mysql(depot).await?;
+    } else {
+        seq = get_next_seq_sqlite(args).await?;
+    }
+
+    let mut challenge_html: String = String::new();
+    let mut client_html: String = String::new();
+    let mut answer: String = String::new();
+
+    {
+        let challenge = crate::ffi::InteractiveChallengeWrapper::new();
+
+        if let Ok(ch_html_raw) = challenge.get_challenge_html() {
+            if let Ok(utf8_ch_html) = ch_html_raw.to_str() {
+                challenge_html = utf8_ch_html.to_owned();
+            }
+        }
+
+        if challenge_html.len() == 0 {
+            return Err(Error::GenericStaticStr(
+                "Interactive Challenge html is zero-length",
+            ));
+        }
+
+        if let Ok(cli_html_raw) = challenge.get_client_resp_html() {
+            if let Ok(utf8_cli_html) = cli_html_raw.to_str() {
+                client_html = utf8_cli_html.to_owned();
+            }
+        }
+
+        if client_html.len() == 0 {
+            return Err(Error::GenericStaticStr(
+                "Interactive Challenge client-html is zero-length",
+            ));
+        }
+
+        if let Ok(answer_raw) = challenge.get_answer() {
+            if let Ok(utf8_answer) = answer_raw.to_str() {
+                answer = utf8_answer.to_owned();
+            }
+        }
+
+        if answer.len() == 0 {
+            return Err(Error::GenericStaticStr(
+                "Interactive Challenge answer is zero-length",
+            ));
+        }
+    }
+
+    loop {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update("pma.seodisparate.com".as_bytes());
+        hasher.update(&seq.to_ne_bytes());
+        let mut buf = [0u8; GETRANDOM_BUF_SIZE];
+        getrandom::fill(&mut buf)?;
+        hasher.update(&buf);
+        let hasher = hasher.finalize();
+
+        hash = hasher.to_string();
+
+        if args.mysql_has_priority {
+            if has_interactive_challenge_id_msql(depot, &hash).await? {
+                continue;
+            }
+        } else if has_interactive_challenge_id_sqlite(args, &hash).await? {
+            continue;
+        }
+
+        let answer_hash = blake3::hash(answer.as_bytes()).to_string();
+
+        if args.mysql_has_priority {
+            set_interactive_challenge_msql(depot, ip, &hash, port, &answer_hash).await?;
+        } else {
+            set_interactive_challenge_sqlite(args, ip, &hash, port, &answer_hash).await?;
+        }
+        break;
+    }
+
+    Ok((challenge_html, client_html, answer, hash))
 }
 
 fn get_local_port_from_req(req: &Request) -> Result<u16, Error> {
@@ -818,7 +1030,7 @@ async fn factors_js_fn(
     Ok(())
 }
 
-async fn validate_client_mysql(
+async fn validate_client_factors_mysql(
     args: &args::Args,
     factors_response: &json_types::FactorsResponse,
     addr: &str,
@@ -912,7 +1124,99 @@ async fn validate_client_mysql(
     }
 }
 
-async fn validate_client_sqlite(
+async fn validate_client_interactive_msql(
+    args: &args::Args,
+    interactive_response: &json_types::InteractiveResponse,
+    addr: &str,
+) -> Result<u16, Error> {
+    let correct: bool;
+    let mut port: u16 = 0;
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
+
+    {
+        let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+            let mut locked = conn_ref.lock().unwrap();
+            locked
+                .query_drop("UNLOCK TABLES")
+                .expect("Should be able to UNLOCK TABLES in cleanup");
+        });
+
+        let mut locked = conn.lock().unwrap();
+
+        locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE WRITE")?;
+
+        {
+            let mut params = MSQLParamsWrapper::new();
+            params.append_uint64(args.challenge_timeout_mins);
+
+            locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
+        }
+
+        let hashed_answer = blake3::hash(interactive_response.answer.as_bytes()).to_string();
+
+        let mut params = MSQLParamsWrapper::new();
+        params.append_str(&interactive_response.id)?;
+        params.append_str(&hashed_answer)?;
+
+        let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
+            .query_with_params_rows(
+                "SELECT IP, PORT FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ? AND ANSWER = ?",
+                &params,
+            )
+            .map_err(|e| e.to_owned())?;
+
+        if let Some(rows) = addr_port_rows_opt {
+            let client_addr: String = match &rows[0][0] {
+                MSQLValueEnum::String(s) => s.to_owned(),
+                _ => {
+                    return Err(Error::as_str("No IP from InteractiveChallenges"));
+                }
+            };
+
+            if client_addr == addr {
+                port = match rows[0][1] {
+                    MSQLValueEnum::Int64(i) => i as u16,
+                    MSQLValueEnum::UInt64(u) => u as u16,
+                    _ => {
+                        return Err(Error::as_str("No Port from InteractiveChallenges"));
+                    }
+                };
+                correct = true;
+
+                let mut params = MSQLParamsWrapper::new();
+                params.append_str(&interactive_response.id)?;
+
+                locked.query_with_params_drop(
+                    "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ?",
+                    &params,
+                )?;
+            } else {
+                correct = false;
+            }
+        } else {
+            correct = false;
+        }
+    }
+
+    if correct && port != 0 {
+        let mut locked = conn.lock().unwrap();
+
+        let mut params = MSQLParamsWrapper::new();
+        params.append_str(addr)?;
+        params.append_uint64(port as u64);
+
+        locked.query_with_params_drop(
+            "INSERT INTO RUST_ALLOWED_IPS (IP, PORT) VALUES (?, ?)",
+            &params,
+        )?;
+
+        Ok(port)
+    } else {
+        Err(Error::as_str("Incorrect"))
+    }
+}
+
+async fn validate_client_factors_sqlite(
     args: &args::Args,
     factors_response: &json_types::FactorsResponse,
     addr: &str,
@@ -948,45 +1252,134 @@ async fn validate_client_sqlite(
     }
 }
 
+async fn validate_client_interactive_sqlite(
+    args: &args::Args,
+    interactive_response: &json_types::InteractiveResponse,
+    addr: &str,
+) -> Result<u16, Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    let hashed_answer = blake3::hash(interactive_response.answer.as_bytes()).to_string();
+
+    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.challenge_timeout_mins), ())?;
+
+    let res = conn.query_one(
+        r"SELECT IP, PORT FROM INTERACTIVE_CHALLENGE WHERE ID = ?1 AND ANSWER = ?2",
+        (&interactive_response.id, &hashed_answer),
+        |r| Ok((r.get::<usize, String>(0), r.get::<usize, u16>(1))),
+    );
+
+    if let Ok((Ok(ip), Ok(port))) = res {
+        if ip == addr && port != 0 {
+            conn.execute(
+                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+                (&interactive_response.id,),
+            )?;
+            conn.execute(
+                r"INSERT INTO ALLOWED_IP (IP, PORT) VALUES (?1, ?2)",
+                (&ip, &port),
+            )?;
+            Ok(port)
+        } else {
+            Err(Error::as_str("Invalid entries from InteractiveChallenge"))
+        }
+    } else {
+        Err(Error::as_str("Incorrect"))
+    }
+}
+
 #[handler]
 async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
     let args = depot.get_typed::<args::Args>().unwrap();
     let client_info_ret = get_client_ip_addr(depot, req).await?;
     //eprintln!("API: {}", &addr_string);
-    let factors_response: json_types::FactorsResponse = req
+    let factors_response_ret: Result<json_types::FactorsResponse, _> = req
         .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
         .await
-        .map_err(Error::from)?;
+        .map_err(Error::from);
 
-    helpers::validate_client_response(&factors_response.factors)?;
+    let interactive_response_ret: Result<json_types::InteractiveResponse, _> = req
+        .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
+        .await
+        .map_err(Error::from);
 
-    #[allow(unused_assignments)]
-    let mut validate_result: Result<u16, Error> = Err(Error::as_str("Invalid state"));
-    if args.mysql_has_priority {
-        validate_result =
-            validate_client_mysql(args, &factors_response, &client_info_ret.addr).await;
+    if let Ok(factors_response) = factors_response_ret {
+        helpers::validate_client_response(&factors_response.factors)?;
+
+        #[allow(unused_assignments)]
+        let mut validate_result: Result<u16, Error> = Err(Error::as_str("Invalid state"));
+        if args.mysql_has_priority {
+            validate_result =
+                validate_client_factors_mysql(args, &factors_response, &client_info_ret.addr).await;
+        } else {
+            validate_result =
+                validate_client_factors_sqlite(args, &factors_response, &client_info_ret.addr)
+                    .await;
+        }
+
+        if let Ok(port) = validate_result {
+            eprintln!(
+                "Challenge response accepted from {}:{} -> {}",
+                client_info_ret.addr,
+                client_info_ret.remote_port.unwrap_or(0),
+                port
+            );
+            res.body("Correct")
+                .add_header("content-type", "text/plain", true)?
+                .status_code(StatusCode::OK);
+        } else {
+            eprintln!(
+                "Challenge response DENIED from {}:{} -> {}",
+                client_info_ret.addr,
+                client_info_ret.remote_port.unwrap_or(0),
+                client_info_ret.local_port.unwrap_or(0)
+            );
+            res.body("Incorrect")
+                .add_header("content-type", "text/plain", true)?
+                .status_code(StatusCode::BAD_REQUEST);
+        }
+    } else if let Ok(interactive_response) = interactive_response_ret {
+        #[allow(unused_assignments)]
+        let mut validate_result: Result<u16, Error> = Err(Error::as_str("Invalid state"));
+        if args.mysql_has_priority {
+            validate_result = validate_client_interactive_msql(
+                args,
+                &interactive_response,
+                &client_info_ret.addr,
+            )
+            .await;
+        } else {
+            validate_result = validate_client_interactive_sqlite(
+                args,
+                &interactive_response,
+                &client_info_ret.addr,
+            )
+            .await;
+        }
+
+        if let Ok(port) = validate_result {
+            eprintln!(
+                "Challenge response accepted from {}:{} -> {}",
+                client_info_ret.addr,
+                client_info_ret.remote_port.unwrap_or(0),
+                port
+            );
+            res.body("Correct")
+                .add_header("content-type", "text/plain", true)?
+                .status_code(StatusCode::OK);
+        } else {
+            eprintln!(
+                "Challenge response DENIED from {}:{} -> {}",
+                client_info_ret.addr,
+                client_info_ret.remote_port.unwrap_or(0),
+                client_info_ret.local_port.unwrap_or(0)
+            );
+            res.body("Incorrect")
+                .add_header("content-type", "text/plain", true)?
+                .status_code(StatusCode::BAD_REQUEST);
+        }
     } else {
-        validate_result =
-            validate_client_sqlite(args, &factors_response, &client_info_ret.addr).await;
-    }
-
-    if let Ok(port) = validate_result {
-        eprintln!(
-            "Challenge response accepted from {}:{} -> {}",
-            client_info_ret.addr,
-            client_info_ret.remote_port.unwrap_or(0),
-            port
-        );
-        res.body("Correct")
-            .add_header("content-type", "text/plain", true)?
-            .status_code(StatusCode::OK);
-    } else {
-        eprintln!(
-            "Challenge response DENIED from {}:{} -> {}",
-            client_info_ret.addr,
-            client_info_ret.remote_port.unwrap_or(0),
-            client_info_ret.local_port.unwrap_or(0)
-        );
+        eprintln!("WARNING Invalid json from {}", client_info_ret.addr);
         res.body("Incorrect")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::BAD_REQUEST);
@@ -1287,26 +1680,66 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
         }
     } else {
-        #[allow(unused_assignments)]
-        let mut hash: Option<String> = None;
+        let rand_val = rand::rng().next_u64();
+        let rand_val = rand_val % 2;
 
-        if args.mysql_has_priority {
-            hash = Some(init_id_to_port_mysql(args, port).await?);
-        } else {
-            hash = Some(init_id_to_port_sqlite(args, port).await?);
-        }
+        let mut html: String = String::new();
+        match 1 {
+            0 => {
+                let hash_ret;
+                if args.mysql_has_priority {
+                    hash_ret = init_id_to_port_mysql(args, port).await;
+                } else {
+                    hash_ret = init_id_to_port_sqlite(args, port).await;
+                }
 
-        if let Some(hash) = hash {
-            let html = constants::HTML_BODY_FACTORS;
-            let html = html.replacen(
-                "{JS_FACTORS_URL}",
-                &format!("{}?id={}", args.js_factors_url, hash),
-                1,
-            );
-            res.body(html).status_code(StatusCode::OK);
-        } else {
-            res.render("Failed to init request challenge");
-            res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
+                if let Err(e) = hash_ret {
+                    html = String::from("Internal Server Error: Failed to init id");
+                    res.body(html)
+                        .status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                    eprintln!("ERROR Failed to init id: {}", e);
+                    return Ok(());
+                }
+
+                let hash = hash_ret.unwrap();
+
+                html.push_str(constants::HTML_BODY_FACTORS);
+                html = html.replacen(
+                    "{JS_FACTORS_URL}",
+                    &format!("{}?id={}", args.js_factors_url, hash),
+                    1,
+                );
+                res.body(html).status_code(StatusCode::OK);
+            }
+            1 => {
+                let ret = set_up_interactive_challenge(depot, &client_info_ret.addr, port).await;
+
+                if let Ok((challenge_html, client_html, answer, hash_id)) = ret {
+                    eprintln!("Set up challenge with answer: {}", answer);
+                    html = challenge_html;
+                    html.push_str(
+                        &client_html
+                            .replace("{UUID}", &hash_id)
+                            .replace("{API_URL}", &args.api_url),
+                    );
+                } else {
+                    html = String::from(
+                        "Internal Server Error: Failed to generate interactive challenge",
+                    );
+                    res.body(html)
+                        .status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                    return Ok(());
+                }
+
+                res.add_header("content-type", "text/html", true)?;
+                res.body(html).status_code(StatusCode::OK);
+            }
+            _ => {
+                html = String::from("Internal Server Error: rand_val out of range");
+                res.body(html)
+                    .status_code(StatusCode::INTERNAL_SERVER_ERROR);
+                return Ok(());
+            }
         }
     }
 

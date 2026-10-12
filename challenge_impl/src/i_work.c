@@ -619,6 +619,44 @@ InteractiveChallenge i_challenge_generate(void) {
         free(img_data.data);
     }
 
+    if (c.challenge_html) {
+#define CLI_ANSWER_OUTPUT_HTML_FMT \
+        "<br /><label for=\"answer\">The text:</label>" \
+        "<input type=\"text\" name=\"answer\" id=\"answer\" required />" \
+        "<br />" \
+        "<div id=\"answer_div\">" \
+        "<button id=\"answer_button\">Submit</button>" \
+        "</div>" \
+        "\n<script>\n" \
+        "\"use strict\";\n" \
+        "document.getElementById(\"answer_button\").addEventListener('click', function () {\n" \
+        "  let answer = document.getElementById(\"answer\").value;\n" \
+        "  let data = JSON.stringify({\"type\": \"interactive\", \"id\": \"{UUID}\", \"answer\": answer});\n" \
+        "  let xhr = new XMLHttpRequest();\n" \
+        "  let url = \"{API_URL}\";\n" \
+        "  xhr.open(\"POST\", url, true);\n" \
+        "  xhr.setRequestHeader(\"Content-Type\", \"application/json\");\n" \
+        "  xhr.onreadystatechange = function () {\n" \
+        "    if (xhr.readyState === 4) {\n" \
+        "      if (xhr.status === 200) {\n" \
+        "        window.location.reload();\n" \
+        "      } // status === 200\n" \
+        "      else {\n" \
+        "        document.getElementById(\"answer_div\").innerHTML = \"<h2>Error</h2>\";\n" \
+        "      } // not status === 200\n" \
+        "    } // readyState === 4\n" \
+        "  }; // xhr onreadystatechange\n" \
+        "  xhr.send(data);\n" \
+        "}); // answer_button on click fn\n" \
+        "</script>\n"
+
+        int cli_html_size = snprintf(NULL, 0, CLI_ANSWER_OUTPUT_HTML_FMT);
+        c.client_resp_html = malloc((size_t)(cli_html_size + 1));
+        snprintf(c.client_resp_html, (size_t)(cli_html_size + 1), CLI_ANSWER_OUTPUT_HTML_FMT);
+
+        c.answer = strdup(text);
+    }
+
     rand_state_cleanup(r_state);
 
     return c;

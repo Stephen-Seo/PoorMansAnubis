@@ -1277,6 +1277,7 @@ dependencies = [
  "getrandom 0.4.3",
  "libc",
  "msql_ffi",
+ "rand",
  "reqwest",
  "rusqlite",
  "salvo",

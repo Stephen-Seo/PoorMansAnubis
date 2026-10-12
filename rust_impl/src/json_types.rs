@@ -22,3 +22,10 @@ pub struct FactorsResponse {
     pub id: String,
     pub factors: String,
 }
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct InteractiveResponse {
+    pub r#type: String,
+    pub id: String,
+    pub answer: String,
+}
