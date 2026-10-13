@@ -537,6 +537,10 @@ InteractiveChallenge i_challenge_generate(void) {
     c.client_resp_html = NULL;
     c.answer = NULL;
 
+#ifdef NDEBUG
+    SetTraceLogLevel(LOG_ERROR);
+#endif
+
     InitWindow(50, 50, "rendering_window");
 
     Font f = get_jupiteroid_font();
