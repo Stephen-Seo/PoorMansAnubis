@@ -14,6 +14,35 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
+const char *HTML_START_GENERIC =
+    "<!DOCTYPE html>\n"
+    "    <html lang=\"en\">\n"
+    "    <head>\n"
+    "        <meta charset=\"utf-8\">\n"
+    "        <title>Checking Your Browser...</title>\n"
+    "        <style>\n"
+    "            body {\n"
+    "                color: #FFF;\n"
+    "                background: #555;\n"
+    "                font-family: sans-serif;\n"
+    "            }\n"
+    "            .center {\n"
+    "                text-align: center;\n"
+    "                display: block;\n"
+    "                margin-left: auto;\n"
+    "                margin-right: auto;\n"
+    "            }\n"
+    "            pre {\n"
+    "                font-size: 32px;\n"
+    "            }\n"
+    "        </style>\n"
+    "    </head>\n"
+    "    <body>\n";
+
+const char *HTML_END_GENERIC =
+    "    </body>\n"
+    "    </html>\n";
+
 const char *HTML_BODY_FACTORS =
     "<!DOCTYPE html>\n"
     "    <html lang=\"en\">\n"

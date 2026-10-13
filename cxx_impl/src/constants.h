@@ -20,6 +20,9 @@
 #include <chrono>
 #include <cstdint>
 
+extern const char *HTML_START_GENERIC;
+extern const char *HTML_END_GENERIC;
+
 extern const char *HTML_BODY_FACTORS;
 
 extern const char *JS_FACTORS_WORKER;

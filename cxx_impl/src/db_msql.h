@@ -46,6 +46,7 @@ enum class Error {
   FAILED_DB_ADD_ALLOWED,
   FAILED_GET_NEXT_SEQ,
   FAILED_DB_ADD_CHALL_FACT,
+  FAILED_DB_ADD_INTERACTIVE_CHALL,
   FAILED_DB_CLEANUP_ALLOWED,
   FAILED_DB_ADD_ID_TO_PORT,
 };
@@ -233,12 +234,21 @@ std::tuple<Error, std::string, std::string> set_challenge_factor(
     uint64_t chall_factors_timeout,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
+std::tuple<Error, std::string, std::string> set_interactive_challenge(
+    Connection &c, std::string ip, uint16_t port, uint64_t chall_timeout,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+
 /// First value is SUCCESS on not error. Second value is port.
 std::tuple<Error, uint16_t> get_id_to_port_port(Connection &c, std::string id);
 
-std::tuple<Error, uint16_t> validate_client(
+std::tuple<Error, uint16_t> validate_factors_client(
     Connection &c, uint64_t chall_factors_timeout, std::string id,
     std::string factors, std::string client_ip,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+
+std::tuple<Error, uint16_t> validate_interactive_client(
+    Connection &c, uint64_t chall_timeout, std::string id, std::string answer,
+    std::string client_ip,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 Error client_is_allowed(Connection &c, std::string ip, uint16_t port,

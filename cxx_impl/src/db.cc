@@ -28,7 +28,9 @@
 #include <random>
 
 // Local includes.
+#include "constants.h"
 #include "helpers.h"
+#include "i_work.h"
 #include "work.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -242,6 +244,23 @@ PMA_SQL::init_sqlite(std::string filepath) {
   // if (sql_ret.has_value()) {
   //   return std::move(sql_ret.value());
   // }
+
+  sql_ret = internal_exec_sqlite_statement(
+      ctx,
+      "CREATE TABLE IF NOT EXISTS INTERACTIVE_CHALLENGE "
+      "( ID TEXT NOT NULL PRIMARY KEY, ANSWER TEXT NOT NULL, IP TEXT NOT NULL, "
+      "PORT INT NOT NULL, ON_TIME TEXT DEFAULT ( datetime() ) )");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
+  }
+
+  sql_ret = internal_exec_sqlite_statement(
+      ctx,
+      "CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_TIME ON "
+      "INTERACTIVE_CHALLENGE (ON_TIME)");
+  if (sql_ret.has_value()) {
+    return std::move(sql_ret.value());
+  }
 
   sql_ret = internal_exec_sqlite_statement(
       ctx,
@@ -486,8 +505,85 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
   return {ErrorT::SUCCESS, challenge_str, answer_str, hash_id};
 }
 
-std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
-    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id) {
+std::tuple<PMA_SQL::ErrorT, std::string, std::string>
+PMA_SQL::generate_interactive_challenge(
+    PMA_SQL::SQLITECtx &ctx, std::string client_ip, uint16_t port,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
+  __attribute__((
+      cleanup(i_challenge_cleanup_ptr))) InteractiveChallenge challenge =
+      i_challenge_generate();
+
+  std::string html = HTML_START_GENERIC;
+  html += challenge.challenge_html;
+  html += challenge.client_resp_html;
+  html += HTML_END_GENERIC;
+
+  // Get a unique identifier for INTERACTIVE_CHALLENGE.
+  std::string hash_id;
+  bool exists_with_id = true;
+  while (exists_with_id) {
+    const auto [optv, error_type, error_msg] = internal_increment_seq_id(ctx);
+    if (error_type != ErrorT::SUCCESS) {
+      return {error_type, error_msg, {}};
+    } else if (!optv.has_value()) {
+      return {ErrorT::FAILED_TO_FETCH_FROM_SEQ_ID,
+              "SEQ_ID optv does not have value",
+              {}};
+    }
+
+    hash_id = PMA_HELPER::next_hash(optv.value(), hasher_fn);
+
+    const auto [err_enum, err_msg, opt_vec] =
+        SqliteStmtRow<std::string>::exec_sqlite_stmt_with_rows<0, std::string>(
+            ctx, "SELECT ID FROM INTERACTIVE_CHALLENGE WHERE ID = ?",
+            std::nullopt, hash_id);
+
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, {}};
+    } else if (opt_vec.has_value() && !opt_vec.value().empty()) {
+      exists_with_id = true;
+    } else {
+      exists_with_id = false;
+    }
+  }
+
+  PMA_HELPER::str_replace_all(html, "{UUID}", hash_id);
+
+  // hash the answer prior to storing
+  std::string hash;
+  {
+    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    blake3_hasher_update(&hasher, challenge.answer,
+                         std::strlen(challenge.answer));
+
+    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
+
+    hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
+  }
+
+  // Insert challenge into db.
+  {
+    const auto [err_enum, err_msg, opt_vec] =
+        SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, std::string, std::string,
+                                                    std::string, int>(
+            ctx,
+            "INSERT INTO INTERACTIVE_CHALLENGE (ID, ANSWER, IP, PORT) VALUES "
+            "(?, ?, ?, ?)",
+            std::nullopt, hash_id, hash, client_ip, port);
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, hash_id};
+    }
+  }
+
+  return {ErrorT::SUCCESS, html, hash_id};
+}
+
+std::tuple<PMA_SQL::ErrorT, std::string, uint16_t>
+PMA_SQL::verify_factors_answer(SQLITECtx &ctx, std::string answer,
+                               std::string ipaddr, std::string id) {
   std::string hash;
   // get hash
   {
@@ -532,6 +628,73 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t> PMA_SQL::verify_answer(
   {
     const auto [err_enum, err_msg] = exec_sqlite_statement<0, std::string>(
         ctx, "DELETE FROM CHALLENGE_FACTOR WHERE ID = ?", std::nullopt, id);
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, 0};
+    }
+  }
+
+  {
+    const auto [err_enum, err_msg] = exec_sqlite_statement<0>(
+        ctx, "INSERT INTO ALLOWED_IP (IP, PORT) VALUES (?, ?)", std::nullopt,
+        ipaddr, port);
+
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, 0};
+    }
+  }
+
+  return {ErrorT::SUCCESS, {}, port};
+}
+
+std::tuple<PMA_SQL::ErrorT, std::string, uint16_t>
+PMA_SQL::verify_interactive_answer(SQLITECtx &ctx, std::string answer,
+                                   std::string ipaddr, std::string id) {
+  std::string hash;
+  // get hash
+  {
+    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+
+    blake3_hasher_update(&hasher, answer.c_str(), answer.size());
+
+    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
+
+    hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
+  }
+
+  std::string stored_ip;
+  uint16_t port = 0;
+  {
+    const auto [err_enum, err_msg, opt_vec] =
+        SqliteStmtRow<std::string, int>::exec_sqlite_stmt_with_rows<
+            0, std::string, std::string>(
+            ctx,
+            "SELECT IP, PORT FROM INTERACTIVE_CHALLENGE WHERE ID = ? "
+            "AND ANSWER = ?",
+            std::nullopt, id, hash);
+
+    if (err_enum != ErrorT::SUCCESS) {
+      return {err_enum, err_msg, 0};
+    } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
+      return {ErrorT::EXEC_GENERIC_INVALID_STATE,
+              "Failed to get IP, PORT from INTERACTIVE_CHALLENGE", 0};
+    }
+
+    stored_ip = std::get<0>(opt_vec.value().at(0).row).value();
+    port =
+        static_cast<uint16_t>(std::get<1>(opt_vec.value().at(0).row).value());
+  }
+
+  if (stored_ip != ipaddr) {
+    return {ErrorT::CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
+            "client ip address mismatch", 0};
+  }
+
+  {
+    const auto [err_enum, err_msg] = exec_sqlite_statement<0, std::string>(
+        ctx, "DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?", std::nullopt,
+        id);
     if (err_enum != ErrorT::SUCCESS) {
       return {err_enum, err_msg, 0};
     }
