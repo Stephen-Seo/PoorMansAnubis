@@ -841,9 +841,7 @@ async fn set_up_interactive_challenge(
         }
 
         if challenge_html.len() == 0 {
-            return Err(Error::GenericStaticStr(
-                "Interactive Challenge html is zero-length",
-            ));
+            return Err(Error::as_str("Interactive Challenge html is zero-length"));
         }
 
         if let Ok(cli_html_raw) = challenge.get_client_resp_html() {
@@ -853,7 +851,7 @@ async fn set_up_interactive_challenge(
         }
 
         if client_html.len() == 0 {
-            return Err(Error::GenericStaticStr(
+            return Err(Error::as_str(
                 "Interactive Challenge client-html is zero-length",
             ));
         }
@@ -865,9 +863,7 @@ async fn set_up_interactive_challenge(
         }
 
         if answer.len() == 0 {
-            return Err(Error::GenericStaticStr(
-                "Interactive Challenge answer is zero-length",
-            ));
+            return Err(Error::as_str("Interactive Challenge answer is zero-length"));
         }
     }
 
