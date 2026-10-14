@@ -1676,6 +1676,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             res.render("Failed to query");
             res.status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
         }
+    } else if req.uri() == "favicon.ico" || req.uri() == "/favicon.ico" {
+        res.body("404 Not Found").status_code(StatusCode::NOT_FOUND);
+        return Ok(());
     } else {
         let rand_val = rand::rng().next_u64();
         let rand_val = rand_val % 2;
