@@ -19,6 +19,35 @@ pub const DEFAULT_JSON_MAX_SIZE: usize = 4096;
 pub const ALLOWED_IP_TIMEOUT_MINUTES: u64 = 60;
 pub const CHALLENGE_FACTORS_TIMEOUT_MINUTES: u64 = 2;
 
+pub const HTML_BEGIN_GENERIC: &str = r#"<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="utf-8">
+            <title>Checking Your Browser...</title>
+            <style>
+                body {
+                    color: #FFF;
+                    background: #555;
+                    font-family: sans-serif;
+                }
+                .center {
+                    text-align: center;
+                    display: block;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+                pre {
+                    font-size: 32px;
+                }
+            </style>
+        </head>
+        <body>
+"#;
+
+pub const HTML_END_GENERIC: &str = r#"</body>
+</html>
+"#;
+
 pub const HTML_BODY_FACTORS: &str = r#"<!DOCTYPE html>
     <html lang="en">
     <head>

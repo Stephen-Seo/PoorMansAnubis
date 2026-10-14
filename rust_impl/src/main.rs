@@ -45,6 +45,7 @@ use error::Error;
 
 use msql_ffi::{MSQLParamsWrapper, MSQLValueEnum, MSQLWrapper};
 
+use crate::constants::{HTML_BEGIN_GENERIC, HTML_END_GENERIC};
 use crate::helpers::GenericCleanup;
 
 const GETRANDOM_BUF_SIZE: usize = 64;
@@ -1712,12 +1713,14 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
                 if let Ok((challenge_html, client_html, answer, hash_id)) = ret {
                     eprintln!("Set up challenge with answer: {}", answer);
-                    html = challenge_html;
+                    html = String::from(HTML_BEGIN_GENERIC);
+                    html.push_str(&challenge_html);
                     html.push_str(
                         &client_html
                             .replace("{UUID}", &hash_id)
                             .replace("{API_URL}", &args.api_url),
                     );
+                    html.push_str(HTML_END_GENERIC);
                 } else {
                     html = String::from(
                         "Internal Server Error: Failed to generate interactive challenge",
