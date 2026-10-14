@@ -1776,6 +1776,11 @@ void thread_handle_connection_fn(void *ud) {
               }
               goto PMA_RESPONSE_AFTER_SENDING;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
+              if (req.full_url == "/favicon.ico") {
+                status = "HTTP/1.0 404 Not Found";
+                body = "<html><p>404 Not Found</p></html>";
+                goto PMA_RESPONSE_AFTER_SENDING;
+              }
               // const uint64_t challenge_type = PMA_HELPER::rand_uint64_t() %
               // 2;
               const uint64_t challenge_type = 1;
@@ -1879,6 +1884,11 @@ void thread_handle_connection_fn(void *ud) {
               sqliteCtx, data->addr_port_info.client_addr,
               data->addr_port_info.local_port);
           if (err != PMA_SQL::ErrorT::SUCCESS || !is_allowed) {
+            if (req.full_url == "/favicon.ico") {
+              status = "HTTP/1.0 404 Not Found";
+              body = "<html><p>404 Not Found</p></html>";
+              goto PMA_RESPONSE_AFTER_SENDING;
+            }
             // const uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
             const uint64_t challenge_type = 1;
             if (challenge_type == 0) {
