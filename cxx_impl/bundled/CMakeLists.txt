@@ -527,6 +527,7 @@ add_library(db_msql_api_pre STATIC
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/http.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/helpers.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/poor_mans_print.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/constants.cc"
 )
 target_compile_features(db_msql_api_pre PUBLIC cxx_std_23)
 target_include_directories(db_msql_api_pre PUBLIC
