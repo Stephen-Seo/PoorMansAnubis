@@ -1460,8 +1460,7 @@ void thread_handle_connection_fn(void *ud) {
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   PMA_Println("Challenge success from {}:{} port {}",
                               data->addr_port_info.client_addr,
-                              data->addr_port_info.remote_port,
-                              data->addr_port_info.local_port);
+                              data->addr_port_info.remote_port, port);
                   content_type = "Content-type: text/plain";
                   body = "Correct";
                   std::unique_lock<std::mutex> cached_allowed_lock(
@@ -1498,8 +1497,7 @@ void thread_handle_connection_fn(void *ud) {
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   PMA_Println("Challenge success from {}:{} port {}",
                               data->addr_port_info.client_addr,
-                              data->addr_port_info.remote_port,
-                              data->addr_port_info.local_port);
+                              data->addr_port_info.remote_port, port);
                   content_type = "Content-type: text/plain";
                   body = "Correct";
                   std::unique_lock<std::mutex> cached_allowed_lock(
@@ -1553,8 +1551,7 @@ void thread_handle_connection_fn(void *ud) {
               } else {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
-                            data->addr_port_info.remote_port,
-                            data->addr_port_info.local_port);
+                            data->addr_port_info.remote_port, port);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
                 std::unique_lock<std::mutex> cached_allowed_lock(
@@ -1584,8 +1581,7 @@ void thread_handle_connection_fn(void *ud) {
               } else {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
-                            data->addr_port_info.remote_port,
-                            data->addr_port_info.local_port);
+                            data->addr_port_info.remote_port, port);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
                 std::unique_lock<std::mutex> cached_allowed_lock(
