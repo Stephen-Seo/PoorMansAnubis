@@ -103,8 +103,8 @@ static const char *DB_ADD_CHAL_FACT =
 
 static const char *DB_SEL_INTER_CHAL_BY_ID =
     "SELECT ID FROM CXX_INTERACTIVE_CHALLENGES WHERE ID = ?";
-static const char *DB_SEL_INTER_CHAL_BY_IP =
-    "SELECT PORT FROM CXX_INTERACTIVE_CHALLENGES WHERE IP = ?";
+static const char *DB_SEL_INTER_CHAL_BY_IP_PORT =
+    "SELECT PORT FROM CXX_INTERACTIVE_CHALLENGES WHERE IP = ? AND PORT = ?";
 static const char *DB_ADD_INTER_CHAL =
     "INSERT INTO CXX_INTERACTIVE_CHALLENGES (ID, IP, PORT, ANSWER) VALUES "
     "(?, ?, ?, ?)";
@@ -3411,8 +3411,8 @@ std::tuple<PMA_MSQL::Error, std::string> PMA_MSQL::init_id_to_port(
   return {Error::SUCCESS, id_hashed};
 }
 
-std::tuple<PMA_MSQL::Error, bool> PMA_MSQL::has_interactive_challenge(
-    Connection &c, std::string ip, uint64_t chall_timeout) {
+std::tuple<PMA_MSQL::Error, uint64_t> PMA_MSQL::has_interactive_challenge(
+    Connection &c, std::string ip, uint16_t port, uint64_t chall_timeout) {
   if (!c.is_valid()) {
     return {Error::INVALID_MSQL_CONNECTION, false};
   }
@@ -3425,14 +3425,15 @@ std::tuple<PMA_MSQL::Error, bool> PMA_MSQL::has_interactive_challenge(
     return {Error::FAILED_DB_CLEANUP_CHALLENGES, {}};
   }
 
-  auto select_ret = c.execute_stmt(DB_SEL_INTER_CHAL_BY_IP, {ip});
+  auto select_ret =
+      c.execute_stmt(DB_SEL_INTER_CHAL_BY_IP_PORT, {ip, Value::new_uint(port)});
   if (!select_ret.has_value() || select_ret.value().empty()) {
     c.execute_stmt("UNLOCK TABLES", {});
-    return {Error::SUCCESS, false};
+    return {Error::SUCCESS, 0};
   }
 
   c.execute_stmt("UNLOCK TABLES", {});
-  return {Error::SUCCESS, true};
+  return {Error::SUCCESS, select_ret.value().size()};
 }
 
 std::optional<PMA_MSQL::Conf> PMA_MSQL::parse_conf_file(

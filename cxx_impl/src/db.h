@@ -175,8 +175,9 @@ std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
                                                          std::string ipaddr,
                                                          uint16_t port);
 
-std::tuple<ErrorT, bool> has_interactive_challenge(SQLITECtx &ctx,
-                                                   std::string addr);
+std::tuple<ErrorT, uint64_t> has_interactive_challenge(SQLITECtx &ctx,
+                                                       std::string addr,
+                                                       uint16_t port);
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////

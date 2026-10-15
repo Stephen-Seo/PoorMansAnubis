@@ -258,8 +258,10 @@ std::tuple<Error, std::string> init_id_to_port(
     Connection &c, uint16_t port, uint64_t id_to_port_timeout,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
-std::tuple<Error, bool> has_interactive_challenge(Connection &c, std::string ip,
-                                                  uint64_t chall_timeout);
+std::tuple<Error, uint64_t> has_interactive_challenge(Connection &c,
+                                                      std::string ip,
+                                                      uint16_t port,
+                                                      uint64_t chall_timeout);
 
 struct Conf {
   std::string addr;

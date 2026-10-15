@@ -756,12 +756,13 @@ std::tuple<PMA_SQL::ErrorT, std::string, bool> PMA_SQL::is_allowed_ip_port(
   return {ErrorT::SUCCESS, {}, false};
 }
 
-std::tuple<PMA_SQL::ErrorT, bool> PMA_SQL::has_interactive_challenge(
-    SQLITECtx &ctx, std::string addr) {
+std::tuple<PMA_SQL::ErrorT, uint64_t> PMA_SQL::has_interactive_challenge(
+    SQLITECtx &ctx, std::string addr, uint16_t port) {
   const auto [err_enum, err_msg, opt_vec] =
-      SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string>(
-          ctx, "SELECT PORT FROM INTERACTIVE_CHALLENGE WHERE IP = ?",
-          std::nullopt, addr);
+      SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string, uint16_t>(
+          ctx,
+          "SELECT PORT FROM INTERACTIVE_CHALLENGE WHERE IP = ? AND PORT = ?",
+          std::nullopt, addr, port);
 
   if (err_enum != ErrorT::SUCCESS) {
     return {err_enum, false};
@@ -769,12 +770,13 @@ std::tuple<PMA_SQL::ErrorT, bool> PMA_SQL::has_interactive_challenge(
     return {ErrorT::FAILED_TO_FETCH_FROM_INTERACTIVE_CHAL, false};
   }
 
+  uint64_t count = 0;
   for (size_t idx = 0; idx < opt_vec.value().size(); ++idx) {
     if (auto opt_val = std::get<0>(opt_vec.value().at(idx).row);
         opt_val.has_value()) {
-      return {ErrorT::SUCCESS, true};
+      ++count;
     }
   }
 
-  return {ErrorT::SUCCESS, false};
+  return {ErrorT::SUCCESS, count};
 }

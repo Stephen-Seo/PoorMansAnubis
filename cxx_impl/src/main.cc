@@ -1782,12 +1782,21 @@ void thread_handle_connection_fn(void *ud) {
                 goto PMA_RESPONSE_AFTER_SENDING;
               }
               uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
-              const auto [err_t, has_i] = PMA_MSQL::has_interactive_challenge(
+              const auto [err_t, i_count] = PMA_MSQL::has_interactive_challenge(
                   msql_conn_opt.value(), data->addr_port_info.client_addr,
+                  data->addr_port_info.local_port,
                   data->args->challenge_timeout);
-              if (err_t == PMA_MSQL::Error::SUCCESS && has_i) {
-                // PMA_EPrintln("DEBUG has interactive challenge");
-                challenge_type = 1;
+              if (err_t == PMA_MSQL::Error::SUCCESS) {
+                if (i_count >= MAX_ALLOWED_INTERACTIVE_CHALLENGES) {
+                  status = "HTTP/1.0 400 Bad Request";
+                  body =
+                      "<html><p>400 Bad Request: Too Many Challenges For "
+                      "Client, Try Again Later</p></html>";
+                  goto PMA_RESPONSE_AFTER_SENDING;
+                } else if (i_count != 0) {
+                  // PMA_EPrintln("DEBUG has interactive challenge");
+                  challenge_type = 1;
+                }
               }
               if (challenge_type == 0) {
                 const auto [err, id] = PMA_MSQL::init_id_to_port(
@@ -1897,11 +1906,20 @@ void thread_handle_connection_fn(void *ud) {
             uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
             PMA_SQL::cleanup_stale_i_challenges(sqliteCtx,
                                                 data->args->allowed_timeout);
-            const auto [err, has_i] = PMA_SQL::has_interactive_challenge(
-                sqliteCtx, data->addr_port_info.client_addr);
-            if (err == PMA_SQL::ErrorT::SUCCESS && has_i) {
-              // PMA_EPrintln("DEBUG has interactive challenge");
-              challenge_type = 1;
+            const auto [err, i_count] = PMA_SQL::has_interactive_challenge(
+                sqliteCtx, data->addr_port_info.client_addr,
+                data->addr_port_info.local_port);
+            if (err == PMA_SQL::ErrorT::SUCCESS) {
+              if (i_count >= MAX_ALLOWED_INTERACTIVE_CHALLENGES) {
+                status = "HTTP/1.0 400 Bad Request";
+                body =
+                    "<html><p>400 Bad Request: Too Many Challenges For Client, "
+                    "Try Again Later</p></html>";
+                goto PMA_RESPONSE_AFTER_SENDING;
+              } else if (i_count != 0) {
+                // PMA_EPrintln("DEBUG has interactive challenge");
+                challenge_type = 1;
+              }
             }
             if (challenge_type == 0) {
               PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
