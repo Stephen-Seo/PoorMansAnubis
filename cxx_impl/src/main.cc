@@ -2051,6 +2051,9 @@ int main(int argc, char **argv) {
 
   curl_global_init(CURL_GLOBAL_SSL);
 
+  GenericCleanup<void *> generic_cleanup_curl(
+      nullptr, [](void *) { curl_global_cleanup(); });
+
   PMA_HELPER::MimeTypes mime_types{};
 
   // Mapping is a socket-fd to AddrPortInfo
@@ -2285,11 +2288,6 @@ int main(int argc, char **argv) {
 
     std::cout << std::flush;
   }
-
-  thread_pool.reset();
-  thread_limit.reset();
-
-  curl_global_cleanup();
 
   return 0;
 }
