@@ -17,7 +17,6 @@
 #include "db.h"
 
 // Third party includes.
-#include <blake3.h>
 #include <sqlite3.h>
 
 // Standard Library includes.
@@ -25,7 +24,6 @@
 #include <cstring>
 #include <format>
 #include <optional>
-#include <random>
 
 // Local includes.
 #include "constants.h"
@@ -474,18 +472,8 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
   }
 
   // hash the answer prior to storing
-  std::string hash;
-  {
-    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-
-    blake3_hasher_update(&hasher, answer_str.c_str(), answer_str.size());
-
-    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
-
-    hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
-  }
+  std::string hash = PMA_HELPER::vec_to_hexadecimal(
+      hasher_fn(answer_str.data(), answer_str.size()));
 
   // Insert challenge into db.
   {
@@ -550,19 +538,8 @@ PMA_SQL::generate_interactive_challenge(
   PMA_HELPER::str_replace_all(html, "{UUID}", hash_id);
 
   // hash the answer prior to storing
-  std::string hash;
-  {
-    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-
-    blake3_hasher_update(&hasher, challenge.answer,
-                         std::strlen(challenge.answer));
-
-    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
-
-    hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
-  }
+  std::string hash = PMA_HELPER::vec_to_hexadecimal(
+      hasher_fn(challenge.answer, std::strlen(challenge.answer)));
 
   // Insert challenge into db.
   {
@@ -583,20 +560,11 @@ PMA_SQL::generate_interactive_challenge(
 
 std::tuple<PMA_SQL::ErrorT, std::string, uint16_t>
 PMA_SQL::verify_factors_answer(SQLITECtx &ctx, std::string answer,
-                               std::string ipaddr, std::string id) {
-  std::string hash;
-  // get hash
-  {
-    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-
-    blake3_hasher_update(&hasher, answer.c_str(), answer.size());
-
-    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
-
-    hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
-  }
+                               std::string ipaddr, std::string id,
+                               std::vector<uint8_t> (*hasher_fn)(void *data,
+                                                                 size_t size)) {
+  std::string hash =
+      PMA_HELPER::vec_to_hexadecimal(hasher_fn(answer.data(), answer.size()));
 
   std::string stored_ip;
   uint16_t port = 0;
@@ -647,21 +615,11 @@ PMA_SQL::verify_factors_answer(SQLITECtx &ctx, std::string answer,
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, uint16_t>
-PMA_SQL::verify_interactive_answer(SQLITECtx &ctx, std::string answer,
-                                   std::string ipaddr, std::string id) {
-  std::string hash;
-  // get hash
-  {
-    std::array<uint8_t, BLAKE3_OUT_LEN> hash_data;
-    blake3_hasher hasher;
-    blake3_hasher_init(&hasher);
-
-    blake3_hasher_update(&hasher, answer.c_str(), answer.size());
-
-    blake3_hasher_finalize(&hasher, hash_data.data(), BLAKE3_OUT_LEN);
-
-    hash = PMA_HELPER::raw_to_hexadecimal<BLAKE3_OUT_LEN>(hash_data);
-  }
+PMA_SQL::verify_interactive_answer(
+    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
+  std::string hash =
+      PMA_HELPER::vec_to_hexadecimal(hasher_fn(answer.data(), answer.size()));
 
   std::string stored_ip;
   uint16_t port = 0;

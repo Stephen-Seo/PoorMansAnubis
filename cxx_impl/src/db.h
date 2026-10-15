@@ -154,12 +154,14 @@ std::tuple<ErrorT, std::string, std::string> generate_interactive_challenge(
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.
 std::tuple<ErrorT, std::string, uint16_t> verify_factors_answer(
-    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id);
+    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.
 std::tuple<ErrorT, std::string, uint16_t> verify_interactive_answer(
-    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id);
+    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
 get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);

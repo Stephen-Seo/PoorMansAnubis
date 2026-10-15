@@ -1536,7 +1536,7 @@ void thread_handle_connection_fn(void *ud) {
               const auto [err, msg, port] = PMA_SQL::verify_factors_answer(
                   sqliteCtx, json_keyvals.find("factors")->second,
                   data->addr_port_info.client_addr,
-                  json_keyvals.find("id")->second);
+                  json_keyvals.find("id")->second, internal_blake3_hash_fn);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
                     "Warning: Client {}:{} -> {} failed challenge due to {}, "
@@ -1566,7 +1566,7 @@ void thread_handle_connection_fn(void *ud) {
               const auto [err, msg, port] = PMA_SQL::verify_interactive_answer(
                   sqliteCtx, json_keyvals.find("answer")->second,
                   data->addr_port_info.client_addr,
-                  json_keyvals.find("id")->second);
+                  json_keyvals.find("id")->second, internal_blake3_hash_fn);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
                     "Warning: Client {}:{} -> {} failed challenge due to {}, "

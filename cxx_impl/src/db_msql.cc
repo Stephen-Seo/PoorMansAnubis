@@ -34,7 +34,6 @@
 
 // Local includes.
 #include "constants.h"
-#include "db.h"
 #include "db_msql_capi.h"
 #include "helpers.h"
 #include "http.h"
