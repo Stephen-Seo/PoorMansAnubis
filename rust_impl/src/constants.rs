@@ -18,6 +18,7 @@ pub const DEFAULT_FACTORS_QUADS: u64 = 2200;
 pub const DEFAULT_JSON_MAX_SIZE: usize = 4096;
 pub const ALLOWED_IP_TIMEOUT_MINUTES: u64 = 60;
 pub const CHALLENGE_FACTORS_TIMEOUT_MINUTES: u64 = 2;
+pub const MAX_INTERACTIVE_CHALLENGES: u64 = 7;
 
 pub const HTML_BEGIN_GENERIC: &str = r#"<!DOCTYPE html>
         <html lang="en">

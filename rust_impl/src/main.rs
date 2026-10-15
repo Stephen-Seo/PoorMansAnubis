@@ -45,7 +45,7 @@ use error::Error;
 
 use msql_ffi::{MSQLParamsWrapper, MSQLValueEnum, MSQLWrapper};
 
-use crate::constants::{HTML_BEGIN_GENERIC, HTML_END_GENERIC};
+use crate::constants::{HTML_BEGIN_GENERIC, HTML_END_GENERIC, MAX_INTERACTIVE_CHALLENGES};
 use crate::helpers::GenericCleanup;
 
 const GETRANDOM_BUF_SIZE: usize = 64;
@@ -1293,7 +1293,11 @@ async fn validate_client_interactive_sqlite(
     }
 }
 
-async fn client_has_interactive_challenge_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
+async fn client_has_interactive_challenge_msql(
+    args: &args::Args,
+    ip: &str,
+    port: u16,
+) -> Result<u64, Error> {
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
@@ -1316,36 +1320,35 @@ async fn client_has_interactive_challenge_msql(args: &args::Args, ip: &str) -> R
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(ip)?;
+    params.append_uint64(port as u64);
 
     let rows = locked
         .query_with_params_rows(
-            r#"SELECT PORT FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ?"#,
+            r#"SELECT ID FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ? AND PORT = ?"#,
             &params,
         )
         .map_err(|e| e.to_owned())?;
 
-    Ok(rows.is_some())
+    if let Some(rows) = rows {
+        Ok(rows.len() as u64)
+    } else {
+        Ok(0)
+    }
 }
 
 async fn client_has_interactive_challenge_sqlite(
     args: &args::Args,
     ip: &str,
-) -> Result<bool, Error> {
+    port: u16,
+) -> Result<u64, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
     conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.challenge_timeout_mins), ())?;
 
-    let res = conn.query_row(
-        r#"SELECT PORT FROM INTERACTIVE_CHALLENGE WHERE IP = ?1"#,
-        (ip,),
-        |r| Ok(r.get::<usize, u16>(0)),
-    );
-
-    if let Ok(_port) = res {
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    let mut stmt =
+        conn.prepare(r#"SELECT PORT FROM INTERACTIVE_CHALLENGE WHERE IP = ?1 AND PORT = ?2"#)?;
+    let rows = stmt.query_map((ip, port), |row| row.get::<usize, i64>(0))?;
+    Ok(rows.count() as u64)
 }
 
 #[handler]
@@ -1746,17 +1749,25 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         let mut rand_val = rand::rng().next_u64() % 2;
 
         if args.mysql_has_priority {
-            if client_has_interactive_challenge_msql(args, &client_info_ret.addr)
-                .await
-                .unwrap_or(false)
-            {
+            let count_ret =
+                client_has_interactive_challenge_msql(args, &client_info_ret.addr, port).await?;
+            if count_ret >= MAX_INTERACTIVE_CHALLENGES {
+                res.body("400 Bad Request: Too Many Challenges For Client, Try Again Later")
+                    .status_code(StatusCode::BAD_REQUEST);
+                return Ok(());
+            } else if count_ret != 0 {
                 rand_val = 1;
             }
-        } else if client_has_interactive_challenge_sqlite(args, &client_info_ret.addr)
-            .await
-            .unwrap_or(false)
-        {
-            rand_val = 1;
+        } else {
+            let count_ret =
+                client_has_interactive_challenge_sqlite(args, &client_info_ret.addr, port).await?;
+            if count_ret >= MAX_INTERACTIVE_CHALLENGES {
+                res.body("400 Bad Request: Too Many Challenges For Client, Try Again Later")
+                    .status_code(StatusCode::BAD_REQUEST);
+                return Ok(());
+            } else if count_ret != 0 {
+                rand_val = 1;
+            }
         }
 
         let mut html: String = String::new();
