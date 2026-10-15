@@ -2286,5 +2286,7 @@ int main(int argc, char **argv) {
     std::cout << std::flush;
   }
 
+  curl_global_cleanup();
+
   return 0;
 }
