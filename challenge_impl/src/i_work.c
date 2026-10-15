@@ -578,6 +578,10 @@ InteractiveChallenge i_challenge_generate(void) {
                                        &text_color);
     //const float max_size_half = (float)max_size / 2.0F;
 
+    if (!render_image.data) {
+        return c;
+    }
+
     draw_obscuring_circle(text_color, 10.0F, &render_image, r_state);
     draw_obscuring_grid(
         text_color,

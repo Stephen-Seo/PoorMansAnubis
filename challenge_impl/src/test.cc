@@ -18,9 +18,12 @@
 #include "work2.cc"
 
 #include "random.h"
+#include "i_work.h"
 
+#include <array>
 #include <atomic>
 #include <iostream>
+#include <thread>
 
 static std::atomic_uint64_t passed(0);
 static std::atomic_uint64_t tested(0);
@@ -374,6 +377,42 @@ int main() {
         }
 
         rand_state_cleanup(r_state);
+    }
+
+    // stress test image loading.
+    {
+        global_initialize_i_challenge();
+
+        std::array<InteractiveChallenge, 100> challenges;
+        std::vector<std::thread> gen_threads;
+
+        for (size_t idx = 0; idx < challenges.size(); ++idx) {
+            gen_threads.emplace_back([] (InteractiveChallenge *c) {
+                *c = i_challenge_generate();
+            }, &challenges[idx]);
+        }
+
+        for (size_t idx = 0; idx < challenges.size(); ++idx) {
+            gen_threads[idx].join();
+        }
+
+        for (size_t idx = 0; idx < challenges.size(); ++idx) {
+            CHECK_TRUE(challenges[idx].challenge_html);
+            CHECK_TRUE(challenges[idx].client_resp_html);
+            CHECK_TRUE(challenges[idx].answer);
+
+            if (challenges[idx].challenge_html) {
+                std::free(challenges[idx].challenge_html);
+            }
+            if (challenges[idx].client_resp_html) {
+                std::free(challenges[idx].client_resp_html);
+            }
+            if (challenges[idx].answer) {
+                std::free(challenges[idx].answer);
+            }
+        }
+
+        global_cleanup_i_challenge();
     }
 
     std::cerr << "Passed: " << passed.load() << "\n";
