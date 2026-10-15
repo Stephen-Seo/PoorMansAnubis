@@ -2059,7 +2059,9 @@ int main(int argc, char **argv) {
     test_raylib();
     return 0;
   } else if (args.flags.test(9)) {
+    global_initialize_i_challenge();
     i_challenge_debug_quick_print();
+    global_cleanup_i_challenge();
     return 0;
   }
 
