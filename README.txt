@@ -7,9 +7,11 @@ POOR MAN'S ANUBIS: Website Access Challenge Verification
 This software is heavily inspired by Anubis.
 (https://github.com/TecharoHQ/anubis)
 
-There is currently one method of challenge verification: factors of a large
-number. It is generated per request, and the challenge response should be the
-factors of the number in sorted increasing order.
+There are currently two methods of challenge verification: factors of a large
+number and a "captcha" style manual input. It is generated per request, and the
+challenge response for the first method should be the factors of the number in
+sorted increasing order, while the response for the second method should be the
+text of the image embedded in the response.
 
 The "challenge_impl" contains the challenge generation code.
 
