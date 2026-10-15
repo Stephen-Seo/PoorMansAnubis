@@ -50,13 +50,16 @@
 #include "thread_pool.h"
 
 volatile int interrupt_received = 0;
+volatile int usr1_received = 0;
 
 void receive_signal(int sig) {
-  PMA_Println("Interupt received...");
-  // SIGHUP, SIGINT, SIGTERM
-  // if (sig == 1 || sig == 2 || sig == 15) {
-  //}
-  interrupt_received = 1;
+  if (sig == SIGHUP || sig == SIGINT || sig == SIGTERM) {
+    PMA_Println("Interupt received...");
+    interrupt_received = 1;
+  } else if (sig == SIGUSR1) {
+    PMA_Println("USR1 received...");
+    usr1_received = 1;
+  }
 }
 
 void ignore_sigpipe(__attribute__((unused)) int sig) {}
@@ -2163,6 +2166,8 @@ int main(int argc, char **argv) {
   PMA_HELPER::set_signal_handler(SIGHUP, receive_signal);
   PMA_HELPER::set_signal_handler(SIGTERM, receive_signal);
 
+  PMA_HELPER::set_signal_handler(SIGUSR1, receive_signal);
+
   PMA_HELPER::set_signal_handler(SIGPIPE, ignore_sigpipe);
 
   struct sockaddr_in sain4;
@@ -2186,10 +2191,14 @@ int main(int argc, char **argv) {
   while (!interrupt_received) {
     std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
     time_now = std::chrono::steady_clock::now();
-    if (time_now - time_prev > CACHED_CLEAR_T) {
+    if (time_now - time_prev > CACHED_CLEAR_T || usr1_received) {
       time_prev = time_now;
       std::unique_lock<std::mutex> cached_allowed_lock(cached_allowed_mutex);
       cached_allowed.clear();
+
+      if (usr1_received) {
+        usr1_received = 0;
+      }
     }
 
     // Fetch new connections
