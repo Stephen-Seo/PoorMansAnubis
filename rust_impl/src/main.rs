@@ -835,35 +835,35 @@ async fn set_up_interactive_challenge(
     {
         let challenge = crate::ffi::InteractiveChallengeWrapper::new();
 
-        if let Ok(ch_html_raw) = challenge.get_challenge_html() {
-            if let Ok(utf8_ch_html) = ch_html_raw.to_str() {
-                challenge_html = utf8_ch_html.to_owned();
-            }
+        if let Ok(ch_html_raw) = challenge.get_challenge_html()
+            && let Ok(utf8_ch_html) = ch_html_raw.to_str()
+        {
+            challenge_html = utf8_ch_html.to_owned();
         }
 
-        if challenge_html.len() == 0 {
+        if challenge_html.is_empty() {
             return Err(Error::as_str("Interactive Challenge html is zero-length"));
         }
 
-        if let Ok(cli_html_raw) = challenge.get_client_resp_html() {
-            if let Ok(utf8_cli_html) = cli_html_raw.to_str() {
-                client_html = utf8_cli_html.to_owned();
-            }
+        if let Ok(cli_html_raw) = challenge.get_client_resp_html()
+            && let Ok(utf8_cli_html) = cli_html_raw.to_str()
+        {
+            client_html = utf8_cli_html.to_owned();
         }
 
-        if client_html.len() == 0 {
+        if client_html.is_empty() {
             return Err(Error::as_str(
                 "Interactive Challenge client-html is zero-length",
             ));
         }
 
-        if let Ok(answer_raw) = challenge.get_answer() {
-            if let Ok(utf8_answer) = answer_raw.to_str() {
-                answer = utf8_answer.to_owned();
-            }
+        if let Ok(answer_raw) = challenge.get_answer()
+            && let Ok(utf8_answer) = answer_raw.to_str()
+        {
+            answer = utf8_answer.to_owned();
         }
 
-        if answer.len() == 0 {
+        if answer.is_empty() {
             return Err(Error::as_str("Interactive Challenge answer is zero-length"));
         }
     }
@@ -1313,11 +1313,7 @@ async fn client_has_interactive_challenge_msql(args: &args::Args, ip: &str) -> R
         )
         .map_err(|e| e.to_owned())?;
 
-    if let Some(_) = rows {
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    Ok(rows.is_some())
 }
 
 async fn client_has_interactive_challenge_sqlite(
@@ -1756,12 +1752,11 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         let mut html: String = String::new();
         match rand_val {
             0 => {
-                let hash_ret;
-                if args.mysql_has_priority {
-                    hash_ret = init_id_to_port_mysql(args, port).await;
+                let hash_ret = if args.mysql_has_priority {
+                    init_id_to_port_mysql(args, port).await
                 } else {
-                    hash_ret = init_id_to_port_sqlite(args, port).await;
-                }
+                    init_id_to_port_sqlite(args, port).await
+                };
 
                 if let Err(e) = hash_ret {
                     html = String::from("Internal Server Error: Failed to init id");
