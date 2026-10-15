@@ -53,6 +53,8 @@
 extern const unsigned char _binary_Jupiteroid_ttf_start[];
 extern const unsigned char _binary_Jupiteroid_ttf_end[];
 
+static Font global_font_for_i_challenge = {0};
+
 typedef struct jpg_export_part {
     void *data;
     uint64_t size;
@@ -533,9 +535,14 @@ void global_initialize_i_challenge(void) {
     SetTraceLogLevel(LOG_ERROR);
 #endif
     InitWindow(50, 50, "rendering_window");
+
+    global_font_for_i_challenge = get_jupiteroid_font();
 }
 
 void global_cleanup_i_challenge(void) {
+    UnloadFont(global_font_for_i_challenge);
+    memset(&global_font_for_i_challenge, 0, sizeof(Font));
+
     CloseWindow();
 }
 
@@ -552,7 +559,9 @@ InteractiveChallenge i_challenge_generate(void) {
     SetTraceLogLevel(LOG_ERROR);
 #endif
 
-    Font f = get_jupiteroid_font();
+    if (global_font_for_i_challenge.baseSize == 0) {
+        return c;
+    }
 
     int image_width = 0;
     int image_height = 0;
@@ -561,7 +570,7 @@ InteractiveChallenge i_challenge_generate(void) {
 #ifndef NDEBUG
     fprintf(stderr, "Random word: %s\n", text);
 #endif
-    Image render_image = text_to_image(f,
+    Image render_image = text_to_image(global_font_for_i_challenge,
                                        text,
                                        r_state,
                                        &image_width,
@@ -598,8 +607,6 @@ InteractiveChallenge i_challenge_generate(void) {
     jpg_export_part img_data = image_to_jpg_memory(render_image);
 
     UnloadImage(render_image);
-
-    UnloadFont(f);
 
     if (img_data.data && img_data.size > 0) {
         unsigned long long out_size = 0;
