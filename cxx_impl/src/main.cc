@@ -2286,6 +2286,9 @@ int main(int argc, char **argv) {
     std::cout << std::flush;
   }
 
+  thread_pool.reset();
+  thread_limit.reset();
+
   curl_global_cleanup();
 
   return 0;
