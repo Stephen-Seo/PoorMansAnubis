@@ -1781,6 +1781,7 @@ void thread_handle_connection_fn(void *ud) {
                 body = "<html><p>404 Not Found</p></html>";
                 goto PMA_RESPONSE_AFTER_SENDING;
               }
+              // TODO allow both challenge types.
               // const uint64_t challenge_type = PMA_HELPER::rand_uint64_t() %
               // 2;
               const uint64_t challenge_type = 1;
@@ -1889,6 +1890,7 @@ void thread_handle_connection_fn(void *ud) {
               body = "<html><p>404 Not Found</p></html>";
               goto PMA_RESPONSE_AFTER_SENDING;
             }
+            // TODO allow both challenge types.
             // const uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
             const uint64_t challenge_type = 1;
             if (challenge_type == 0) {
