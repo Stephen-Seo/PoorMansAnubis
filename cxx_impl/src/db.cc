@@ -509,9 +509,9 @@ std::tuple<PMA_SQL::ErrorT, std::string, std::string>
 PMA_SQL::generate_interactive_challenge(
     PMA_SQL::SQLITECtx &ctx, std::string client_ip, uint16_t port,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
-  __attribute__((
-      cleanup(i_challenge_cleanup_ptr))) InteractiveChallenge challenge =
-      i_challenge_generate();
+  InteractiveChallenge challenge = i_challenge_generate();
+  GenericCleanup<InteractiveChallenge> interactive_challenge_cleanup(
+      challenge, [](InteractiveChallenge *c) { i_challenge_cleanup_ptr(c); });
 
   std::string html = HTML_START_GENERIC;
   html += challenge.challenge_html;

@@ -3130,9 +3130,9 @@ PMA_MSQL::set_interactive_challenge(
     return {Error::INVALID_MSQL_CONNECTION, {}, {}};
   }
 
-  __attribute__((
-      cleanup(i_challenge_cleanup_ptr))) InteractiveChallenge challenge =
-      i_challenge_generate();
+  InteractiveChallenge challenge = i_challenge_generate();
+  GenericCleanup<InteractiveChallenge> interactive_challenge_cleanup(
+      challenge, [](InteractiveChallenge *c) { i_challenge_cleanup_ptr(c); });
 
   std::string challenge_html = HTML_START_GENERIC;
   challenge_html += challenge.challenge_html;
