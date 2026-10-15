@@ -528,6 +528,17 @@ const char *get_random_word(void *r_state) {
                                             third_party_nouns_size - 1)];
 }
 
+void global_initialize_i_challenge(void) {
+#ifdef NDEBUG
+    SetTraceLogLevel(LOG_ERROR);
+#endif
+    InitWindow(50, 50, "rendering_window");
+}
+
+void global_cleanup_i_challenge(void) {
+    CloseWindow();
+}
+
 InteractiveChallenge i_challenge_generate(void) {
     void *r_state = rand_state_init();
 
@@ -540,8 +551,6 @@ InteractiveChallenge i_challenge_generate(void) {
 #ifdef NDEBUG
     SetTraceLogLevel(LOG_ERROR);
 #endif
-
-    InitWindow(50, 50, "rendering_window");
 
     Font f = get_jupiteroid_font();
 
@@ -591,8 +600,6 @@ InteractiveChallenge i_challenge_generate(void) {
     UnloadImage(render_image);
 
     UnloadFont(f);
-
-    CloseWindow();
 
     if (img_data.data && img_data.size > 0) {
         unsigned long long out_size = 0;

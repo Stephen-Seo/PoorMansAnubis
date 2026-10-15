@@ -21,6 +21,9 @@
 extern "C" {
 #endif
 
+void global_initialize_i_challenge(void);
+void global_cleanup_i_challenge(void);
+
 typedef struct InteractiveChallenge {
     char *challenge_html;
     char *client_resp_html;

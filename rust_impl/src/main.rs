@@ -1868,6 +1868,7 @@ async fn main() {
         }
         return;
     } else if parsed_args.i_challenge {
+        crate::ffi::InteractiveChallengeWrapper::global_init();
         let challenge = crate::ffi::InteractiveChallengeWrapper::new();
         let challenge_html = challenge
             .get_challenge_html()
@@ -1877,6 +1878,7 @@ async fn main() {
         } else {
             println!("{:?}", challenge_html);
         }
+        crate::ffi::InteractiveChallengeWrapper::global_deinit();
         return;
     }
 
@@ -1892,6 +1894,11 @@ async fn main() {
             "NOTICE: --enable-override-dest-url is active! A well set-up firewall is highly recommended!"
         );
     }
+
+    crate::ffi::InteractiveChallengeWrapper::global_init();
+    let _i_chal_deinit = GenericCleanup::new(&(), |_| {
+        crate::ffi::InteractiveChallengeWrapper::global_deinit();
+    });
 
     let mut client_wrapper = ClientWrapper::new();
 

@@ -87,6 +87,18 @@ impl Drop for InteractiveChallengeWrapper {
 }
 
 impl InteractiveChallengeWrapper {
+    pub fn global_init() {
+        unsafe {
+            global_initialize_i_challenge();
+        }
+    }
+
+    pub fn global_deinit() {
+        unsafe {
+            global_cleanup_i_challenge();
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             challenge_value: unsafe { i_challenge_generate() },

@@ -2087,6 +2087,10 @@ int main(int argc, char **argv) {
   GenericCleanup<void *> generic_cleanup_curl(
       nullptr, [](void *) { curl_global_cleanup(); });
 
+  global_initialize_i_challenge();
+  GenericCleanup<void *> generic_cleanup_i_challenge(
+      nullptr, [](void *) { global_cleanup_i_challenge(); });
+
   PMA_HELPER::MimeTypes mime_types{};
 
   // Mapping is a socket-fd to AddrPortInfo
