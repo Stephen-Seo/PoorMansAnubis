@@ -3042,6 +3042,8 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
   }
 }
 
+#ifndef COM_SEODISPARATE_MSQL_CHALLENGE_DISABLE
+
 std::optional<bool> PMA_MSQL::has_challenge_factor_id(Connection &c,
                                                       std::string hash) {
   if (!c.is_valid()) {
@@ -3557,6 +3559,8 @@ std::optional<PMA_MSQL::Conf> PMA_MSQL::parse_conf_file(
   PMA_EPrintln("ERROR: Config file {} missing opts!", msql_conf_path);
   return std::nullopt;
 }
+
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // db_msql_capi impl
