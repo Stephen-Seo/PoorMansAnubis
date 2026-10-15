@@ -1181,10 +1181,10 @@ async fn validate_client_interactive_msql(
                 correct = true;
 
                 let mut params = MSQLParamsWrapper::new();
-                params.append_str(&interactive_response.id)?;
+                params.append_str(addr)?;
 
                 locked.query_with_params_drop(
-                    "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ?",
+                    "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ?",
                     &params,
                 )?;
             } else {
@@ -1268,10 +1268,7 @@ async fn validate_client_interactive_sqlite(
 
     if let Ok((Ok(ip), Ok(port))) = res {
         if ip == addr && port != 0 {
-            conn.execute(
-                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
-                (&interactive_response.id,),
-            )?;
+            conn.execute(r"DELETE FROM INTERACTIVE_CHALLENGE WHERE IP = ?1", (&addr,))?;
             conn.execute(
                 r"INSERT INTO ALLOWED_IP (IP, PORT) VALUES (?1, ?2)",
                 (&ip, &port),
@@ -1282,6 +1279,65 @@ async fn validate_client_interactive_sqlite(
         }
     } else {
         Err(Error::as_str("Incorrect"))
+    }
+}
+
+async fn client_has_interactive_challenge_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
+
+    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
+        let mut locked = conn_ref.lock().unwrap();
+        locked
+            .query_drop("UNLOCK TABLES")
+            .expect("Should be able to UNLOCK TABLES in cleanup");
+    });
+
+    let mut locked = conn.lock().unwrap();
+    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE WRITE")?;
+
+    {
+        // Cleanup stale entries first.
+        let mut params = MSQLParamsWrapper::new();
+        params.append_uint64(args.challenge_timeout_mins);
+
+        locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
+    }
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(ip)?;
+
+    let rows = locked
+        .query_with_params_rows(
+            r#"SELECT PORT FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ?"#,
+            &params,
+        )
+        .map_err(|e| e.to_owned())?;
+
+    if let Some(_) = rows {
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+async fn client_has_interactive_challenge_sqlite(
+    args: &args::Args,
+    ip: &str,
+) -> Result<bool, Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.challenge_timeout_mins), ())?;
+
+    let res = conn.query_row(
+        r#"SELECT PORT FROM INTERACTIVE_CHALLENGE WHERE IP = ?1"#,
+        (ip,),
+        |r| Ok(r.get::<usize, u16>(0)),
+    );
+
+    if let Ok(_port) = res {
+        Ok(true)
+    } else {
+        Ok(false)
     }
 }
 
@@ -1680,11 +1736,25 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         res.body("404 Not Found").status_code(StatusCode::NOT_FOUND);
         return Ok(());
     } else {
-        let rand_val = rand::rng().next_u64();
-        let rand_val = rand_val % 2;
+        let mut rand_val = rand::rng().next_u64() % 2;
+
+        if args.mysql_has_priority {
+            if client_has_interactive_challenge_msql(args, &client_info_ret.addr)
+                .await
+                .unwrap_or(false)
+            {
+                rand_val = 1;
+            }
+        } else if client_has_interactive_challenge_sqlite(args, &client_info_ret.addr)
+            .await
+            .unwrap_or(false)
+        {
+            eprintln!("DEBUG Was previously interactive");
+            rand_val = 1;
+        }
 
         let mut html: String = String::new();
-        match 1 {
+        match rand_val {
             0 => {
                 let hash_ret;
                 if args.mysql_has_priority {
