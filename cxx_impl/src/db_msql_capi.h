@@ -15,13 +15,13 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 #ifdef __cplusplus
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 extern "C" {
 #else
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 #endif
 
 typedef void *MSQL_Connection;

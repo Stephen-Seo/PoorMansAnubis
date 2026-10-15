@@ -1,0 +1,2 @@
+#define COM_SEODISPARATE_POOR_MANS_ANUBIS_CHALLENGE_THIRD_PARTY_NOUNS_IMPL
+#include "../third_party/nouns.h"

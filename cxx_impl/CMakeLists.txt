@@ -17,15 +17,6 @@ set(poor_mans_anubis_bundled_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/thread_limit.cc"
 )
 
-set(challenge_impl_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/src/work.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/src/base64.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/priority_heap.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/chunked_array.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/third_party/SimpleArchiver/src/data_structures/linked_list.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/src/work2.cc"
-)
-
 if("${CMAKE_BUILD_TYPE}" STREQUAL "")
     message(STATUS "CMAKE_BUILD_TYPE not specified, defaulting to \"Debug\".")
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
@@ -88,7 +79,9 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
 
-add_library(PMA_LIB STATIC ${poor_mans_anubis_bundled_SOURCES} ${challenge_impl_SOURCES})
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl" "${CMAKE_CURRENT_BINARY_DIR}/challenge_impl")
+
+add_library(PMA_LIB STATIC ${poor_mans_anubis_bundled_SOURCES})
 target_compile_features(PMA_LIB PUBLIC cxx_std_23)
 target_include_directories(PMA_LIB PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/../challenge_impl/src"
@@ -97,7 +90,7 @@ target_include_directories(PMA_LIB PUBLIC
 	${LIBCURL_INCLUDE_DIRS}
 )
 target_link_directories(PMA_LIB PUBLIC ${SQLITE3_LIBRARY_DIRS} ${LIBCURL_LIBRARY_DIRS})
-target_link_libraries(PMA_LIB BLAKE3::blake3 ${SQLITE3_LIBRARIES} ${LIBCURL_LIBRARIES} OpenSSL::Crypto)
+target_link_libraries(PMA_LIB PUBLIC BLAKE3::blake3 ${SQLITE3_LIBRARIES} ${LIBCURL_LIBRARIES} OpenSSL::Crypto PMA_Challenge)
 
 add_executable(poor_mans_anubis
     "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cc"

@@ -20,6 +20,9 @@
 #include <chrono>
 #include <cstdint>
 
+extern const char *HTML_START_GENERIC;
+extern const char *HTML_END_GENERIC;
+
 extern const char *HTML_BODY_FACTORS;
 
 extern const char *JS_FACTORS_WORKER;
@@ -52,7 +55,8 @@ constexpr std::chrono::milliseconds CONN_TRY_LOCK_DURATION =
 constexpr uint32_t DEFAULT_FACTORS_QUADS = 2200;
 constexpr uint32_t DEFAULT_JSON_MAX_SIZE = 10000;
 constexpr uint32_t ALLOWED_IP_TIMEOUT_MINUTES = 60;
-constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 1;
+constexpr uint32_t CHALLENGE_FACTORS_TIMEOUT_MINUTES = 2;
+constexpr uint64_t MAX_ALLOWED_INTERACTIVE_CHALLENGES = 7;
 
 constexpr int SOCKET_BACKLOG_SIZE = 2048;
 

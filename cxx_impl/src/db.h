@@ -21,7 +21,6 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -46,7 +45,8 @@ enum class ErrorT {
   EXEC_GENERIC_INVALID_STATE,
   CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
   FAILED_TO_FETCH_FROM_ALLOWED_IPS,
-  FAILED_TO_FETCH_FROM_ID_TO_PORT
+  FAILED_TO_FETCH_FROM_ID_TO_PORT,
+  FAILED_TO_FETCH_FROM_INTERACTIVE_CHAL
 };
 
 std::string error_t_to_string(ErrorT err);
@@ -130,6 +130,10 @@ std::tuple<ErrorT, std::string> cleanup_stale_challenges(SQLITECtx &ctx,
                                                          uint32_t timeout);
 
 // string is err message.
+std::tuple<ErrorT, std::string> cleanup_stale_i_challenges(SQLITECtx &ctx,
+                                                           uint32_t timeout);
+
+// string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_entries(SQLITECtx &ctx,
                                                       uint32_t timeout);
 
@@ -145,12 +149,23 @@ std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
     SQLITECtx &ctx, uint64_t quads, std::string client_ip, std::string id,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
+// On error, first string is err message. On SUCCESS, first string is challenge
+// html. Last string is id.
+std::tuple<ErrorT, std::string, std::string> generate_interactive_challenge(
+    SQLITECtx &ctx, std::string client_ip, uint16_t port,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request.
-std::tuple<ErrorT, std::string, uint16_t> verify_answer(SQLITECtx &ctx,
-                                                        std::string answer,
-                                                        std::string ipaddr,
-                                                        std::string id);
+std::tuple<ErrorT, std::string, uint16_t> verify_factors_answer(
+    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+
+// string is error msg, uint16_t is destination port of initial challenge
+// generation request.
+std::tuple<ErrorT, std::string, uint16_t> verify_interactive_answer(
+    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
 get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
@@ -159,6 +174,10 @@ get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
 std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
                                                          std::string ipaddr,
                                                          uint16_t port);
+
+std::tuple<ErrorT, uint64_t> has_interactive_challenge(SQLITECtx &ctx,
+                                                       std::string addr,
+                                                       uint16_t port);
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////

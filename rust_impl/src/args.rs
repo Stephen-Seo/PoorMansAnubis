@@ -36,6 +36,8 @@ pub struct Args {
     pub allowed_timeout_mins: u64,
     pub enable_override_dest_url: bool,
     pub mysql_has_priority: bool,
+    pub test_raylib: bool,
+    pub i_challenge: bool,
 }
 
 pub fn print_args() {
@@ -98,6 +100,8 @@ pub fn parse_args() -> Result<Args, Error> {
         allowed_timeout_mins: crate::constants::ALLOWED_IP_TIMEOUT_MINUTES,
         enable_override_dest_url: false,
         mysql_has_priority: true,
+        test_raylib: false,
+        i_challenge: false,
     };
 
     let p_args = args_fn();
@@ -110,7 +114,7 @@ pub fn parse_args() -> Result<Args, Error> {
     for mut arg in p_args.skip(1) {
         if arg == "-h" || arg == "--help" {
             print_args();
-            return Err("Printed help text".into());
+            return Err(Error::as_str("Printed help text"));
         } else if arg.starts_with("--factors=") {
             let end = arg.split_off(10);
             args.factors = end.parse().ok();
@@ -169,15 +173,19 @@ pub fn parse_args() -> Result<Args, Error> {
             override_dest_url_warning_read = true;
         } else if arg == "--enable-unknown-arg-error" {
             unknown_arg_error = true;
+        } else if arg == "--test-raylib" {
+            args.test_raylib = true;
+        } else if arg == "--i-challenge" {
+            args.i_challenge = true;
         } else {
             unknown_args.push_back(arg);
         }
     }
 
     if args.enable_override_dest_url && !override_dest_url_warning_read {
-        return Err(
-            "--enable-override-dest-url Requires --important-warning-has-been-read , it is highly recommended to have a firewall configured if you insist on using this feature! Maybe consider using \"--addr-port=\" and \"--port-to-dest-url=\" instead?".into(),
-        );
+        return Err(Error::as_str(
+            r#"--enable-override-dest-url Requires --important-warning-has-been-read , it is highly recommended to have a firewall configured if you insist on using this feature! Maybe consider using "--addr-port=" and "--port-to-dest-url=" instead?"#,
+        ));
     }
 
     if !unknown_args.is_empty() {
@@ -195,7 +203,7 @@ pub fn parse_args() -> Result<Args, Error> {
                     eprintln!("  {}", arg);
                 }
             }
-            return Err("Unknown arg(s) was given".into());
+            return Err(Error::as_str("Unknown arg(s) was given"));
         } else {
             if unknown_args.len() == 1 {
                 eprintln!(

@@ -1272,11 +1272,12 @@ version = "0.1.0"
 dependencies = [
  "bindgen",
  "blake3",
- "cc",
+ "cmake",
  "futures",
  "getrandom 0.4.3",
  "libc",
  "msql_ffi",
+ "rand",
  "reqwest",
  "rusqlite",
  "salvo",

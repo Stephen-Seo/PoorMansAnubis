@@ -19,6 +19,7 @@ use std::{error, fmt::Display};
 #[derive(Debug)]
 pub enum Error {
     Generic(String),
+    GenericStaticStr(&'static str),
     Sqlite(rusqlite::Error),
     IO(std::io::Error),
     Reqwest(reqwest::Error),
@@ -37,6 +38,7 @@ impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Error::Generic(_) => None,
+            Error::GenericStaticStr(_) => None,
             Error::Sqlite(error) => error.source(),
             Error::IO(error) => error.source(),
             Error::Reqwest(error) => error.source(),
@@ -57,6 +59,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Generic(s) => f.write_str(s),
+            Error::GenericStaticStr(s) => f.write_str(s),
             Error::Sqlite(error) => error.fmt(f),
             Error::IO(error) => error.fmt(f),
             Error::Reqwest(error) => error.fmt(f),
@@ -70,6 +73,12 @@ impl Display for Error {
             Error::IntParse(error) => error.fmt(f),
             Error::GetRand(error) => error.fmt(f),
         }
+    }
+}
+
+impl Error {
+    pub fn as_str(s: &'static str) -> Self {
+        Self::GenericStaticStr(s)
     }
 }
 

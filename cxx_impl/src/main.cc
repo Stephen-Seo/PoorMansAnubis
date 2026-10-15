@@ -43,18 +43,23 @@
 #include "db_msql.h"
 #include "helpers.h"
 #include "http.h"
+#include "i_work.h"
 #include "poor_mans_print.h"
+#include "raylib_test.h"
 #include "thread_limit.h"
 #include "thread_pool.h"
 
 volatile int interrupt_received = 0;
+volatile int usr1_received = 0;
 
 void receive_signal(int sig) {
-  PMA_Println("Interupt received...");
-  // SIGHUP, SIGINT, SIGTERM
-  // if (sig == 1 || sig == 2 || sig == 15) {
-  //}
-  interrupt_received = 1;
+  if (sig == SIGHUP || sig == SIGINT || sig == SIGTERM) {
+    PMA_Println("Interupt received...");
+    interrupt_received = 1;
+  } else if (sig == SIGUSR1) {
+    PMA_Println("USR1 received...");
+    usr1_received = 1;
+  }
 }
 
 void ignore_sigpipe(__attribute__((unused)) int sig) {}
@@ -1009,10 +1014,8 @@ void do_ipv4_socket_forwarding(ThreadData *data, std::bitset<32> &forward_flags,
               return;
             }
 
-            if (status.ends_with("301")
-                || status.ends_with("302")
-                || status.ends_with("303")
-                || status.ends_with("304")) {
+            if (status.ends_with("301") || status.ends_with("302") ||
+                status.ends_with("303") || status.ends_with("304")) {
               // PMA_EPrintln("DEBUG: 301 or 302 or 303 or 304");
               forward_flags.set(1);
             }
@@ -1423,7 +1426,8 @@ void thread_handle_connection_fn(void *ud) {
                 "json</p></html>";
           } else if (json_keyvals.find("type") == json_keyvals.end() ||
                      json_keyvals.find("id") == json_keyvals.end() ||
-                     json_keyvals.find("factors") == json_keyvals.end()) {
+                     (json_keyvals.find("factors") == json_keyvals.end() &&
+                      json_keyvals.find("answer") == json_keyvals.end())) {
             PMA_EPrintln("ERROR: Client {} omitted necessary info!",
                          data->addr_port_info.client_addr);
             status = "HTTP/1.0 400 Bad Request";
@@ -1449,16 +1453,108 @@ void thread_handle_connection_fn(void *ud) {
               ping_ok = true;
             }
             if (ping_ok) {
-              const auto [err, port] = PMA_MSQL::validate_client(
-                  msql_conn_opt.value(), data->args->challenge_timeout,
-                  json_keyvals.find("id")->second,
-                  json_keyvals.find("factors")->second,
-                  data->addr_port_info.client_addr, internal_blake3_hash_fn);
-              if (err == PMA_MSQL::Error::SUCCESS) {
+              if (json_keyvals.find("type")->second == "factors" &&
+                  json_keyvals.find("factors") != json_keyvals.end()) {
+                const auto [err, port] = PMA_MSQL::validate_factors_client(
+                    msql_conn_opt.value(), data->args->challenge_timeout,
+                    json_keyvals.find("id")->second,
+                    json_keyvals.find("factors")->second,
+                    data->addr_port_info.client_addr, internal_blake3_hash_fn);
+                if (err == PMA_MSQL::Error::SUCCESS) {
+                  PMA_Println("Challenge success from {}:{} port {}",
+                              data->addr_port_info.client_addr,
+                              data->addr_port_info.remote_port, port);
+                  content_type = "Content-type: text/plain";
+                  body = "Correct";
+                  std::unique_lock<std::mutex> cached_allowed_lock(
+                      *data->cached_allowed_mutex);
+                  data->cached_allowed->insert(std::make_pair(
+                      std::format("{}:{}", data->addr_port_info.client_addr,
+                                  data->addr_port_info.local_port),
+                      time_now));
+                } else {
+                  PMA_EPrintln(
+                      "Warning: Client {}:{} -> {} failed challenge due to {}",
+                      data->addr_port_info.client_addr,
+                      data->addr_port_info.remote_port,
+                      data->addr_port_info.local_port,
+                      PMA_MSQL::error_to_str(err));
+                  if (PMA_MSQL::error_is_client_err(err)) {
+                    status = "HTTP/1.0 400 Bad Request";
+                    content_type = "Content-type: text/plain";
+                    body = "Incorrect";
+                  } else {
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Failed to "
+                        "validate req</p></html>";
+                  }
+                }
+              } else if (json_keyvals.find("type")->second == "interactive" &&
+                         json_keyvals.find("answer") != json_keyvals.end()) {
+                const auto [err, port] = PMA_MSQL::validate_interactive_client(
+                    msql_conn_opt.value(), data->args->challenge_timeout,
+                    json_keyvals.find("id")->second,
+                    json_keyvals.find("answer")->second,
+                    data->addr_port_info.client_addr, internal_blake3_hash_fn);
+                if (err == PMA_MSQL::Error::SUCCESS) {
+                  PMA_Println("Challenge success from {}:{} port {}",
+                              data->addr_port_info.client_addr,
+                              data->addr_port_info.remote_port, port);
+                  content_type = "Content-type: text/plain";
+                  body = "Correct";
+                  std::unique_lock<std::mutex> cached_allowed_lock(
+                      *data->cached_allowed_mutex);
+                  data->cached_allowed->insert(std::make_pair(
+                      std::format("{}:{}", data->addr_port_info.client_addr,
+                                  data->addr_port_info.local_port),
+                      time_now));
+                } else {
+                  PMA_EPrintln(
+                      "Warning: Client {}:{} -> {} failed challenge due to {}",
+                      data->addr_port_info.client_addr,
+                      data->addr_port_info.remote_port,
+                      data->addr_port_info.local_port,
+                      PMA_MSQL::error_to_str(err));
+                  if (PMA_MSQL::error_is_client_err(err)) {
+                    status = "HTTP/1.0 400 Bad Request";
+                    content_type = "Content-type: text/plain";
+                    body = "Incorrect";
+                  } else {
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Failed to "
+                        "validate req</p></html>";
+                  }
+                }
+              } else {
+                status = "HTTP/1.0 400 Bad Request";
+                content_type = "Content-type: text/plain";
+                body = "Incorrect";
+              }
+            }
+          } else {
+            if (json_keyvals.find("type")->second == "factors" &&
+                json_keyvals.find("factors") != json_keyvals.end()) {
+              const auto [err, msg, port] = PMA_SQL::verify_factors_answer(
+                  sqliteCtx, json_keyvals.find("factors")->second,
+                  data->addr_port_info.client_addr,
+                  json_keyvals.find("id")->second, internal_blake3_hash_fn);
+              if (err != PMA_SQL::ErrorT::SUCCESS) {
+                PMA_EPrintln(
+                    "Warning: Client {}:{} -> {} failed challenge due to {}, "
+                    "{}",
+                    data->addr_port_info.client_addr,
+                    data->addr_port_info.remote_port,
+                    data->addr_port_info.local_port,
+                    PMA_SQL::error_t_to_string(err), msg);
+                status = "HTTP/1.0 400 Bad Request";
+                content_type = "Content-type: text/plain";
+                body = "Incorrect";
+              } else {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
-                            data->addr_port_info.remote_port,
-                            data->addr_port_info.local_port);
+                            data->addr_port_info.remote_port, port);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
                 std::unique_lock<std::mutex> cached_allowed_lock(
@@ -1467,57 +1563,43 @@ void thread_handle_connection_fn(void *ud) {
                     std::format("{}:{}", data->addr_port_info.client_addr,
                                 data->addr_port_info.local_port),
                     time_now));
-              } else {
+              }
+            } else if (json_keyvals.find("type")->second == "interactive" &&
+                       json_keyvals.find("answer") != json_keyvals.end()) {
+              const auto [err, msg, port] = PMA_SQL::verify_interactive_answer(
+                  sqliteCtx, json_keyvals.find("answer")->second,
+                  data->addr_port_info.client_addr,
+                  json_keyvals.find("id")->second, internal_blake3_hash_fn);
+              if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
-                    "Warning: Client {}:{} -> {} failed challenge due to {}",
+                    "Warning: Client {}:{} -> {} failed challenge due to {}, "
+                    "{}",
                     data->addr_port_info.client_addr,
                     data->addr_port_info.remote_port,
                     data->addr_port_info.local_port,
-                    PMA_MSQL::error_to_str(err));
-                if (PMA_MSQL::error_is_client_err(err)) {
-                  status = "HTTP/1.0 400 Bad Request";
-                  content_type = "Content-type: text/plain";
-                  body = "Incorrect";
-                } else {
-                  status = "HTTP/1.0 500 Internal Server Error";
-                  body =
-                      "<html><p>500 Internal Server Error</p><p>Failed to "
-                      "validate req</p></html>";
-                }
+                    PMA_SQL::error_t_to_string(err), msg);
+                status = "HTTP/1.0 400 Bad Request";
+                content_type = "Content-type: text/plain";
+                body = "Incorrect";
+              } else {
+                PMA_Println("Challenge success from {}:{} port {}",
+                            data->addr_port_info.client_addr,
+                            data->addr_port_info.remote_port, port);
+                content_type = "Content-type: text/plain";
+                body = "Correct";
+                std::unique_lock<std::mutex> cached_allowed_lock(
+                    *data->cached_allowed_mutex);
+                data->cached_allowed->insert(std::make_pair(
+                    std::format("{}:{}", data->addr_port_info.client_addr,
+                                data->addr_port_info.local_port),
+                    time_now));
               }
-            }
-          } else {
-            const auto [err, msg, port] = PMA_SQL::verify_answer(
-                sqliteCtx, json_keyvals.find("factors")->second,
-                data->addr_port_info.client_addr,
-                json_keyvals.find("id")->second);
-            if (err != PMA_SQL::ErrorT::SUCCESS) {
-              PMA_EPrintln(
-                  "Warning: Client {}:{} -> {} failed challenge due to {}, "
-                  "{}",
-                  data->addr_port_info.client_addr,
-                  data->addr_port_info.remote_port,
-                  data->addr_port_info.local_port,
-                  PMA_SQL::error_t_to_string(err), msg);
+            } else {
               status = "HTTP/1.0 400 Bad Request";
               content_type = "Content-type: text/plain";
               body = "Incorrect";
-            } else {
-              PMA_Println("Challenge success from {}:{} port {}",
-                          data->addr_port_info.client_addr,
-                          data->addr_port_info.remote_port,
-                          data->addr_port_info.local_port);
-              content_type = "Content-type: text/plain";
-              body = "Correct";
-              std::unique_lock<std::mutex> cached_allowed_lock(
-                  *data->cached_allowed_mutex);
-              data->cached_allowed->insert(std::make_pair(
-                  std::format("{}:{}", data->addr_port_info.client_addr,
-                              data->addr_port_info.local_port),
-                  time_now));
             }
           }
-
         } else if (req.url_or_err_msg == data->args->js_factors_url) {
           if (auto id_iter = req.queries.find("id");
               id_iter != req.queries.end()) {
@@ -1697,28 +1779,83 @@ void thread_handle_connection_fn(void *ud) {
               }
               goto PMA_RESPONSE_AFTER_SENDING;
             } else if (is_allowed_e == PMA_MSQL::Error::EMPTY_QUERY_RESULT) {
-              const auto [err, id] = PMA_MSQL::init_id_to_port(
-                  msql_conn_opt.value(), data->addr_port_info.local_port,
-                  data->args->challenge_timeout, internal_blake3_hash_fn);
-              if (err == PMA_MSQL::Error::SUCCESS) {
-                body = HTML_BODY_FACTORS;
-                PMA_HELPER::str_replace_all(
-                    body, "{JS_FACTORS_URL}",
-                    std::format("{}?id={}", data->args->js_factors_url, id));
-              } else {
-                PMA_EPrintln(
-                    "ERROR: Failed to init id-to-port for client {}! {}",
-                    data->addr_port_info.client_addr,
-                    PMA_MSQL::error_to_str(err));
-                if (PMA_MSQL::error_is_client_err(err)) {
+              if (req.full_url == "/favicon.ico") {
+                status = "HTTP/1.0 404 Not Found";
+                body = "<html><p>404 Not Found</p></html>";
+                goto PMA_RESPONSE_AFTER_SENDING;
+              }
+              uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
+              const auto [err_t, i_count] = PMA_MSQL::has_interactive_challenge(
+                  msql_conn_opt.value(), data->addr_port_info.client_addr,
+                  data->addr_port_info.local_port,
+                  data->args->challenge_timeout);
+              if (err_t == PMA_MSQL::Error::SUCCESS) {
+                if (i_count >= MAX_ALLOWED_INTERACTIVE_CHALLENGES) {
                   status = "HTTP/1.0 400 Bad Request";
-                  body = "<html><p>400 Bad Request</p></html>";
-                } else {
-                  status = "HTTP/1.0 500 Internal Server Error";
                   body =
-                      "<html><p>500 Internal Server Error</p><p>Failed "
-                      "prepare for client</p></html>";
+                      "<html><p>400 Bad Request: Too Many Challenges For "
+                      "Client, Try Again Later</p></html>";
+                  goto PMA_RESPONSE_AFTER_SENDING;
+                } else if (i_count != 0) {
+                  // PMA_EPrintln("DEBUG has interactive challenge");
+                  challenge_type = 1;
                 }
+              }
+              if (challenge_type == 0) {
+                const auto [err, id] = PMA_MSQL::init_id_to_port(
+                    msql_conn_opt.value(), data->addr_port_info.local_port,
+                    data->args->challenge_timeout, internal_blake3_hash_fn);
+                if (err == PMA_MSQL::Error::SUCCESS) {
+                  body = HTML_BODY_FACTORS;
+                  PMA_HELPER::str_replace_all(
+                      body, "{JS_FACTORS_URL}",
+                      std::format("{}?id={}", data->args->js_factors_url, id));
+                } else {
+                  PMA_EPrintln(
+                      "ERROR: Failed to init id-to-port for client {}! {}",
+                      data->addr_port_info.client_addr,
+                      PMA_MSQL::error_to_str(err));
+                  if (PMA_MSQL::error_is_client_err(err)) {
+                    status = "HTTP/1.0 400 Bad Request";
+                    body = "<html><p>400 Bad Request</p></html>";
+                  } else {
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Failed "
+                        "prepare for client</p></html>";
+                  }
+                }
+              } else if (challenge_type == 1) {
+                auto [err, html, id] = PMA_MSQL::set_interactive_challenge(
+                    msql_conn_opt.value(), data->addr_port_info.client_addr,
+                    data->addr_port_info.local_port,
+                    data->args->challenge_timeout, internal_blake3_hash_fn);
+
+                if (err == PMA_MSQL::Error::SUCCESS) {
+                  body = std::move(html);
+                  PMA_HELPER::str_replace_all(body, "{API_URL}",
+                                              data->args->api_url);
+                } else {
+                  PMA_EPrintln(
+                      "ERROR: Failed to set up interactive challenge for "
+                      "client {}! {}",
+                      data->addr_port_info.client_addr,
+                      PMA_MSQL::error_to_str(err));
+                  if (PMA_MSQL::error_is_client_err(err)) {
+                    status = "HTTP/1.0 400 Bad Request";
+                    body = "<html><p>400 Bad Request</p></html>";
+                  } else {
+                    status = "HTTP/1.0 500 Internal Server Error";
+                    body =
+                        "<html><p>500 Internal Server Error</p><p>Failed "
+                        "prepare for client</p></html>";
+                  }
+                }
+              } else {
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed "
+                    "prepare for client challenge type</p></html>";
               }
             } else {
               PMA_EPrintln("ERROR: Failed to check if client {} is allowed: {}",
@@ -1764,15 +1901,65 @@ void thread_handle_connection_fn(void *ud) {
               sqliteCtx, data->addr_port_info.client_addr,
               data->addr_port_info.local_port);
           if (err != PMA_SQL::ErrorT::SUCCESS || !is_allowed) {
-            PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
-                                               data->args->challenge_timeout);
-            const auto [err, msg, id] = PMA_SQL::init_id_to_port(
-                sqliteCtx, data->addr_port_info.local_port,
-                internal_blake3_hash_fn);
-            body = HTML_BODY_FACTORS;
-            PMA_HELPER::str_replace_all(
-                body, "{JS_FACTORS_URL}",
-                std::format("{}?id={}", data->args->js_factors_url, id));
+            if (req.full_url == "/favicon.ico") {
+              status = "HTTP/1.0 404 Not Found";
+              body = "<html><p>404 Not Found</p></html>";
+              goto PMA_RESPONSE_AFTER_SENDING;
+            }
+            uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
+            PMA_SQL::cleanup_stale_i_challenges(sqliteCtx,
+                                                data->args->allowed_timeout);
+            const auto [err, i_count] = PMA_SQL::has_interactive_challenge(
+                sqliteCtx, data->addr_port_info.client_addr,
+                data->addr_port_info.local_port);
+            if (err == PMA_SQL::ErrorT::SUCCESS) {
+              if (i_count >= MAX_ALLOWED_INTERACTIVE_CHALLENGES) {
+                status = "HTTP/1.0 400 Bad Request";
+                body =
+                    "<html><p>400 Bad Request: Too Many Challenges For Client, "
+                    "Try Again Later</p></html>";
+                goto PMA_RESPONSE_AFTER_SENDING;
+              } else if (i_count != 0) {
+                // PMA_EPrintln("DEBUG has interactive challenge");
+                challenge_type = 1;
+              }
+            }
+            if (challenge_type == 0) {
+              PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
+                                                 data->args->challenge_timeout);
+              const auto [err, msg, id] = PMA_SQL::init_id_to_port(
+                  sqliteCtx, data->addr_port_info.local_port,
+                  internal_blake3_hash_fn);
+              body = HTML_BODY_FACTORS;
+              PMA_HELPER::str_replace_all(
+                  body, "{JS_FACTORS_URL}",
+                  std::format("{}?id={}", data->args->js_factors_url, id));
+            } else if (challenge_type == 1) {
+              auto [err, html, id] = PMA_SQL::generate_interactive_challenge(
+                  sqliteCtx, data->addr_port_info.client_addr,
+                  data->addr_port_info.local_port, internal_blake3_hash_fn);
+
+              if (err == PMA_SQL::ErrorT::SUCCESS) {
+                body = std::move(html);
+                PMA_HELPER::str_replace_all(body, "{API_URL}",
+                                            data->args->api_url);
+              } else {
+                PMA_EPrintln(
+                    "ERROR: Failed to set up interactive challenge for "
+                    "client {}! {}",
+                    data->addr_port_info.client_addr,
+                    PMA_SQL::error_t_to_string(err));
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed "
+                    "prepare for client</p></html>";
+              }
+            } else {
+              status = "HTTP/1.0 500 Internal Server Error";
+              body =
+                  "<html><p>500 Internal Server Error</p><p>Failed "
+                  "prepare for client challenge type</p></html>";
+            }
           } else {
             std::unique_lock<std::mutex> cached_allowed_lock(
                 *data->cached_allowed_mutex);
@@ -1868,6 +2055,12 @@ int main(int argc, char **argv) {
   if (args.flags.test(2)) {
     PMA_EPrintln("ERROR: Failed to parse args!");
     return 3;
+  } else if (args.flags.test(8)) {
+    test_raylib();
+    return 0;
+  } else if (args.flags.test(9)) {
+    i_challenge_debug_quick_print();
+    return 0;
   }
 
   std::optional<PMA_MSQL::Conf> msql_conf_opt;
@@ -1890,6 +2083,9 @@ int main(int argc, char **argv) {
   }
 
   curl_global_init(CURL_GLOBAL_SSL);
+
+  GenericCleanup<void *> generic_cleanup_curl(
+      nullptr, [](void *) { curl_global_cleanup(); });
 
   PMA_HELPER::MimeTypes mime_types{};
 
@@ -1970,6 +2166,8 @@ int main(int argc, char **argv) {
   PMA_HELPER::set_signal_handler(SIGHUP, receive_signal);
   PMA_HELPER::set_signal_handler(SIGTERM, receive_signal);
 
+  PMA_HELPER::set_signal_handler(SIGUSR1, receive_signal);
+
   PMA_HELPER::set_signal_handler(SIGPIPE, ignore_sigpipe);
 
   struct sockaddr_in sain4;
@@ -1993,10 +2191,14 @@ int main(int argc, char **argv) {
   while (!interrupt_received) {
     std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
     time_now = std::chrono::steady_clock::now();
-    if (time_now - time_prev > CACHED_CLEAR_T) {
+    if (time_now - time_prev > CACHED_CLEAR_T || usr1_received) {
       time_prev = time_now;
       std::unique_lock<std::mutex> cached_allowed_lock(cached_allowed_mutex);
       cached_allowed.clear();
+
+      if (usr1_received) {
+        usr1_received = 0;
+      }
     }
 
     // Fetch new connections

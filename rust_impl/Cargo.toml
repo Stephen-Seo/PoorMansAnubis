@@ -16,7 +16,8 @@ blake3 = "1.8"
 rusqlite = { version = "0.40", features = ["bundled"]}
 getrandom = "0.4"
 msql_ffi = { path = "msql_ffi" }
+rand = "0.10"
 
 [build-dependencies]
 bindgen = "0.73"
-cc = "1.8"
+cmake = "0.1"

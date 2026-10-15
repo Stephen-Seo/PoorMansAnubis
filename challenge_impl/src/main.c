@@ -21,9 +21,14 @@
 #include <string.h>
 #include <limits.h>
 
+// third party includes.
+#include <raylib.h>
+
 // Local includes.
 #include "work.h"
 #include "base64.h"
+#include "raylib_test.h"
+#include "i_work.h"
 
 void print_help(void) {
   puts("Usage:");
@@ -37,6 +42,8 @@ void print_help(void) {
        "in a compact way.");
   puts("  --n-to-b64=<number> : Convert number to b64 string.");
   puts("  --b64-to-n=<number> : Convert b64 to number string.");
+  puts("  --test-raylib");
+  puts("  --i-challenge");
 }
 
 void free_work_factors(Work_Factors **factors) {
@@ -59,6 +66,8 @@ int main(int argc, char **argv) {
   __attribute__((cleanup(free_work_factors2)))
   Work_Factors *work_factors2 = NULL;
   int_fast8_t factors_2 = 0;
+  int_fast8_t raylib = 0;
+  int_fast8_t i_challenge = 0;
 
   char *number = NULL;
   char *b64 = NULL;
@@ -107,6 +116,10 @@ int main(int argc, char **argv) {
       number = argv[0] + 11;
     } else if (strncmp("--b64-to-n=", argv[0], 11) == 0) {
       b64 = argv[0] + 11;
+    } else if (strcmp("--test-raylib", argv[0]) == 0) {
+      raylib = 1;
+    } else if (strcmp("--i-challenge", argv[0]) == 0) {
+      i_challenge = 1;
     } else {
       fprintf(stderr, "ERROR: Invalid arg \"%s\"!\n", argv[0]);
       print_help();
@@ -175,6 +188,10 @@ int main(int argc, char **argv) {
     } else {
       fprintf(stderr, "ERROR: Got invalid base64 value!\n");
     }
+  } else if (raylib) {
+    test_raylib();
+  } else if (i_challenge) {
+    i_challenge_debug_quick_print();
   } else {
     print_help();
     return 1;

@@ -25,6 +25,7 @@ extern "C" {
 #include <vector>
 
 #include "base64.h"
+#include "random.h"
 #include "work.h"
 
 #ifndef NDEBUG
@@ -149,9 +150,7 @@ void mult_b64_scalar(std::vector<char> &a, unsigned int scalar) {
 }
 
 Work_Factors work_generate_target_factors2(uint64_t quads) {
-  {
-    srand(std::random_device()());
-  }
+  void *random_state = rand_state_init();
 
   Work_Factors wf;
   wf.value = nullptr;
@@ -161,10 +160,7 @@ Work_Factors work_generate_target_factors2(uint64_t quads) {
   wf.factors = simple_archiver_priority_heap_init();
 
   while (b64->size() / 4 < quads) {
-    int r = rand();
-    if (r < 0) {
-      r = -r;
-    }
+    int r = rand_int_range(random_state, 0, 16);
     switch (r % 17) {
       case 0:
         r = 2;
@@ -230,6 +226,8 @@ Work_Factors work_generate_target_factors2(uint64_t quads) {
     simple_archiver_priority_heap_insert(wf.factors, 2, ptr, nullptr);
     mult_b64_scalar(*b64, 2);
   }
+
+  rand_state_cleanup(random_state);
 
   return wf;
 }
