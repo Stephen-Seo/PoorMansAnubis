@@ -67,7 +67,8 @@ static const char *DB_INIT_TABLE_INTERACTIVE_CHALLENGES =
     "  ANSWER CHAR(64) CHARACTER SET ascii NOT NULL,"
     "  PORT INT UNSIGNED NOT NULL,"
     "  GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
-    "  INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)"
+    "  INDEX ON_TIME_INDEX USING BTREE (GEN_TIME),"
+    "  INDEX IP_AND_PORT_INDEX USING HASH (IP, PORT)"
     ")";
 
 static const char *DB_INIT_TABLE_ALLOWED_IPS =
@@ -102,6 +103,8 @@ static const char *DB_ADD_CHAL_FACT =
 
 static const char *DB_SEL_INTER_CHAL_BY_ID =
     "SELECT ID FROM CXX_INTERACTIVE_CHALLENGES WHERE ID = ?";
+static const char *DB_SEL_INTER_CHAL_BY_IP =
+    "SELECT PORT FROM CXX_INTERACTIVE_CHALLENGES WHERE IP = ?";
 static const char *DB_ADD_INTER_CHAL =
     "INSERT INTO CXX_INTERACTIVE_CHALLENGES (ID, IP, PORT, ANSWER) VALUES "
     "(?, ?, ?, ?)";
@@ -120,7 +123,7 @@ static const char *DB_IP_PORT_FROM_INTER_CHAL =
     "SELECT IP, PORT FROM CXX_INTERACTIVE_CHALLENGES WHERE ID = ? "
     "AND ANSWER = ?";
 static const char *DB_DEL_FROM_INTER_CHAL =
-    "DELETE FROM CXX_INTERACTIVE_CHALLENGES WHERE ID = ?";
+    "DELETE FROM CXX_INTERACTIVE_CHALLENGES WHERE IP = ? AND PORT = ?";
 
 static const char *DB_ADD_ALLOWED_IPS_ENTRY =
     "INSERT INTO CXX_ALLOWED_IPS (IP, PORT) VALUES (?, ?)";
@@ -3320,7 +3323,7 @@ std::tuple<PMA_MSQL::Error, uint16_t> PMA_MSQL::validate_interactive_client(
 
   uint16_t port =
       static_cast<uint16_t>(*vec_opt->at(0).at(1).get_unsigned_int().value());
-  c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {id});
+  c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {client_ip, Value::new_uint(port)});
   c.execute_stmt("UNLOCK TABLES", {});
 
   vec_opt = c.execute_stmt(DB_ADD_ALLOWED_IPS_ENTRY,
@@ -3406,6 +3409,30 @@ std::tuple<PMA_MSQL::Error, std::string> PMA_MSQL::init_id_to_port(
 
   c.execute_stmt("UNLOCK TABLES", {});
   return {Error::SUCCESS, id_hashed};
+}
+
+std::tuple<PMA_MSQL::Error, bool> PMA_MSQL::has_interactive_challenge(
+    Connection &c, std::string ip, uint64_t chall_timeout) {
+  if (!c.is_valid()) {
+    return {Error::INVALID_MSQL_CONNECTION, false};
+  }
+
+  if (!c.execute_stmt("LOCK TABLE CXX_INTERACTIVE_CHALLENGES WRITE", {})) {
+    return {Error::FAILED_TO_LOCK_TABLE, false};
+  } else if (!c.execute_stmt(DB_CLEANUP_INTERACTIVE_CHALLENGES,
+                             {chall_timeout})) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    return {Error::FAILED_DB_CLEANUP_CHALLENGES, {}};
+  }
+
+  auto select_ret = c.execute_stmt(DB_SEL_INTER_CHAL_BY_IP, {ip});
+  if (!select_ret.has_value() || select_ret.value().empty()) {
+    c.execute_stmt("UNLOCK TABLES", {});
+    return {Error::SUCCESS, false};
+  }
+
+  c.execute_stmt("UNLOCK TABLES", {});
+  return {Error::SUCCESS, true};
 }
 
 std::optional<PMA_MSQL::Conf> PMA_MSQL::parse_conf_file(

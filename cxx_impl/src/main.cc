@@ -1781,10 +1781,14 @@ void thread_handle_connection_fn(void *ud) {
                 body = "<html><p>404 Not Found</p></html>";
                 goto PMA_RESPONSE_AFTER_SENDING;
               }
-              // TODO allow both challenge types.
-              // const uint64_t challenge_type = PMA_HELPER::rand_uint64_t() %
-              // 2;
-              const uint64_t challenge_type = 1;
+              uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
+              const auto [err_t, has_i] = PMA_MSQL::has_interactive_challenge(
+                  msql_conn_opt.value(), data->addr_port_info.client_addr,
+                  data->args->challenge_timeout);
+              if (err_t == PMA_MSQL::Error::SUCCESS && has_i) {
+                // PMA_EPrintln("DEBUG has interactive challenge");
+                challenge_type = 1;
+              }
               if (challenge_type == 0) {
                 const auto [err, id] = PMA_MSQL::init_id_to_port(
                     msql_conn_opt.value(), data->addr_port_info.local_port,
@@ -1890,9 +1894,15 @@ void thread_handle_connection_fn(void *ud) {
               body = "<html><p>404 Not Found</p></html>";
               goto PMA_RESPONSE_AFTER_SENDING;
             }
-            // TODO allow both challenge types.
-            // const uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
-            const uint64_t challenge_type = 1;
+            uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
+            PMA_SQL::cleanup_stale_i_challenges(sqliteCtx,
+                                                data->args->allowed_timeout);
+            const auto [err, has_i] = PMA_SQL::has_interactive_challenge(
+                sqliteCtx, data->addr_port_info.client_addr);
+            if (err == PMA_SQL::ErrorT::SUCCESS && has_i) {
+              // PMA_EPrintln("DEBUG has interactive challenge");
+              challenge_type = 1;
+            }
             if (challenge_type == 0) {
               PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
                                                  data->args->challenge_timeout);

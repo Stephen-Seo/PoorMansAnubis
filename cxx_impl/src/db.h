@@ -21,7 +21,6 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -46,7 +45,8 @@ enum class ErrorT {
   EXEC_GENERIC_INVALID_STATE,
   CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
   FAILED_TO_FETCH_FROM_ALLOWED_IPS,
-  FAILED_TO_FETCH_FROM_ID_TO_PORT
+  FAILED_TO_FETCH_FROM_ID_TO_PORT,
+  FAILED_TO_FETCH_FROM_INTERACTIVE_CHAL
 };
 
 std::string error_t_to_string(ErrorT err);
@@ -130,6 +130,10 @@ std::tuple<ErrorT, std::string> cleanup_stale_challenges(SQLITECtx &ctx,
                                                          uint32_t timeout);
 
 // string is err message.
+std::tuple<ErrorT, std::string> cleanup_stale_i_challenges(SQLITECtx &ctx,
+                                                           uint32_t timeout);
+
+// string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_entries(SQLITECtx &ctx,
                                                       uint32_t timeout);
 
@@ -170,6 +174,9 @@ get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
 std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
                                                          std::string ipaddr,
                                                          uint16_t port);
+
+std::tuple<ErrorT, bool> has_interactive_challenge(SQLITECtx &ctx,
+                                                   std::string addr);
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////
