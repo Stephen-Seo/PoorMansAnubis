@@ -182,6 +182,21 @@ impl CachedAllow {
 
         Ok(())
     }
+
+    pub fn force_cleanup(&self) -> Result<(), Error> {
+        {
+            let il = self.inst.lock();
+            let il = il.map_err(|_| Error::as_str("Failed to lock CachedAllow.inst"))?;
+            il.set(Instant::now());
+        }
+        {
+            let l = self.allowed.lock();
+            let l = l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
+            l.borrow_mut().clear();
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -1888,11 +1903,13 @@ async fn main() {
         client_wrapper.register(addr.to_owned()).await.ok();
     }
 
+    let cached_allow = CachedAllow::new();
+
     let router = if parsed_args.mysql_has_priority {
         //let locked_bool = Arc::new(AtomicBool::new(false));
         Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
-            .hoop(affix_state::inject(CachedAllow::new()))
+            .hoop(affix_state::inject(cached_allow.clone()))
             //.hoop(affix_state::inject(locked_bool))
             .hoop(affix_state::inject(client_wrapper))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
@@ -1905,7 +1922,7 @@ async fn main() {
     } else {
         Router::new()
             .hoop(affix_state::inject(parsed_args.clone()))
-            .hoop(affix_state::inject(CachedAllow::new()))
+            .hoop(affix_state::inject(cached_allow.clone()))
             .hoop(affix_state::inject(client_wrapper))
             .push(Router::new().path(&parsed_args.api_url).post(api_fn))
             .push(
@@ -1927,6 +1944,10 @@ async fn main() {
                     handle.stop_graceful(Some(Duration::from_secs(5)));
                     break;
                 }
+                if signal::SIGUSR1_HANLDED.load(std::sync::atomic::Ordering::Relaxed) {
+                    cached_allow.force_cleanup().ok();
+                    signal::SIGUSR1_HANLDED.store(false, std::sync::atomic::Ordering::Relaxed);
+                }
                 tokio::time::sleep(Duration::from_millis(333)).await;
             }
         });
@@ -1946,6 +1967,10 @@ async fn main() {
                     handle.stop_graceful(Some(Duration::from_secs(5)));
                     break;
                 }
+                if signal::SIGUSR1_HANLDED.load(std::sync::atomic::Ordering::Relaxed) {
+                    cached_allow.force_cleanup().ok();
+                    signal::SIGUSR1_HANLDED.store(false, std::sync::atomic::Ordering::Relaxed);
+                }
                 tokio::time::sleep(Duration::from_millis(333)).await;
             }
         });
@@ -1963,6 +1988,10 @@ async fn main() {
                 if signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
                     handle.stop_graceful(Some(Duration::from_secs(5)));
                     break;
+                }
+                if signal::SIGUSR1_HANLDED.load(std::sync::atomic::Ordering::Relaxed) {
+                    cached_allow.force_cleanup().ok();
+                    signal::SIGUSR1_HANLDED.store(false, std::sync::atomic::Ordering::Relaxed);
                 }
                 tokio::time::sleep(Duration::from_millis(333)).await;
             }
