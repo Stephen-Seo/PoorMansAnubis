@@ -75,7 +75,8 @@ const MSQL_RUST_INTERACTIVE_CHALLENGE_CREATE: &str = r"CREATE TABLE IF NOT EXIST
         ANSWER CHAR(64) CHARACTER SET ascii NOT NULL,
         PORT INT UNSIGNED NOT NULL,
         GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
+        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME),
+        INDEX IP_PORT_INDEX USING HASH (IP, PORT)
     )";
 
 #[allow(unused)]
@@ -338,6 +339,12 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
     conn.execute(
         r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_TIME
         ON INTERACTIVE_CHALLENGE (ON_TIME)"#,
+        (),
+    )?;
+
+    conn.execute(
+        r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_IP_PORT ON
+        INTERACTIVE_CHALLENGE (IP, PORT)"#,
         (),
     )?;
 
@@ -1182,9 +1189,10 @@ async fn validate_client_interactive_msql(
 
                 let mut params = MSQLParamsWrapper::new();
                 params.append_str(addr)?;
+                params.append_uint64(port as u64);
 
                 locked.query_with_params_drop(
-                    "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ?",
+                    "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ? AND PORT = ?",
                     &params,
                 )?;
             } else {
@@ -1268,7 +1276,10 @@ async fn validate_client_interactive_sqlite(
 
     if let Ok((Ok(ip), Ok(port))) = res {
         if ip == addr && port != 0 {
-            conn.execute(r"DELETE FROM INTERACTIVE_CHALLENGE WHERE IP = ?1", (&addr,))?;
+            conn.execute(
+                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE IP = ?1 AND PORT = ?2",
+                (&addr, port),
+            )?;
             conn.execute(
                 r"INSERT INTO ALLOWED_IP (IP, PORT) VALUES (?1, ?2)",
                 (&ip, &port),
@@ -1745,7 +1756,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             .await
             .unwrap_or(false)
         {
-            eprintln!("DEBUG Was previously interactive");
             rand_val = 1;
         }
 
