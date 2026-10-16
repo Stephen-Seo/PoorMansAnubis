@@ -150,18 +150,18 @@ ${OBJDIR_ABS}/dotdot/%.asm.o: ../challenge_impl/%.asm
 	@mkdir -p $(dir $@)
 	${AS} -o $@ -I $(dir $<) $<
 
-${OBJDIR}/libraylib.a: ${CWD}/bundled/download_cache/raylib-6.0.tar.gz
+${OBJDIR}/libraylib.a: ${CWD}/bundled/download_cache/raylib-6.2.tar.gz
 	@mkdir -p $(dir $@)/raylib_out
-	tar -xf ${CWD}/bundled/download_cache/raylib-6.0.tar.gz -C ${OBJDIR}/raylib_out
-	cd ${OBJDIR}/raylib_out/raylib-6.0 && sed -i -e '/^CC/cCC ?= gcc' -e '/^AR/cAR ?= ar' src/Makefile && CC=${CC} AR=${AR} PLATFORM=PLATFORM_MEMORY ${MAKE} -C src
-	install -D -m444 ${OBJDIR}/raylib_out/raylib-6.0/src/libraylib.a ${OBJDIR}/libraylib.a
-	find ${OBJDIR}/raylib_out/raylib-6.0/src -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/raylib_include/{}" ';'
-	find ${OBJDIR}/raylib_out/raylib-6.0/src/external -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/raylib_include/external/{}" ';'
+	tar -xf ${CWD}/bundled/download_cache/raylib-6.2.tar.gz -C ${OBJDIR}/raylib_out
+	cd ${OBJDIR}/raylib_out/raylib-6.2 && sed -i -e '/^CC/cCC ?= gcc' -e '/^AR/cAR ?= ar' src/Makefile && CC=${CC} AR=${AR} PLATFORM=PLATFORM_MEMORY ${MAKE} -C src
+	install -D -m444 ${OBJDIR}/raylib_out/raylib-6.2/src/libraylib.a ${OBJDIR}/libraylib.a
+	find ${OBJDIR}/raylib_out/raylib-6.2/src -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/raylib_include/{}" ';'
+	find ${OBJDIR}/raylib_out/raylib-6.2/src/external -maxdepth 1 -regex '.*\.h$$' -execdir install -D -m444 '{}' "${OBJDIR_ABS}/raylib_include/external/{}" ';'
 
-${CWD}/bundled/download_cache/raylib-6.0.tar.gz:
+${CWD}/bundled/download_cache/raylib-6.2.tar.gz:
 	@mkdir -p $(dir $@)
-	cd ${CWD}/bundled/download_cache && curl -o raylib-6.0.tar.gz -L https://github.com/raysan5/raylib/archive/refs/tags/6.0.tar.gz
-	cd ${CWD}/bundled && sha256sum -c SHA256SUM_raylib-6.0.tar.gz.txt || (rm -f download_cache/raylib-6.0.tar.gz && false)
+	cd ${CWD}/bundled/download_cache && curl -o raylib-6.2.tar.gz -L https://github.com/raysan5/raylib/archive/refs/tags/6.2.tar.gz
+	cd ${CWD}/bundled && sha256sum -c SHA256SUM_raylib-6.2.tar.gz.txt || (rm -f download_cache/raylib-6.2.tar.gz && false)
 
 .PHONY: clean clang-format
 
