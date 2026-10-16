@@ -191,7 +191,9 @@ int main(int argc, char **argv) {
   } else if (raylib) {
     test_raylib();
   } else if (i_challenge) {
+    global_initialize_i_challenge();
     i_challenge_debug_quick_print();
+    global_cleanup_i_challenge();
   } else {
     print_help();
     return 1;

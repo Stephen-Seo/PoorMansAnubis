@@ -153,11 +153,11 @@ endif()
 # Raylib for generating images.
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/raylib"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib.tar.gz" || curl -L -o "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib.tar.gz" "https://github.com/raysan5/raylib/archive/refs/tags/6.0.tar.gz"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/raylib"
-    COMMAND sed -i -e "/^CC/cCC ?= gcc" -e "/^AR/cAR ?= ar" "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src/Makefile"
-    COMMAND env PLATFORM=PLATFORM_MEMORY CC=$ENV{CC} AR=$ENV{AR} make -C "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
-    COMMAND ln -s "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib-6.2.tar.gz" || curl -L -o "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib-6.2.tar.gz" "https://github.com/raysan5/raylib/archive/refs/tags/6.2.tar.gz"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/third_party/raylib-6.2.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/raylib"
+    COMMAND sed -i -e "/^CC/cCC ?= gcc" -e "/^AR/cAR ?= ar" "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.2/src/Makefile"
+    COMMAND env PLATFORM=PLATFORM_MEMORY CC=$ENV{CC} AR=$ENV{AR} make -C "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.2/src"
+    COMMAND ln -s "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.2/src/libraylib.a" "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a"
     VERBATIM)
 add_custom_target(RAYLIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/raylib/libraylib.a")
 set_target_properties(RAYLIB PROPERTIES
@@ -169,13 +169,13 @@ add_dependencies(UnitTest RAYLIB)
 add_dependencies(PMA_Challenge RAYLIB)
 
 target_include_directories(PoorMansAnubis PUBLIC
-    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.2/src"
 )
 target_include_directories(UnitTest PUBLIC
-    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.2/src"
 )
 target_include_directories(PMA_Challenge PUBLIC
-    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.0/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/raylib/raylib-6.2/src"
 )
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libJupiteroidBold.a"

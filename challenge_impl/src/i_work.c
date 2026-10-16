@@ -510,13 +510,15 @@ Image text_to_image(Font f,
         break;
     }
 
-    ImageDraw(
+    ImageDrawImagePro(
         &render_image,
         text_image,
         (Rectangle)
             {0, 0, (float)text_image.width, (float)text_image.height},
         (Rectangle)
             {0, 0, (float)render_image.width, (float)render_image.height},
+        (Vector2){0, 0},
+        0.0F,
         WHITE);
 
     UnloadImage(text_image);
