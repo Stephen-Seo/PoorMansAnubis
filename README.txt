@@ -105,6 +105,7 @@ Args:
   --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
   --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
   --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)
+  --interactive-challenge-timeout=<minutes> : Sets how long an interactive challenge persists in minutes (default 2 minutes)
   --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
     example header: "override-dest-url: http://127.0.0.1:8888"
   WARNING: If --enable-override-dest-url is used, you must ensure that
@@ -142,6 +143,7 @@ Args for the C++ implementation are as follows:
       --enable-libcurl : Enables fetching dest urls by using libcurl
       --req-timeout-millis=<milliseconds> : Sets the number of milliseconds until timeout during forwarding requests (default 5000)
       --max-interactive-challenges=<int> : Sets the maximum number of interactive challenges before denying access
+      --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for interactive challenges (default 2 minutes)
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
         example header: "override-dest-url: http://127.0.0.1:8888"
       WARNING: If --enable-override-dest-url is used, you must ensure that
