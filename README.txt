@@ -104,6 +104,7 @@ Args:
     example: "--js-factors-url=/pma_factors.js"
   --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
   --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
+  --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)
   --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
     example header: "override-dest-url: http://127.0.0.1:8888"
   WARNING: If --enable-override-dest-url is used, you must ensure that
@@ -140,6 +141,7 @@ Args for the C++ implementation are as follows:
       --enable-thread-limit : Use alternative thread usage implementation; no thread pool, just up to a maximum of spawned threads
       --enable-libcurl : Enables fetching dest urls by using libcurl
       --req-timeout-millis=<milliseconds> : Sets the number of milliseconds until timeout during forwarding requests (default 5000)
+      --max-interactive-challenges=<int> : Sets the maximum number of interactive challenges before denying access
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
         example header: "override-dest-url: http://127.0.0.1:8888"
       WARNING: If --enable-override-dest-url is used, you must ensure that
