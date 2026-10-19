@@ -86,6 +86,9 @@ void pma_print_usage() {
       "  --max-interactive-challenges=<int> : Sets the maximum number of "
       "interactive challenges before denying access");
   PMA_Println(
+      "  --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for "
+      "interactive challenges (default 2 minutes)");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -116,9 +119,10 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       sqlite_path("sqlite_db"),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
+      interactive_challenge_timeout(INTERACTIVE_CHALLENGE_TIMEOUT_MINS),
+      challenge_factors_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
       thread_count(),
       flags(),
-      challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
       req_timeout_milliseconds(TIMEOUT_MILLISECONDS),
       req_timeout_ticks(TIMEOUT_ITER_TICKS) {
@@ -315,7 +319,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
     } else if (std::strncmp(argv[0], "--challenge-timeout=", 20) == 0) {
       try {
-        unsigned long parsed = std::stoul(std::string(argv[0] + 20));
+        unsigned long long parsed = std::stoull(std::string(argv[0] + 20));
         if (parsed > 0xFFFFFFFF) {
           PMA_EPrintln(
               "ERROR: Failed to parse timeout from "
@@ -323,7 +327,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
           flags.set(2);
           return;
         }
-        this->challenge_timeout = static_cast<uint32_t>(parsed);
+        this->challenge_factors_timeout = static_cast<uint64_t>(parsed);
       } catch (const std::invalid_argument &e) {
         PMA_EPrintln(
             "ERROR: Failed to parse timeout from "
@@ -433,6 +437,26 @@ PMA_ARGS::Args::Args(int argc, char **argv)
             "WARNING: Set --max-interactive-challenges to minimum of 2");
       }
       max_interactive_challenges = static_cast<uint64_t>(value);
+    } else if (std::strncmp(argv[0],
+                            "--interactive-challenge-timeout-mins=", 37) == 0) {
+      std::string s(argv[0] + 37);
+      unsigned long long value;
+      try {
+        value = std::stoull(s);
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse value passed to "
+            "--interactive-challenge-timeout-mins=... !");
+        flags.set(2);
+        return;
+      }
+      if (value == 0) {
+        value = 1;
+        PMA_EPrintln(
+            "WARNING: Set --interactive-challenge-timeout-mins to minimum of "
+            "1");
+      }
+      interactive_challenge_timeout = static_cast<uint64_t>(value);
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

@@ -39,6 +39,7 @@ pub struct Args {
     pub test_raylib: bool,
     pub i_challenge: bool,
     pub max_interactive_challenges: u64,
+    pub interactive_challenge_timeout_mins: u64,
 }
 
 pub fn print_args() {
@@ -79,6 +80,9 @@ pub fn print_args() {
         "  --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)"
     );
     println!(
+        "  --interactive-challenge-timeout=<minutes> : Sets how long an interactive challenge persists in minutes (default 2 minutes)"
+    );
+    println!(
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
     println!(
@@ -107,6 +111,7 @@ pub fn parse_args() -> Result<Args, Error> {
         test_raylib: false,
         i_challenge: false,
         max_interactive_challenges: crate::constants::MAX_INTERACTIVE_CHALLENGES,
+        interactive_challenge_timeout_mins: crate::constants::INTERACTIVE_CHALLENGE_TIMEOUT_MINUTES,
     };
 
     let p_args = args_fn();
@@ -180,6 +185,15 @@ pub fn parse_args() -> Result<Args, Error> {
             if args.max_interactive_challenges < 2 {
                 args.max_interactive_challenges = 2;
                 eprintln!("WARNING: Set --max-interactive-challenges to the minimum of 2");
+            }
+        } else if arg.starts_with("--interactive-challenge-timeout=") {
+            let end = arg.split_off(32);
+            args.interactive_challenge_timeout_mins = end
+                .parse()
+                .expect("interactive challenge timeout should be a valid integer");
+            if args.interactive_challenge_timeout_mins == 0 {
+                args.interactive_challenge_timeout_mins = 1;
+                eprintln!("WARNING: Set --interatcive-challenge-timeout to the minimum of 1");
             }
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;

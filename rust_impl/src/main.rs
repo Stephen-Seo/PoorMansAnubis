@@ -1166,7 +1166,7 @@ async fn validate_client_interactive_msql(
 
         {
             let mut params = MSQLParamsWrapper::new();
-            params.append_uint64(args.challenge_timeout_mins);
+            params.append_uint64(args.interactive_challenge_timeout_mins);
 
             locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
         }
@@ -1281,7 +1281,7 @@ async fn validate_client_interactive_sqlite(
 
     let hashed_answer = blake3::hash(interactive_response.answer.as_bytes()).to_string();
 
-    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.challenge_timeout_mins), ())?;
+    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
 
     let res = conn.query_one(
         r"SELECT IP, PORT FROM INTERACTIVE_CHALLENGE WHERE ID = ?1 AND ANSWER = ?2",
@@ -1328,7 +1328,7 @@ async fn client_has_interactive_challenge_msql(
     {
         // Cleanup stale entries first.
         let mut params = MSQLParamsWrapper::new();
-        params.append_uint64(args.challenge_timeout_mins);
+        params.append_uint64(args.interactive_challenge_timeout_mins);
 
         locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
     }
@@ -1358,7 +1358,7 @@ async fn client_has_interactive_challenge_sqlite(
 ) -> Result<u64, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.challenge_timeout_mins), ())?;
+    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
 
     let mut stmt =
         conn.prepare(r#"SELECT PORT FROM INTERACTIVE_CHALLENGE WHERE IP = ?1 AND PORT = ?2"#)?;
@@ -1555,7 +1555,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
     locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
-    params.append_uint64(args.challenge_timeout_mins);
+    params.append_uint64(constants::ID_TO_PORT_TIMEOUT);
 
     locked
         .query_with_params_drop(
@@ -1619,7 +1619,7 @@ async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, 
     conn.execute(
         &format!(
             r#"DELETE FROM ID_TO_PORT WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#,
-            args.challenge_timeout_mins
+            constants::ID_TO_PORT_TIMEOUT
         ),
         (),
     )?;

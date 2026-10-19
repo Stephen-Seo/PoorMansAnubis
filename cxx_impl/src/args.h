@@ -50,6 +50,8 @@ struct Args {
   std::string mysql_conf_path;
   uint64_t factors;
   uint64_t max_interactive_challenges;
+  uint64_t interactive_challenge_timeout;
+  uint64_t challenge_factors_timeout;
   std::optional<uint32_t> thread_count;
   // 0 - enable trusting "x-real-ip" header
   // 1 - enable "override-dest-url" header
@@ -62,7 +64,6 @@ struct Args {
   // 8 - test raylib
   // 9 - test interactive challenge
   std::bitset<32> flags;
-  uint32_t challenge_timeout;
   uint32_t allowed_timeout;
   uint32_t req_timeout_milliseconds;
   uint32_t req_timeout_ticks;

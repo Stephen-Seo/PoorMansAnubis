@@ -1456,7 +1456,8 @@ void thread_handle_connection_fn(void *ud) {
               if (json_keyvals.find("type")->second == "factors" &&
                   json_keyvals.find("factors") != json_keyvals.end()) {
                 const auto [err, port] = PMA_MSQL::validate_factors_client(
-                    msql_conn_opt.value(), data->args->challenge_timeout,
+                    msql_conn_opt.value(),
+                    data->args->challenge_factors_timeout,
                     json_keyvals.find("id")->second,
                     json_keyvals.find("factors")->second,
                     data->addr_port_info.client_addr, internal_blake3_hash_fn);
@@ -1493,7 +1494,8 @@ void thread_handle_connection_fn(void *ud) {
               } else if (json_keyvals.find("type")->second == "interactive" &&
                          json_keyvals.find("answer") != json_keyvals.end()) {
                 const auto [err, port] = PMA_MSQL::validate_interactive_client(
-                    msql_conn_opt.value(), data->args->challenge_timeout,
+                    msql_conn_opt.value(),
+                    data->args->interactive_challenge_timeout,
                     json_keyvals.find("id")->second,
                     json_keyvals.find("answer")->second,
                     data->addr_port_info.client_addr, internal_blake3_hash_fn);
@@ -1632,7 +1634,8 @@ void thread_handle_connection_fn(void *ud) {
                       PMA_MSQL::set_challenge_factor(
                           msql_conn_opt.value(),
                           data->addr_port_info.client_addr, port,
-                          data->args->factors, data->args->challenge_timeout,
+                          data->args->factors,
+                          data->args->challenge_factors_timeout,
                           internal_blake3_hash_fn);
                   if (cf_err == PMA_MSQL::Error::SUCCESS) {
                     PMA_Println("Requested challenge from {}:{} -> {}",
@@ -1684,8 +1687,8 @@ void thread_handle_connection_fn(void *ud) {
                 }
               }
             } else {
-              PMA_SQL::cleanup_stale_challenges(sqliteCtx,
-                                                data->args->challenge_timeout);
+              PMA_SQL::cleanup_stale_challenges(
+                  sqliteCtx, data->args->challenge_factors_timeout);
               const auto [err, msg_or_chal, answ, id] =
                   PMA_SQL::generate_challenge(sqliteCtx, data->args->factors,
                                               data->addr_port_info.client_addr,
@@ -1788,7 +1791,7 @@ void thread_handle_connection_fn(void *ud) {
               const auto [err_t, i_count] = PMA_MSQL::has_interactive_challenge(
                   msql_conn_opt.value(), data->addr_port_info.client_addr,
                   data->addr_port_info.local_port,
-                  data->args->challenge_timeout);
+                  data->args->interactive_challenge_timeout);
               if (err_t == PMA_MSQL::Error::SUCCESS) {
                 if (i_count >= data->args->max_interactive_challenges) {
                   status = "HTTP/1.0 400 Bad Request";
@@ -1804,7 +1807,7 @@ void thread_handle_connection_fn(void *ud) {
               if (challenge_type == 0) {
                 const auto [err, id] = PMA_MSQL::init_id_to_port(
                     msql_conn_opt.value(), data->addr_port_info.local_port,
-                    data->args->challenge_timeout, internal_blake3_hash_fn);
+                    ID_TO_PORT_TIMEOUT_MINS, internal_blake3_hash_fn);
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   body = HTML_BODY_FACTORS;
                   PMA_HELPER::str_replace_all(
@@ -1829,7 +1832,8 @@ void thread_handle_connection_fn(void *ud) {
                 auto [err, html, id] = PMA_MSQL::set_interactive_challenge(
                     msql_conn_opt.value(), data->addr_port_info.client_addr,
                     data->addr_port_info.local_port,
-                    data->args->challenge_timeout, internal_blake3_hash_fn);
+                    data->args->interactive_challenge_timeout,
+                    internal_blake3_hash_fn);
 
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   body = std::move(html);
@@ -1907,8 +1911,8 @@ void thread_handle_connection_fn(void *ud) {
               goto PMA_RESPONSE_AFTER_SENDING;
             }
             uint64_t challenge_type = PMA_HELPER::rand_uint64_t() % 2;
-            PMA_SQL::cleanup_stale_i_challenges(sqliteCtx,
-                                                data->args->allowed_timeout);
+            PMA_SQL::cleanup_stale_i_challenges(
+                sqliteCtx, data->args->interactive_challenge_timeout);
             const auto [err, i_count] = PMA_SQL::has_interactive_challenge(
                 sqliteCtx, data->addr_port_info.client_addr,
                 data->addr_port_info.local_port);
@@ -1926,7 +1930,7 @@ void thread_handle_connection_fn(void *ud) {
             }
             if (challenge_type == 0) {
               PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
-                                                 data->args->challenge_timeout);
+                                                 ID_TO_PORT_TIMEOUT_MINS);
               const auto [err, msg, id] = PMA_SQL::init_id_to_port(
                   sqliteCtx, data->addr_port_info.local_port,
                   internal_blake3_hash_fn);
