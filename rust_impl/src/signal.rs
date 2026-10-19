@@ -24,6 +24,7 @@ extern "C" fn handle_signal(s: std::ffi::c_int) {
         SIGNAL_HANDLED.store(true, std::sync::atomic::Ordering::Relaxed);
     } else if s == libc::SIGUSR1 {
         SIGUSR1_HANLDED.store(true, std::sync::atomic::Ordering::Relaxed);
+        eprintln!("Handled SIGUSR1");
     }
 }
 
