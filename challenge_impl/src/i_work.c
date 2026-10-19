@@ -663,6 +663,7 @@ InteractiveChallenge i_challenge_generate(void) {
         "  xhr.onreadystatechange = function () {\n" \
         "    if (xhr.readyState === 4) {\n" \
         "      if (xhr.status === 200) {\n" \
+        "        document.getElementById(\"answer\").value = \"\";\n" \
         "        window.location.reload();\n" \
         "      } // status === 200\n" \
         "      else {\n" \
