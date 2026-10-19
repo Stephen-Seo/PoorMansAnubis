@@ -297,7 +297,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
-    PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
+    PMA_SQL::SQLITECtx &ctx, uint64_t challenge_timeout) {
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -320,7 +320,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
-    PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
+    PMA_SQL::SQLITECtx &ctx, uint64_t challenge_timeout) {
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
@@ -343,7 +343,7 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_i_challenges(
-    PMA_SQL::SQLITECtx &ctx, uint32_t challenge_timeout) {
+    PMA_SQL::SQLITECtx &ctx, uint64_t challenge_timeout) {
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
     return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};

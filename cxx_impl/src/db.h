@@ -123,15 +123,15 @@ std::tuple<SQLITECtx, ErrorT, std::string> init_sqlite(std::string filepath);
 
 // string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_id_to_ports(SQLITECtx &ctx,
-                                                          uint32_t timeout);
+                                                          uint64_t timeout);
 
 // string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_challenges(SQLITECtx &ctx,
-                                                         uint32_t timeout);
+                                                         uint64_t timeout);
 
 // string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_i_challenges(SQLITECtx &ctx,
-                                                           uint32_t timeout);
+                                                           uint64_t timeout);
 
 // string is err message.
 std::tuple<ErrorT, std::string> cleanup_stale_entries(SQLITECtx &ctx,
