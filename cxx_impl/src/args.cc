@@ -83,6 +83,9 @@ void pma_print_usage() {
       "  --req-timeout-millis=<milliseconds> : Sets the number of milliseconds "
       "until timeout during forwarding requests (default 5000)");
   PMA_Println(
+      "  --max-interactive-challenges=<int> : Sets the maximum number of "
+      "interactive challenges before denying access");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -112,6 +115,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       js_factors_url("/pma_factors.js"),
       sqlite_path("sqlite_db"),
       factors(DEFAULT_FACTORS_QUADS),
+      max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
       thread_count(),
       flags(),
       challenge_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
@@ -410,6 +414,25 @@ PMA_ARGS::Args::Args(int argc, char **argv)
 
       req_timeout_milliseconds = static_cast<uint32_t>(value);
       req_timeout_ticks = req_timeout_milliseconds / SLEEP_MILLISECONDS;
+    } else if (std::strncmp(argv[0], "--max-interactive-challenges=", 29) ==
+               0) {
+      std::string s(argv[0] + 29);
+      unsigned long long value;
+      try {
+        value = std::stoull(s);
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse value passed to "
+            "--max-interactive-challenges=... !");
+        flags.set(2);
+        return;
+      }
+      if (value < 2) {
+        value = 2;
+        PMA_EPrintln(
+            "WARNING: Set --max-interactive-challenges to minimum of 2");
+      }
+      max_interactive_challenges = static_cast<uint64_t>(value);
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

@@ -49,6 +49,7 @@ struct Args {
   std::string sqlite_path;
   std::string mysql_conf_path;
   uint64_t factors;
+  uint64_t max_interactive_challenges;
   std::optional<uint32_t> thread_count;
   // 0 - enable trusting "x-real-ip" header
   // 1 - enable "override-dest-url" header

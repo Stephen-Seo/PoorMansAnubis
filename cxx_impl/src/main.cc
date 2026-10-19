@@ -1790,7 +1790,7 @@ void thread_handle_connection_fn(void *ud) {
                   data->addr_port_info.local_port,
                   data->args->challenge_timeout);
               if (err_t == PMA_MSQL::Error::SUCCESS) {
-                if (i_count >= MAX_ALLOWED_INTERACTIVE_CHALLENGES) {
+                if (i_count >= data->args->max_interactive_challenges) {
                   status = "HTTP/1.0 400 Bad Request";
                   body =
                       "<html><p>400 Bad Request: Too Many Challenges For "
@@ -1913,7 +1913,7 @@ void thread_handle_connection_fn(void *ud) {
                 sqliteCtx, data->addr_port_info.client_addr,
                 data->addr_port_info.local_port);
             if (err == PMA_SQL::ErrorT::SUCCESS) {
-              if (i_count >= MAX_ALLOWED_INTERACTIVE_CHALLENGES) {
+              if (i_count >= data->args->max_interactive_challenges) {
                 status = "HTTP/1.0 400 Bad Request";
                 body =
                     "<html><p>400 Bad Request: Too Many Challenges For Client, "
