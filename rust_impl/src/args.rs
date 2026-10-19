@@ -38,6 +38,7 @@ pub struct Args {
     pub mysql_has_priority: bool,
     pub test_raylib: bool,
     pub i_challenge: bool,
+    pub max_interactive_challenges: u64,
 }
 
 pub fn print_args() {
@@ -75,6 +76,9 @@ pub fn print_args() {
         "  --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again"
     );
     println!(
+        "  --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)"
+    );
+    println!(
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
     println!(
@@ -102,6 +106,7 @@ pub fn parse_args() -> Result<Args, Error> {
         mysql_has_priority: true,
         test_raylib: false,
         i_challenge: false,
+        max_interactive_challenges: crate::constants::MAX_INTERACTIVE_CHALLENGES,
     };
 
     let p_args = args_fn();
@@ -167,6 +172,15 @@ pub fn parse_args() -> Result<Args, Error> {
             args.allowed_timeout_mins = end
                 .parse()
                 .expect("allowed timeout should be a valid integer");
+        } else if arg.starts_with("--max-interactive-challenges=") {
+            let end = arg.split_off(29);
+            args.max_interactive_challenges = end
+                .parse()
+                .expect("max interactive challenges should be a valid integer");
+            if args.max_interactive_challenges < 2 {
+                args.max_interactive_challenges = 2;
+                eprintln!("WARNING: Set --max-interactive-challenges to the minimum of 2");
+            }
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;
         } else if arg == "--important-warning-has-been-read" {

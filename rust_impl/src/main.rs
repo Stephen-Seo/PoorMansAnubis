@@ -45,7 +45,7 @@ use error::Error;
 
 use msql_ffi::{MSQLParamsWrapper, MSQLValueEnum, MSQLWrapper};
 
-use crate::constants::{HTML_BEGIN_GENERIC, HTML_END_GENERIC, MAX_INTERACTIVE_CHALLENGES};
+use crate::constants::{HTML_BEGIN_GENERIC, HTML_END_GENERIC};
 use crate::helpers::GenericCleanup;
 
 const GETRANDOM_BUF_SIZE: usize = 64;
@@ -1766,7 +1766,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         if args.mysql_has_priority {
             let count_ret =
                 client_has_interactive_challenge_msql(args, &client_info_ret.addr, port).await?;
-            if count_ret >= MAX_INTERACTIVE_CHALLENGES {
+            if count_ret >= args.max_interactive_challenges {
                 res.body("400 Bad Request: Too Many Challenges For Client, Try Again Later")
                     .status_code(StatusCode::BAD_REQUEST);
                 return Ok(());
@@ -1776,7 +1776,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         } else {
             let count_ret =
                 client_has_interactive_challenge_sqlite(args, &client_info_ret.addr, port).await?;
-            if count_ret >= MAX_INTERACTIVE_CHALLENGES {
+            if count_ret >= args.max_interactive_challenges {
                 res.body("400 Bad Request: Too Many Challenges For Client, Try Again Later")
                     .status_code(StatusCode::BAD_REQUEST);
                 return Ok(());
