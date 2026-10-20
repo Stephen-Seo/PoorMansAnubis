@@ -31,15 +31,16 @@ COMPILING
 
 ================================================================================
 
-cxx_impl/ contains a Makefile that builds a Debug build and expects dependencies
-already installed on the system. Use "RELEASE=1 make ..." to build a Release
-build.
+cxx_impl/ contains a CMakeLists.txt and a Makefile that builds a Debug build
+and expects dependencies already installed on the system. Use "RELEASE=1 make
+..." to build a Release build, or use cmake.
 
-cxx_impl/bundled/ contains a Makefile that builds all dependencies and links
-them statically to the executable which is also placed in cxx_impl/ .
+cxx_impl/bundled/ contains a CMakeLists.txt and a Makefile that builds all
+dependencies and links them statically to the executable which is also placed
+in cxx_impl/ .
 
 
-rust_impl/ contains a Rust project which will call `make` on cxx_impl/bundled/
+rust_impl/ contains a Rust project which will call cmake on cxx_impl/bundled/
 as it uses the cxx_impl's msql code and at least 1 library built in the bundled
 build. Note that because of this, compilling the Rust project will be slow as it
 builds some of cxx_impl/bundled/ as well as its own dependencies.
