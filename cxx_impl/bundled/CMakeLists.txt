@@ -344,11 +344,11 @@ add_dependencies(LIBZSTD_LIB
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libbrotlicommon.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.0.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.0.tar.gz" -L "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_brotli-1.2.0.tar.gz.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" -L "https://github.com/google/brotli/archive/refs/tags/v1.2.1.tar.gz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_brotli-1.2.1.tar.gz.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.0.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/brotli-1.2.0" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/brotli-1.2.1" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/INSTALL_OUT install
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/INSTALL_OUT/usr/lib" && find . -regex .*\.a$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/{}" ";"

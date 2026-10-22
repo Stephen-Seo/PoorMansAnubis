@@ -124,18 +124,18 @@ download_cache/zstd-1.5.7.tar.zst:
 	cd download_cache && curl -OL https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.zst
 	sha256sum -c SHA256SUM_zstd-1.5.7.tar.zst.txt || (rm -f download_cache/zstd-1.5.7.tar.zst && false)
 
-out/lib/libbrotlicommon.a out/lib/libbrotlidec.a: download_cache/brotli-1.2.0.tar.gz
+out/lib/libbrotlicommon.a out/lib/libbrotlidec.a: download_cache/brotli-1.2.1.tar.gz
 	@mkdir -p brotli_build
-	tar -xf download_cache/brotli-1.2.0.tar.gz -C brotli_build
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S brotli_build/brotli-1.2.0 -B brotli_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On && ${MAKE} -C brotli_build/build && ${MAKE} DESTDIR="${PWD}/brotli_build/brotli_out" -C brotli_build/build install
+	tar -xf download_cache/brotli-1.2.1.tar.gz -C brotli_build
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S brotli_build/brotli-1.2.1 -B brotli_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On && ${MAKE} -C brotli_build/build && ${MAKE} DESTDIR="${PWD}/brotli_build/brotli_out" -C brotli_build/build install
 	cd brotli_build/brotli_out/usr/lib && find . -regex '.*\.a$$' -execdir install -D -m444 '{}' "${PWD}/out/lib/{}" ';'
 	cd brotli_build/brotli_out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf brotli_build
 
-download_cache/brotli-1.2.0.tar.gz:
+download_cache/brotli-1.2.1.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -o brotli-1.2.0.tar.gz -L https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz
-	sha256sum -c SHA256SUM_brotli-1.2.0.tar.gz.txt || (rm -f download_cache/brotli-1.2.0.tar.gz && false)
+	cd download_cache && curl -o brotli-1.2.1.tar.gz -L https://github.com/google/brotli/archive/refs/tags/v1.2.1.tar.gz
+	sha256sum -c SHA256SUM_brotli-1.2.1.tar.gz.txt || (rm -f download_cache/brotli-1.2.1.tar.gz && false)
 
 out/lib/libz.a: download_cache/zlib-1.3.2.tar.xz
 	@mkdir -p zlib_build
