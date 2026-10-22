@@ -23,24 +23,24 @@ all: ../cxx_backend_impl
 ../cxx_backend_impl: sqlite3_TARGET out/lib/libblake3.a out/lib/libcurl.a
 	PMA_PRE_LINKER_FLAGS="-L${PWD}/out/lib -L${PWD}/out/ssl/usr/lib" PMA_POST_LINKER_FLAGS="-lnghttp2 -lidn2 -lunistring -lzstd -llzma -llz4 -lbrotlidec -lbrotlicommon -lz -lssl -lcrypto" RELEASE=1 ${MAKE} -C ..
 
-sqlite_build/: download_cache/sqlite-autoconf-3540000.tar.gz
+sqlite_build/: download_cache/sqlite-autoconf-3540100.tar.gz
 	@mkdir -p sqlite_build
-	(test -e out/include/sqlite3.h && test -e out/lib/libsqlite3.a) || tar -xf download_cache/sqlite-autoconf-3540000.tar.gz -C sqlite_build
+	(test -e out/include/sqlite3.h && test -e out/lib/libsqlite3.a) || tar -xf download_cache/sqlite-autoconf-3540100.tar.gz -C sqlite_build
 
 out/include/sqlite3.h: | sqlite_build/
-	install -D -m444 sqlite_build/sqlite-autoconf-3540000/sqlite3.h out/include/sqlite3.h
+	install -D -m444 sqlite_build/sqlite-autoconf-3540100/sqlite3.h out/include/sqlite3.h
 
 out/lib/libsqlite3.a: | sqlite_build/
-	cd sqlite_build/sqlite-autoconf-3540000 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --disable-shared && ${MAKE} libsqlite3.a
-	install -D -m444 sqlite_build/sqlite-autoconf-3540000/libsqlite3.a out/lib/libsqlite3.a
+	cd sqlite_build/sqlite-autoconf-3540100 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --disable-shared && ${MAKE} libsqlite3.a
+	install -D -m444 sqlite_build/sqlite-autoconf-3540100/libsqlite3.a out/lib/libsqlite3.a
 
 sqlite3_TARGET: out/include/sqlite3.h out/lib/libsqlite3.a
 	rm -rf sqlite_build
 
-download_cache/sqlite-autoconf-3540000.tar.gz:
+download_cache/sqlite-autoconf-3540100.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://sqlite.org/2026/sqlite-autoconf-3540000.tar.gz
-	sha256sum -c SHA256SUM_sqlite-3.54.0.txt || (rm -f download_cache/sqlite-autoconf-3540000.tar.gz && false)
+	cd download_cache && curl -OL https://sqlite.org/2026/sqlite-autoconf-3540100.tar.gz
+	sha256sum -c SHA256SUM_sqlite-3.54.1.txt || (rm -f download_cache/sqlite-autoconf-3540100.tar.gz && false)
 
 out/lib/libblake3.a out/include/blake3.h: download_cache/blake3_1.8.7.tar.gz
 	@mkdir -p blake3_build
@@ -96,20 +96,20 @@ download_cache/libidn2-2.3.8.tar.gz:
 	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libidn/libidn2-2.3.8.tar.gz
 	sha256sum -c SHA256SUM_idn2-2.3.8.tar.gz.txt || (rm -f download_cache/libidn2-2.3.8.tar.gz && false)
 
-out/lib/libunistring.a: download_cache/libunistring-1.4.2.tar.xz
+out/lib/libunistring.a: download_cache/libunistring-1.5.tar.xz
 	@mkdir -p libunistring_build
-	tar -xf download_cache/libunistring-1.4.2.tar.xz -C libunistring_build
-	cd libunistring_build/libunistring-1.4.2 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
-	#patch -p1 < patches/libunistring-1.4.2-fix-build.patch
-	${MAKE} -C libunistring_build/libunistring-1.4.2 && ${MAKE} -C libunistring_build/libunistring-1.4.2 DESTDIR="${PWD}/libunistring_build/libunistring-1.4.2/HERE_OUT" install
-	install -D -m444 libunistring_build/libunistring-1.4.2/lib/.libs/libunistring.a out/lib/libunistring.a
-	cd libunistring_build/libunistring-1.4.2/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
+	tar -xf download_cache/libunistring-1.5.tar.xz -C libunistring_build
+	cd libunistring_build/libunistring-1.5 && CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
+	#patch -p1 < patches/libunistring-1.5-fix-build.patch
+	${MAKE} -C libunistring_build/libunistring-1.5 && ${MAKE} -C libunistring_build/libunistring-1.5 DESTDIR="${PWD}/libunistring_build/libunistring-1.5/HERE_OUT" install
+	install -D -m444 libunistring_build/libunistring-1.5/lib/.libs/libunistring.a out/lib/libunistring.a
+	cd libunistring_build/libunistring-1.5/HERE_OUT/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf libunistring_build
 
-download_cache/libunistring-1.4.2.tar.xz:
+download_cache/libunistring-1.5.tar.xz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.4.2.tar.xz
-	sha256sum -c SHA256SUM_libunistring-1.4.2.tar.xz.txt || (rm -f download_cache/libunistring-1.4.2.tar.xz && false)
+	cd download_cache && curl -OL https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.5.tar.xz
+	sha256sum -c SHA256SUM_libunistring-1.5.tar.xz.txt || (rm -f download_cache/libunistring-1.5.tar.xz && false)
 
 out/lib/libzstd.a: download_cache/zstd-1.5.7.tar.zst out/lib/libz.a out/lib/liblzma.a out/lib/liblz4.a
 	@mkdir -p zstd_build
@@ -124,18 +124,18 @@ download_cache/zstd-1.5.7.tar.zst:
 	cd download_cache && curl -OL https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.zst
 	sha256sum -c SHA256SUM_zstd-1.5.7.tar.zst.txt || (rm -f download_cache/zstd-1.5.7.tar.zst && false)
 
-out/lib/libbrotlicommon.a out/lib/libbrotlidec.a: download_cache/brotli-1.2.0.tar.gz
+out/lib/libbrotlicommon.a out/lib/libbrotlidec.a: download_cache/brotli-1.2.1.tar.gz
 	@mkdir -p brotli_build
-	tar -xf download_cache/brotli-1.2.0.tar.gz -C brotli_build
-	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S brotli_build/brotli-1.2.0 -B brotli_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On && ${MAKE} -C brotli_build/build && ${MAKE} DESTDIR="${PWD}/brotli_build/brotli_out" -C brotli_build/build install
+	tar -xf download_cache/brotli-1.2.1.tar.gz -C brotli_build
+	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S brotli_build/brotli-1.2.1 -B brotli_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On && ${MAKE} -C brotli_build/build && ${MAKE} DESTDIR="${PWD}/brotli_build/brotli_out" -C brotli_build/build install
 	cd brotli_build/brotli_out/usr/lib && find . -regex '.*\.a$$' -execdir install -D -m444 '{}' "${PWD}/out/lib/{}" ';'
 	cd brotli_build/brotli_out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
 	rm -rf brotli_build
 
-download_cache/brotli-1.2.0.tar.gz:
+download_cache/brotli-1.2.1.tar.gz:
 	@mkdir -p $(dir $@)
-	cd download_cache && curl -o brotli-1.2.0.tar.gz -L https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz
-	sha256sum -c SHA256SUM_brotli-1.2.0.tar.gz.txt || (rm -f download_cache/brotli-1.2.0.tar.gz && false)
+	cd download_cache && curl -o brotli-1.2.1.tar.gz -L https://github.com/google/brotli/archive/refs/tags/v1.2.1.tar.gz
+	sha256sum -c SHA256SUM_brotli-1.2.1.tar.gz.txt || (rm -f download_cache/brotli-1.2.1.tar.gz && false)
 
 out/lib/libz.a: download_cache/zlib-1.3.2.tar.xz
 	@mkdir -p zlib_build

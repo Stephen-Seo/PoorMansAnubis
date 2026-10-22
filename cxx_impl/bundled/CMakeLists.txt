@@ -194,26 +194,26 @@ link_directories("${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib")
 
 set_property(DIRECTORY PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/bundled_build;${CMAKE_CURRENT_BINARY_DIR}/bundled_out")
 
-add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540000/"
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540000.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540000.tar.gz" -L "https://sqlite.org/2026/sqlite-autoconf-3540000.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_sqlite-3.54.0.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540100.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540100.tar.gz" -L "https://sqlite.org/2026/sqlite-autoconf-3540100.tar.gz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_sqlite-3.54.1.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540000.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540100.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
     VERBATIM
 )
-add_custom_target(SQLITE3_BINARY_DIR DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540000/")
+add_custom_target(SQLITE3_BINARY_DIR DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/")
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540000/sqlite3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/sqlite3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
     VERBATIM
 )
 add_custom_target(SQLITE3_HEADER DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h")
 add_dependencies(SQLITE3_HEADER SQLITE3_BINARY_DIR)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540000" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --disable-shared && make libsqlite3.a
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540000/libsqlite3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --disable-shared && make libsqlite3.a
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/libsqlite3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
     VERBATIM
 )
 add_custom_target(SQLITE3_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a")
@@ -250,13 +250,13 @@ add_custom_target(NGHTTP2_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/l
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libunistring.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.4.2.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.4.2.tar.xz" -L "https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.4.2.tar.xz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_libunistring-1.4.2.tar.xz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" -L "https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.5.tar.xz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_libunistring-1.5.tar.xz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.4.2.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.4.2" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.4.2"
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.4.2" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT install
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5"
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT install
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT/usr/lib/libunistring.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libunistring.a"
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT/usr/include" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
     VERBATIM
@@ -344,11 +344,11 @@ add_dependencies(LIBZSTD_LIB
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libbrotlicommon.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.0.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.0.tar.gz" -L "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_brotli-1.2.0.tar.gz.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" -L "https://github.com/google/brotli/archive/refs/tags/v1.2.1.tar.gz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_brotli-1.2.1.tar.gz.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.0.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/brotli-1.2.0" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/brotli-1.2.1" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/INSTALL_OUT install
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/INSTALL_OUT/usr/lib" && find . -regex .*\.a$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/{}" ";"
