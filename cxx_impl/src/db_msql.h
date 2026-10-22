@@ -222,6 +222,8 @@ int parse_row_pkt(uint8_t *buf, size_t size,
                   const std::vector<uint16_t> &field_details,
                   std::vector<Value> *out);
 
+#ifndef COM_SEODISPARATE_MSQL_CHALLENGE_DISABLE
+
 void init_db(Connection &c);
 
 std::optional<uint64_t> get_next_seq_id(Connection &c);
@@ -272,6 +274,8 @@ struct Conf {
 };
 
 std::optional<Conf> parse_conf_file(std::string msql_conf_path);
+
+#endif
 
 }  // Namespace PMA_MSQL
 

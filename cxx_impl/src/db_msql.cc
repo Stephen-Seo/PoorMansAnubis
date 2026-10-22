@@ -41,6 +41,8 @@
 #include "poor_mans_print.h"
 #include "work.h"
 
+#ifndef COM_SEODISPARATE_MSQL_CHALLENGE_DISABLE
+
 static const char *DB_REMOVE_OLD_TABLE_SEQ_ID =
     "DROP TABLE IF EXISTS CXX_SEQ_ID";
 
@@ -146,6 +148,8 @@ static const char *DB_CLEANUP_ALLOWED_IPS =
 static const char *DB_CLEANUP_ID_TO_PORT =
     "DELETE FROM CXX_ID_TO_PORT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= "
     "?";
+
+#endif
 
 const char *PMA_MSQL::error_to_str(PMA_MSQL::Error e) {
   switch (e) {
@@ -2948,6 +2952,8 @@ int PMA_MSQL::parse_row_pkt(uint8_t *buf, size_t size,
   return 0;
 }
 
+#ifndef COM_SEODISPARATE_MSQL_CHALLENGE_DISABLE
+
 void PMA_MSQL::init_db(PMA_MSQL::Connection &c) {
   if (!c.is_valid()) {
     return;
@@ -3041,8 +3047,6 @@ std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
     }
   }
 }
-
-#ifndef COM_SEODISPARATE_MSQL_CHALLENGE_DISABLE
 
 std::optional<bool> PMA_MSQL::has_challenge_factor_id(Connection &c,
                                                       std::string hash) {
