@@ -250,13 +250,13 @@ add_custom_target(NGHTTP2_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/l
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libunistring.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.4.2.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.4.2.tar.xz" -L "https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.4.2.tar.xz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_libunistring-1.4.2.tar.xz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" -L "https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.5.tar.xz"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_libunistring-1.5.tar.xz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.4.2.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.4.2" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.4.2"
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.4.2" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT install
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5"
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT install
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT/usr/lib/libunistring.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libunistring.a"
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT/usr/include" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
     VERBATIM
