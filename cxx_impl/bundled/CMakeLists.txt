@@ -152,7 +152,7 @@ $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-g,-DNDEBUG>
 -Wl,-z,nodlopen -Wl,-z,noexecstack
 -Wl,-z,relro -Wl,-z,now
 -Wl,--as-needed -Wl,--no-copy-dt-needed-entries
--Wtrampolines -fzero-init-padding-bits=all
+-Wtrampolines
 -fPIE -pie
 )
 add_link_options(
@@ -167,7 +167,7 @@ $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-g,-DNDEBUG>
 -Wl,-z,nodlopen -Wl,-z,noexecstack
 -Wl,-z,relro -Wl,-z,now
 -Wl,--as-needed -Wl,--no-copy-dt-needed-entries
--Wtrampolines -fzero-init-padding-bits=all
+-Wtrampolines
 -fPIE -pie
 )
 
