@@ -303,7 +303,7 @@ float bezier(float amt, float bezier_amt, int flags) {
     float a = -2.0F * bezier_p1[0] + 1.0F;
     float t;
     if (float_approximate_default(a, 0.0F) == 0) {
-        t = amt / bezier_p1[0];
+        t = amt / bezier_p1[0] / 2.0F;
     } else {
         float quad_out[2];
         solve_quadratic(a,
