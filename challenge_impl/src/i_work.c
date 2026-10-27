@@ -22,6 +22,7 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include <inttypes.h>
 
 #include <raylib.h>
 #include <external/stb_image_write.h>
@@ -31,6 +32,7 @@
 #include "base64.h"
 #include "random.h"
 #include "../third_party/nouns.h"
+#include "helpers.h"
 
 #define GET_IMAGE_PIXEL(image, x, y, pixel_size) \
     GetPixelColor(((char*)(image).data) \
@@ -261,17 +263,92 @@ float inv_sin_lerp(float amt) {
     return (float)(sin((amt + 3) * 1.57079632679489661922F) + 1.0F);
 }
 
+// flags:
+// xxxx xxx1 upper-left bezier curve
+// xxxx xxx0 lower-right bezier curve
+float bezier(float amt, float bezier_amt, int flags) {
+    //static int did_print = 0;
+    // p0 is at origin, p2 is at 1,1 .
+    if (amt < 0.0F) {
+        return 0.0F;
+    } else if (amt > 1.0F) {
+        return 1.0F;
+    }
+
+    if (bezier_amt < 0.0F) {
+        bezier_amt = 0.0F;
+    } else if (bezier_amt > 1.0F) {
+        bezier_amt = 1.0F;
+    }
+
+    static const float BEZIER_OFFSET = 0.65F;
+
+    // p1 is on lines parallel to y = x, the offset determined by BEZIER_OFFSET.
+    float bezier_p1[2];
+    if (flags & 1) {
+        bezier_p1[0] = bezier_amt * BEZIER_OFFSET;
+        bezier_p1[1] = 1.0F - BEZIER_OFFSET + bezier_amt * BEZIER_OFFSET;
+    } else {
+        bezier_p1[0] = 1.0F - BEZIER_OFFSET + bezier_amt * BEZIER_OFFSET;
+        bezier_p1[1] = bezier_amt * BEZIER_OFFSET;
+    }
+
+    //if (!did_print) {
+    //    fprintf(stderr,
+    //            "bezier coords: %.2f, %.2f\n",
+    //            bezier_p1[0],
+    //            bezier_p1[1]);
+    //}
+
+    float a = -2.0F * bezier_p1[0] + 1.0F;
+    float t;
+    if (float_approximate_default(a, 0.0F) == 0) {
+        t = amt / bezier_p1[0];
+    } else {
+        float quad_out[2];
+        solve_quadratic(a,
+                        2.0F * bezier_p1[0],
+                        -amt,
+                        &quad_out[0],
+                        &quad_out[1]);
+        if (quad_out[0] >= 0.0F && quad_out[0] <= 1.0F) {
+            t = quad_out[0];
+        } else if (quad_out[1] >= 0.0F && quad_out[1] <= 1.0F) {
+            t = quad_out[1];
+        } else {
+            //did_print = 1;
+            return 0.0F;
+        }
+    }
+
+    float t_m = 1.0F - t;
+
+    float ret = 2.0F * t_m * t * bezier_p1[1] + t * t;
+
+    //if (!did_print) {
+    //    did_print = 1;
+    //    fprintf(stderr, "first ret value: %.2f\n", ret);
+    //}
+
+    return ret;
+}
+
 /// Flags:
 /// xxxx xxx1 if set use inv_sq_lerp/sin_lerp, else use sq_lerp/inv_sin_lerp
 /// xxxx xx1x if set use sq_lerps, else use sin_lerps
+/// xxxx x1xx if set, use bezier
 void draw_distort_circle(float origin_x,
                          float origin_y,
                          float radius,
                          Image image,
-                         uint_fast32_t flags) {
+                         uint_fast32_t flags,
+                         void *r_state) {
     Image copy = ImageCopy(image);
 
     const int px_data_size = GetPixelDataSize(1, 1, copy.format);
+
+    const float bezier_amt = rand_float_range(r_state, 0.0F, 1.0F);
+    const int bezier_curve_dir = rand_int_range(r_state, 0, 1);
 
     for (int y = 0; y < copy.height; ++y) {
         for (int x = 0; x < copy.width; ++x) {
@@ -283,6 +360,9 @@ void draw_distort_circle(float origin_x,
             if (magnitude <= radius) {
                 const float amt = magnitude / radius;
                 const float new_amt =
+                    ((flags & 4) != 0) ? bezier(amt,
+                                                bezier_amt,
+                                                bezier_curve_dir) :
                     ((flags & 2) != 0)
                         ? (((flags & 1) != 0)
                             ? inv_sq_lerp(amt) : sq_lerp(amt))
@@ -318,15 +398,25 @@ void draw_distort_circle(float origin_x,
 /// Flags:
 /// xxxx xxx1 if set use inv_sq_lerp/sin_lerp, else use sq_lerp/inv_sin_lerp
 /// xxxx xx1x if set use sq_lerps, else use sin_lerps
+/// xxxx x1xx if set, use bezier
 void draw_distort_ellipse(float origin_x,
                           float origin_y,
                           float radius_x,
                           float radius_y,
                           Image image,
-                          uint_fast32_t flags) {
+                          uint_fast32_t flags,
+                          void *r_state) {
     Image copy = ImageCopy(image);
 
     const int px_data_size = GetPixelDataSize(1, 1, copy.format);
+
+    const float bezier_amt = rand_float_range(r_state, 0.0F, 1.0F);
+    const int bezier_curve_dir = rand_int_range(r_state, 0, 1);
+
+    //fprintf(stderr,
+    //        "bezier_amt: %.2f, curve_dir: %d\n",
+    //        bezier_amt,
+    //        bezier_curve_dir);
 
     for (int y = 0; y < copy.height; ++y) {
         for (int x = 0; x < copy.width; ++x) {
@@ -349,6 +439,9 @@ void draw_distort_ellipse(float origin_x,
             if (magnitude <= ell_magnitude) {
                 const float amt = magnitude / ell_magnitude;
                 const float new_amt =
+                    ((flags & 4) != 0) ? bezier(amt,
+                                                bezier_amt,
+                                                bezier_curve_dir) :
                     ((flags & 2) != 0)
                         ? (((flags & 1) != 0)
                             ? inv_sq_lerp(amt) : sq_lerp(amt))
@@ -592,23 +685,47 @@ InteractiveChallenge i_challenge_generate(void) {
         8.0F - (float)(rand_int_range(r_state, 0, 800)) * 8.0F / 800.0F,
         &render_image);
 
+    uint_fast32_t distort_flags = 0;
+
+    switch (rand_int_range(r_state, 0, 2)) {
+        case 0:
+            distort_flags = (uint_fast32_t)(rand_int_range(r_state, 0, 1) << 1);
+            break;
+        case 1:
+            distort_flags =
+                (uint_fast32_t)(1 | (rand_int_range(r_state, 0, 1) << 1));
+            break;
+        case 2:
+            distort_flags = 4;
+            break;
+    }
+
+#ifndef NDEBUG
+    fprintf(stderr, "Distort flags: %" PRIuFAST32 "\n", distort_flags);
+#endif
+
     //const float quarter_max_size = max_size_half / 2.0F;
     //draw_distort_circle(quarter_max_size,
     //                    quarter_max_size,
     //                    quarter_max_size,
     //                    render_image,
-    //                    (uint_fast32_t)rand_int_range(r_state, 0, 3));
+    //                    (uint_fast32_t)rand_int_range(r_state,
+    //                                                  0,
+    //                                                  distort_flags));
     //draw_distort_circle(quarter_max_size * 3,
     //                    quarter_max_size,
     //                    quarter_max_size,
     //                    render_image,
-    //                    (uint_fast32_t)rand_int_range(r_state, 0, 3));
+    //                    (uint_fast32_t)rand_int_range(r_state,
+    //                                                  0,
+    //                                                  distort_flags));
     draw_distort_ellipse((float)image_width / 2.0F,
                          (float)image_height / 2.0F,
                          (float)image_width / 2.0F,
                          (float)image_height / 2.0F,
                          render_image,
-                         (uint_fast32_t)rand_int_range(r_state, 0, 3));
+                         distort_flags,
+                         r_state);
 
     jpg_export_part img_data = image_to_jpg_memory(render_image);
 

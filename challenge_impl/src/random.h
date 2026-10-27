@@ -11,6 +11,8 @@ void rand_state_cleanup(void *state);
 // Returns -1 on error.
 int rand_int_range(void *state, int min, int max);
 
+float rand_float_range(void *state, float min, float max);
+
 #ifdef __cplusplus
 }
 #endif
