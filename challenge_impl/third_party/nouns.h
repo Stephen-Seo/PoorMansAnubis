@@ -3,7 +3,7 @@
 
 # ifdef COM_SEODISPARATE_POOR_MANS_ANUBIS_CHALLENGE_THIRD_PARTY_NOUNS_IMPL
 
-const int third_party_nouns_size = 3198;
+const int third_party_nouns_size = 3194;
 const char *third_party_nouns[] = {
     "ATM",
     "CD",
@@ -710,9 +710,6 @@ const char *third_party_nouns[] = {
     "dawn",
     "day",
     "dead",
-    "deal",
-    "dealer",
-    "dealing",
     "dearest",
     "debate",
     "debris",
@@ -2383,7 +2380,6 @@ const char *third_party_nouns[] = {
     "screen",
     "screw",
     "scrim",
-    "scrip",
     "script",
     "sea",
     "seabass",
