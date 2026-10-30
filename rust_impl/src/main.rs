@@ -18,6 +18,7 @@ mod args;
 mod constants;
 mod error;
 mod ffi;
+mod form;
 mod helpers;
 mod json_types;
 mod salvo_compat;
@@ -1821,8 +1822,9 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     html.push_str(&challenge_html);
                     html.push_str(
                         &client_html
+                            .replace("{URL}", &req.uri().to_string())
                             .replace("{UUID}", &hash_id)
-                            .replace("{API_URL}", &args.api_url),
+                            .replace("{REST_API_URL}", &args.rest_api_url),
                     );
                     html.push_str(HTML_END_GENERIC);
                 } else {
@@ -1844,6 +1846,50 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 return Ok(());
             }
         }
+    }
+
+    Ok(())
+}
+
+#[handler]
+async fn handle_rest_interactive_challenge(
+    depot: &Depot,
+    req: &mut Request,
+    res: &mut Response,
+) -> salvo::Result<()> {
+    let args = depot.get_typed::<args::Args>().unwrap();
+    let client_info_ret = get_client_ip_addr(depot, req).await?;
+
+    let form: form::RestForm = req.parse_form().await?;
+
+    #[allow(unused_assignments)]
+    let mut validate_result: Result<u16, Error> = Err(Error::as_str("Invalid state"));
+    if args.mysql_has_priority {
+        validate_result =
+            validate_client_interactive_msql(args, &(&form).into(), &client_info_ret.addr).await;
+    } else {
+        validate_result =
+            validate_client_interactive_sqlite(args, &(&form).into(), &client_info_ret.addr).await;
+    }
+
+    if let Ok(port) = validate_result {
+        eprintln!(
+            "Challenge response accepted from {}:{} -> {}",
+            client_info_ret.addr,
+            client_info_ret.remote_port.unwrap_or(0),
+            port
+        );
+        res.render(Redirect::found(form.url));
+    } else {
+        eprintln!(
+            "Challenge response DENIED from {}:{} -> {}",
+            client_info_ret.addr,
+            client_info_ret.remote_port.unwrap_or(0),
+            client_info_ret.local_port.unwrap_or(0)
+        );
+        res.body("Incorrect")
+            .add_header("content-type", "text/plain", true)?
+            .status_code(StatusCode::BAD_REQUEST);
     }
 
     Ok(())
@@ -1925,6 +1971,11 @@ async fn main() {
                     .path(&parsed_args.js_factors_url)
                     .get(factors_js_fn),
             )
+            .push(
+                Router::new()
+                    .path(&parsed_args.rest_api_url)
+                    .post(handle_rest_interactive_challenge),
+            )
             .push(Router::new().path("{**}").get(handler_fn).post(handler_fn))
     } else {
         Router::new()
@@ -1936,6 +1987,11 @@ async fn main() {
                 Router::new()
                     .path(&parsed_args.js_factors_url)
                     .get(factors_js_fn),
+            )
+            .push(
+                Router::new()
+                    .path(&parsed_args.rest_api_url)
+                    .post(handle_rest_interactive_challenge),
             )
             .push(Router::new().path("{**}").get(handler_fn).post(handler_fn))
     };

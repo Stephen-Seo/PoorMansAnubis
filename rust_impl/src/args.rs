@@ -32,6 +32,7 @@ pub struct Args {
     pub enable_x_real_ip_header: bool,
     pub api_url: String,
     pub js_factors_url: String,
+    pub rest_api_url: String,
     pub challenge_timeout_mins: u64,
     pub allowed_timeout_mins: u64,
     pub enable_override_dest_url: bool,
@@ -71,6 +72,9 @@ pub fn print_args() {
         "  --js-factors-url=<url> : Set endpoint for client to request factors.js from this software;\n    example: \"--js-factors-url=/pma_factors.js\""
     );
     println!(
+        "  --rest-api-url=<url> : Set endpoint for client to POST for interactive challenge;\n    example: \"--rest-api-rul=/pma_rest_api\""
+    );
+    println!(
         "  --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db"
     );
     println!(
@@ -104,6 +108,7 @@ pub fn parse_args() -> Result<Args, Error> {
         enable_x_real_ip_header: false,
         api_url: "/pma_api".into(),
         js_factors_url: "/pma_factors.js".into(),
+        rest_api_url: "/pma_rest_api".into(),
         challenge_timeout_mins: crate::constants::CHALLENGE_FACTORS_TIMEOUT_MINUTES,
         allowed_timeout_mins: crate::constants::ALLOWED_IP_TIMEOUT_MINUTES,
         enable_override_dest_url: false,
@@ -167,6 +172,9 @@ pub fn parse_args() -> Result<Args, Error> {
         } else if arg.starts_with("--js-factors-url=") {
             let end = arg.split_off(17);
             args.js_factors_url = end;
+        } else if arg.starts_with("--rest-api-url=") {
+            let end = arg.split_off(15);
+            args.rest_api_url = end;
         } else if arg.starts_with("--challenge-timeout=") {
             let end = arg.split_off(20);
             args.challenge_timeout_mins = end
