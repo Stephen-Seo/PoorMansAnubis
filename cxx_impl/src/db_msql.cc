@@ -125,7 +125,7 @@ static const char *DB_IP_PORT_FROM_INTER_CHAL =
     "SELECT IP, PORT FROM CXX_INTERACTIVE_CHALLENGES WHERE ID = ? "
     "AND ANSWER = ?";
 static const char *DB_DEL_FROM_INTER_CHAL =
-    "DELETE FROM CXX_INTERACTIVE_CHALLENGES WHERE IP = ? AND PORT = ?";
+    "DELETE FROM CXX_INTERACTIVE_CHALLENGES WHERE ID = ?";
 
 static const char *DB_ADD_ALLOWED_IPS_ENTRY =
     "INSERT INTO CXX_ALLOWED_IPS (IP, PORT) VALUES (?, ?)";
@@ -3311,25 +3311,30 @@ std::tuple<PMA_MSQL::Error, uint16_t> PMA_MSQL::validate_interactive_client(
 
   auto vec_opt = c.execute_stmt(DB_IP_PORT_FROM_INTER_CHAL, {id, answer_hash});
   if (!vec_opt.has_value()) {
+    c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {id});
     c.execute_stmt("UNLOCK TABLES", {});
     return {Error::BAD_QUERY_RESULT, 0};
   } else if (vec_opt->empty()) {
+    c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {id});
     c.execute_stmt("UNLOCK TABLES", {});
     return {Error::EMPTY_QUERY_RESULT, 0};
   } else if (vec_opt->at(0).at(0).get_type() != Value::STRING) {
+    c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {id});
     c.execute_stmt("UNLOCK TABLES", {});
     return {Error::INVALID_QUERY_RET_TYPE, 0};
   } else if (vec_opt->at(0).at(1).get_type() != Value::UNSIGNED_INT) {
+    c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {id});
     c.execute_stmt("UNLOCK TABLES", {});
     return {Error::INVALID_QUERY_RET_TYPE, 0};
   } else if (*vec_opt->at(0).at(0).get_str().value() != client_ip) {
+    c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {id});
     c.execute_stmt("UNLOCK TABLES", {});
     return {Error::DB_IP_MISMATCH, 0};
   }
 
   uint16_t port =
       static_cast<uint16_t>(*vec_opt->at(0).at(1).get_unsigned_int().value());
-  c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {client_ip, Value::new_uint(port)});
+  c.execute_stmt(DB_DEL_FROM_INTER_CHAL, {id});
   c.execute_stmt("UNLOCK TABLES", {});
 
   vec_opt = c.execute_stmt(DB_ADD_ALLOWED_IPS_ENTRY,

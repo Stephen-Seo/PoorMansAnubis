@@ -665,6 +665,10 @@ PMA_SQL::verify_interactive_answer(
             "AND ANSWER = ?",
             std::nullopt, id, hash);
 
+    exec_sqlite_statement<0, std::string>(
+        ctx, "DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?",
+        std::nullopt, id);
+
     if (err_enum != ErrorT::SUCCESS) {
       return {err_enum, err_msg, 0};
     } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
@@ -680,15 +684,6 @@ PMA_SQL::verify_interactive_answer(
   if (stored_ip != ipaddr) {
     return {ErrorT::CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
             "client ip address mismatch", 0};
-  }
-
-  {
-    const auto [err_enum, err_msg] = exec_sqlite_statement<0, std::string>(
-        ctx, "DELETE FROM INTERACTIVE_CHALLENGE WHERE IP = ? AND PORT = ?",
-        std::nullopt, ipaddr, port);
-    if (err_enum != ErrorT::SUCCESS) {
-      return {err_enum, err_msg, 0};
-    }
   }
 
   {
