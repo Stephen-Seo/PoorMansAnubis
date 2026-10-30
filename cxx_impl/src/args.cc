@@ -60,11 +60,15 @@ void pma_print_usage() {
       "client ip addr");
   PMA_Println(
       "  --api-url=<url> : Set endpoint for client to POST to this software;");
-  PMA_Println("    example: \"--api-url=/pma_api\"");
+  PMA_Println("    example: \"--api-url=/pma_api/\"");
   PMA_Println(
       "  --js-factors-url=<url> : Set endpoint for client to request "
       "factors.js from this software;");
   PMA_Println("    example: \"--js-factors-url=/pma_factors.js\"");
+  PMA_Println(
+      "  --rest-api-url=<url> : Set REST API endpoint for interactive "
+      "challenge verification;");
+  PMA_Println("    example: \"--rest-api-url=/pma_rest_api/\"");
   PMA_Println(
       "  --challenge-timeout=<minutes> : Set minutes for how long challenge "
       "answers are stored in db");
@@ -116,6 +120,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       port_to_dest_urls(),
       api_url("/pma_api/"),
       js_factors_url("/pma_factors.js"),
+      rest_api_url("/pma_rest_api/"),
       sqlite_path("sqlite_db"),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
@@ -314,6 +319,14 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       if (this->js_factors_url.empty()) {
         PMA_EPrintln(
             "ERROR: Failed to parse --js-factors-url=<url> (url is empty)!");
+        flags.set(2);
+        return;
+      }
+    } else if (std::strncmp(argv[0], "--rest-api-url=", 15) == 0) {
+      this->rest_api_url = std::string(argv[0] + 15);
+      if (this->rest_api_url.empty()) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --rest-api-url=<url> (url is empty)!");
         flags.set(2);
         return;
       }

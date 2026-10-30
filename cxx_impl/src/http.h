@@ -82,6 +82,10 @@ Request handle_request_parse(std::string req);
 std::tuple<ErrorT, std::unordered_map<std::string, std::string> >
     parse_simple_json(std::string);
 
+std::unordered_map<std::string, std::string> parse_form_fields(std::string);
+
+std::string percent_decode(std::string);
+
 }  // namespace PMA_HTTP
 
 #endif

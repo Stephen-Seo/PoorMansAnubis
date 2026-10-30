@@ -1252,6 +1252,14 @@ int main() {
     CHECK_TRUE(PMA_HELPER::vec_to_hexadecimal(data) == "120345ABC34D00F00F");
   }
 
+  // TEST PMA_HTTP::percent_decode
+  {
+    std::string text("One%2F%41%61Two");
+    std::string decoded(PMA_HTTP::percent_decode(text));
+    // PMA_EPrintln("{}", decoded);
+    CHECK_TRUE(decoded == "One/AaTwo");
+  }
+
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
               test_count.load());
   return test_succeeded.load() == test_count.load() ? 0 : 1;

@@ -1405,6 +1405,7 @@ void thread_handle_connection_fn(void *ud) {
         // 0 - remote content-type: chunked
         // 1 - 301/302/303/304 response
         // 2 - using forwarding
+        // 3 - using 302 for REST API interactive success
         std::bitset<32> forward_flags;
 
         if (err != PMA_SQL::ErrorT::SUCCESS) {
@@ -1414,6 +1415,101 @@ void thread_handle_connection_fn(void *ud) {
           body =
               "<html><p>500 Internal Server Error</p><p>Failed to init "
               "db</p></html>";
+        } else if (req.url_or_err_msg == data->args->rest_api_url) {
+          const auto form_fields = PMA_HTTP::parse_form_fields(req.body);
+
+          if (form_fields.find("answer") == form_fields.end() ||
+              form_fields.find("url") == form_fields.end() ||
+              form_fields.find("id") == form_fields.end()) {
+            content_type = "Content-Type: text/plain";
+            status = "HTTP/1.0 400 Bad Request";
+            body = "400 Bad Request";
+            goto PMA_RESPONSE_AFTER_SENDING;
+          }
+
+          if (data->args->flags.test(4)) {
+            if (!msql_conn_opt.has_value() || !msql_conn_opt->is_valid()) {
+              msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                  (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
+                  (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
+                  (*data->msql_conf_opt)->db);
+              if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+                PMA_EPrintln(
+                    "ERROR: Thread failed to connect with MSQL server!");
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Problem with "
+                    "DB</p></html>";
+                goto PMA_RESPONSE_AFTER_SENDING;
+              }
+            }
+
+            const auto [err, port] = PMA_MSQL::validate_interactive_client(
+                msql_conn_opt.value(),
+                data->args->interactive_challenge_timeout,
+                form_fields.find("id")->second,
+                form_fields.find("answer")->second,
+                data->addr_port_info.client_addr, internal_blake3_hash_fn);
+            if (err == PMA_MSQL::Error::SUCCESS) {
+              PMA_Println("Challenge success from {}:{} port {}",
+                          data->addr_port_info.client_addr,
+                          data->addr_port_info.remote_port, port);
+              body = PMA_HTTP::percent_decode(form_fields.find("url")->second);
+              forward_flags.set(3);
+              std::unique_lock<std::mutex> cached_allowed_lock(
+                  *data->cached_allowed_mutex);
+              data->cached_allowed->insert(std::make_pair(
+                  std::format("{}:{}", data->addr_port_info.client_addr,
+                              data->addr_port_info.local_port),
+                  time_now));
+            } else {
+              PMA_EPrintln(
+                  "Warning: Client {}:{} -> {} failed challenge due to {}",
+                  data->addr_port_info.client_addr,
+                  data->addr_port_info.remote_port,
+                  data->addr_port_info.local_port, PMA_MSQL::error_to_str(err));
+              if (PMA_MSQL::error_is_client_err(err)) {
+                status = "HTTP/1.0 400 Bad Request";
+                content_type = "Content-type: text/plain";
+                body = "Incorrect";
+              } else {
+                status = "HTTP/1.0 500 Internal Server Error";
+                body =
+                    "<html><p>500 Internal Server Error</p><p>Failed to "
+                    "validate req</p></html>";
+              }
+            }
+          } else {
+            const auto [err, msg, port] = PMA_SQL::verify_interactive_answer(
+                sqliteCtx, form_fields.find("answer")->second,
+                data->addr_port_info.client_addr,
+                form_fields.find("id")->second, internal_blake3_hash_fn);
+            if (err != PMA_SQL::ErrorT::SUCCESS) {
+              PMA_EPrintln(
+                  "Warning: Client {}:{} -> {} failed challenge due to {}, "
+                  "{}",
+                  data->addr_port_info.client_addr,
+                  data->addr_port_info.remote_port,
+                  data->addr_port_info.local_port,
+                  PMA_SQL::error_t_to_string(err), msg);
+              status = "HTTP/1.0 400 Bad Request";
+              content_type = "Content-type: text/plain";
+              body = "Incorrect";
+            } else {
+              PMA_Println("Challenge success from {}:{} port {}",
+                          data->addr_port_info.client_addr,
+                          data->addr_port_info.remote_port, port);
+              body = PMA_HTTP::percent_decode(form_fields.find("url")->second);
+              // PMA_EPrintln("redirect url is: {}", body);
+              forward_flags.set(3);
+              std::unique_lock<std::mutex> cached_allowed_lock(
+                  *data->cached_allowed_mutex);
+              data->cached_allowed->insert(std::make_pair(
+                  std::format("{}:{}", data->addr_port_info.client_addr,
+                              data->addr_port_info.local_port),
+                  time_now));
+            }
+          }
         } else if (req.url_or_err_msg == data->args->api_url) {
           const auto [err, json_keyvals] =
               PMA_HTTP::parse_simple_json(req.body);
@@ -1837,8 +1933,9 @@ void thread_handle_connection_fn(void *ud) {
 
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   body = std::move(html);
-                  PMA_HELPER::str_replace_all(body, "{API_URL}",
-                                              data->args->api_url);
+                  PMA_HELPER::str_replace_all(body, "{REST_API_URL}",
+                                              data->args->rest_api_url);
+                  PMA_HELPER::str_replace_all(body, "{URL}", req.full_url);
                 } else {
                   PMA_EPrintln(
                       "ERROR: Failed to set up interactive challenge for "
@@ -1945,8 +2042,9 @@ void thread_handle_connection_fn(void *ud) {
 
               if (err == PMA_SQL::ErrorT::SUCCESS) {
                 body = std::move(html);
-                PMA_HELPER::str_replace_all(body, "{API_URL}",
-                                            data->args->api_url);
+                PMA_HELPER::str_replace_all(body, "{REST_API_URL}",
+                                            data->args->rest_api_url);
+                PMA_HELPER::str_replace_all(body, "{URL}", req.full_url);
               } else {
                 PMA_EPrintln(
                     "ERROR: Failed to set up interactive challenge for "
@@ -1982,7 +2080,33 @@ void thread_handle_connection_fn(void *ud) {
         }
 
       PMA_RESPONSE_AFTER_SENDING:
-        if (!forward_flags.test(2)) {
+        if (forward_flags.test(3)) {
+          std::string full = "HTTP/1.1 302 Found\r\n";
+          full.append(std::format("Location: {}\r\n", body));
+          full.append("Content-Type: text/html; charset=UTF-8\r\n");
+          full.append("Content-Length: 0\r\n\r\n");
+
+          ssize_t write_ret = write(data->conn_fd, full.data(), full.size());
+          if (write_ret != static_cast<ssize_t>(full.size())) {
+            if (write_ret > 0) {
+              data->addr_port_info.remaining_buffer =
+                  full.substr(static_cast<size_t>(write_ret));
+            } else {
+              PMA_EPrintln(
+                  "ERROR: Failed to send response to client {} (write_ret {})!",
+                  data->addr_port_info.client_addr, write_ret);
+              break;
+            }
+          } else if (write_ret == -1) {
+            PMA_EPrintln("ERROR: Failed to write to client {}, errno {}!",
+                         data->addr_port_info.client_addr, errno);
+            break;
+          } else {
+            // Success
+            // PMA_EPrintln("NOTICE: Connection closed due to success! {}: {}",
+            //             data->dest_conn_fd, req.full_url);
+          }
+        } else if (!forward_flags.test(2)) {
           std::string full;
           if (forward_flags.test(0) && !data->args->flags.test(5)) {
             std::string ending;

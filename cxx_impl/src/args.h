@@ -46,6 +46,7 @@ struct Args {
   std::unordered_map<uint16_t, std::string> port_to_dest_urls;
   std::string api_url;
   std::string js_factors_url;
+  std::string rest_api_url;
   std::string sqlite_path;
   std::string mysql_conf_path;
   uint64_t factors;
