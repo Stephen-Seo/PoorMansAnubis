@@ -89,6 +89,11 @@ void pma_print_usage() {
       "  --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for "
       "interactive challenges (default 2 minutes)");
   PMA_Println(
+      "  --only-factors-challenge : Only allow factors challenge to be used");
+  PMA_Println(
+      "  --only-interactive-challenge : Only allow interactive challenge to "
+      "be used");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -457,6 +462,12 @@ PMA_ARGS::Args::Args(int argc, char **argv)
             "1");
       }
       interactive_challenge_timeout = static_cast<uint64_t>(value);
+    } else if (std::strcmp(argv[0], "--only-factors-challenge") == 0) {
+      flags.set(10);
+      PMA_EPrintln("Enabling only Factors challenge...");
+    } else if (std::strcmp(argv[0], "--only-interactive-challenge") == 0) {
+      flags.set(11);
+      PMA_EPrintln("Enabling only Interactive challenge...");
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

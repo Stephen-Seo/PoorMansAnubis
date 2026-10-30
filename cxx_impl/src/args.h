@@ -63,6 +63,8 @@ struct Args {
   // 7 - error on unknown args
   // 8 - test raylib
   // 9 - test interactive challenge
+  // 10 - only factors challenge
+  // 11 - only interactive challenge
   std::bitset<32> flags;
   uint32_t allowed_timeout;
   uint32_t req_timeout_milliseconds;
