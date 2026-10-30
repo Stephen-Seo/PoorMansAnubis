@@ -666,8 +666,8 @@ PMA_SQL::verify_interactive_answer(
             std::nullopt, id, hash);
 
     exec_sqlite_statement<0, std::string>(
-        ctx, "DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?",
-        std::nullopt, id);
+        ctx, "DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?", std::nullopt,
+        id);
 
     if (err_enum != ErrorT::SUCCESS) {
       return {err_enum, err_msg, 0};
