@@ -1206,17 +1206,21 @@ async fn validate_client_interactive_msql(
                 let mut params = MSQLParamsWrapper::new();
                 params.append_str(addr)?;
                 params.append_uint64(port as u64);
-
-                locked.query_with_params_drop(
-                    "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ? AND PORT = ?",
-                    &params,
-                )?;
             } else {
                 correct = false;
             }
         } else {
             correct = false;
         }
+
+        let mut params = MSQLParamsWrapper::new();
+        params.append_str(&interactive_response.id)?;
+        locked
+            .query_with_params_drop(
+                "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ?",
+                &params,
+            )
+            .map_err(|e| e.to_owned())?;
     }
 
     if correct && port != 0 {
@@ -1293,8 +1297,8 @@ async fn validate_client_interactive_sqlite(
     if let Ok((Ok(ip), Ok(port))) = res {
         if ip == addr && port != 0 {
             conn.execute(
-                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE IP = ?1 AND PORT = ?2",
-                (&addr, port),
+                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+                (&interactive_response.id,),
             )?;
             conn.execute(
                 r"INSERT INTO ALLOWED_IP (IP, PORT) VALUES (?1, ?2)",
@@ -1302,9 +1306,17 @@ async fn validate_client_interactive_sqlite(
             )?;
             Ok(port)
         } else {
+            conn.execute(
+                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+                (&interactive_response.id,),
+            )?;
             Err(Error::as_str("Invalid entries from InteractiveChallenge"))
         }
     } else {
+        conn.execute(
+            r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+            (&interactive_response.id,),
+        )?;
         Err(Error::as_str("Incorrect"))
     }
 }

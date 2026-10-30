@@ -763,6 +763,7 @@ InteractiveChallenge i_challenge_generate(void) {
     if (c.challenge_html) {
 #define CLI_ANSWER_OUTPUT_HTML_FMT \
         "<br />\n" \
+        "<h3>If you respond incorrectly, you must refresh this page.</h3>\n" \
         "<form name=\"text_input_form\" method=\"post\" action=\"{REST_API_URL}\">\n" \
         "<input name=\"id\" type=\"hidden\" id=\"id\" name=\"id\" value=\"{UUID}\" />\n" \
         "<input name=\"url\" type=\"hidden\" id=\"url\" name=\"url\" value=\"{URL}\" />\n" \
