@@ -30,7 +30,6 @@ use std::time::{Duration, Instant};
 
 use std::path::Path;
 
-use rand::Rng;
 use reqwest::Client;
 use reqwest::redirect::Policy;
 use rusqlite::Connection;
@@ -1761,7 +1760,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         res.body("404 Not Found").status_code(StatusCode::NOT_FOUND);
         return Ok(());
     } else {
-        let mut rand_val = rand::rng().next_u64() % 2;
+        let mut rand_type = args::ChallengeType::get_random();
 
         if args.mysql_has_priority {
             let count_ret =
@@ -1771,7 +1770,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     .status_code(StatusCode::BAD_REQUEST);
                 return Ok(());
             } else if count_ret != 0 {
-                rand_val = 1;
+                rand_type = Ok(args::ChallengeType::Interactive);
             }
         } else {
             let count_ret =
@@ -1781,13 +1780,18 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     .status_code(StatusCode::BAD_REQUEST);
                 return Ok(());
             } else if count_ret != 0 {
-                rand_val = 1;
+                rand_type = Ok(args::ChallengeType::Interactive);
             }
         }
 
         let mut html: String = String::new();
-        match rand_val {
-            0 => {
+        if args.only_factors_challenge {
+            rand_type = Ok(args::ChallengeType::Factors);
+        } else if args.only_i_challenge {
+            rand_type = Ok(args::ChallengeType::Interactive);
+        }
+        match rand_type {
+            Ok(args::ChallengeType::Factors) => {
                 let hash_ret = if args.mysql_has_priority {
                     init_id_to_port_mysql(args, port).await
                 } else {
@@ -1812,7 +1816,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 );
                 res.body(html).status_code(StatusCode::OK);
             }
-            1 => {
+            Ok(args::ChallengeType::Interactive) => {
                 let ret = set_up_interactive_challenge(depot, &client_info_ret.addr, port).await;
 
                 if let Ok((challenge_html, client_html, answer, hash_id)) = ret {
@@ -1838,7 +1842,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 res.body(html).status_code(StatusCode::OK);
             }
             _ => {
-                html = String::from("Internal Server Error: rand_val out of range");
+                html = String::from("Internal Server Error: rand_type out of range");
                 res.body(html)
                     .status_code(StatusCode::INTERNAL_SERVER_ERROR);
                 return Ok(());
