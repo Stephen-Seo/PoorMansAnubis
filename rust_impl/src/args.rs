@@ -14,12 +14,30 @@
 // OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
+use rand::Rng;
+
 use crate::error::Error;
 use std::{
     collections::{HashMap, LinkedList},
     env::args as args_fn,
     path::PathBuf,
 };
+
+#[derive(Clone, Debug)]
+pub enum ChallengeType {
+    Factors,
+    Interactive,
+}
+
+impl ChallengeType {
+    pub fn get_random() -> Result<Self, ()> {
+        match rand::rng().next_u64() % 2 {
+            0 => Ok(Self::Factors),
+            1 => Ok(Self::Interactive),
+            _ => Err(()),
+        }
+    }
+}
 
 #[derive(Default, Clone, Debug)]
 pub struct Args {
@@ -41,6 +59,8 @@ pub struct Args {
     pub i_challenge: bool,
     pub max_interactive_challenges: u64,
     pub interactive_challenge_timeout_mins: u64,
+    pub only_factors_challenge: bool,
+    pub only_i_challenge: bool,
 }
 
 pub fn print_args() {
@@ -86,6 +106,8 @@ pub fn print_args() {
     println!(
         "  --interactive-challenge-timeout=<minutes> : Sets how long an interactive challenge persists in minutes (default 2 minutes)"
     );
+    println!("  --only-factors-challenge : Only allow factors challenge to be used");
+    println!("  --only-interactive-challenge : Only allow interactive challenge to be used");
     println!(
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
@@ -117,6 +139,8 @@ pub fn parse_args() -> Result<Args, Error> {
         i_challenge: false,
         max_interactive_challenges: crate::constants::MAX_INTERACTIVE_CHALLENGES,
         interactive_challenge_timeout_mins: crate::constants::INTERACTIVE_CHALLENGE_TIMEOUT_MINUTES,
+        only_factors_challenge: false,
+        only_i_challenge: false,
     };
 
     let p_args = args_fn();
@@ -203,6 +227,12 @@ pub fn parse_args() -> Result<Args, Error> {
                 args.interactive_challenge_timeout_mins = 1;
                 eprintln!("WARNING: Set --interatcive-challenge-timeout to the minimum of 1");
             }
+        } else if arg == "--only-factors-challenge" {
+            args.only_factors_challenge = true;
+            eprintln!("Enabling only Factors challenge...");
+        } else if arg == "--only-interactive-challenge" {
+            args.only_i_challenge = true;
+            eprintln!("Enabling only Interactive challenge...");
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;
         } else if arg == "--important-warning-has-been-read" {
