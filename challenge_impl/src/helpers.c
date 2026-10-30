@@ -19,11 +19,12 @@
 #include <math.h>
 
 void solve_quadratic(float a, float b, float c, float *out0, float *out1) {
+    float sqrt_component = (float)sqrt(b*b - 4.0F*a*c);
     if (out0) {
-        *out0 = (-b + (float)sqrt(b*b - 4.0F*a*c)) / 2.0F / a;
+        *out0 = (-b + sqrt_component) / 2.0F / a;
     }
     if (out1) {
-        *out1 = (-b - (float)sqrt(b*b - 4.0F*a*c)) / 2.0F / a;
+        *out1 = (-b - sqrt_component) / 2.0F / a;
     }
 }
 
