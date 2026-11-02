@@ -1419,7 +1419,6 @@ void thread_handle_connection_fn(void *ud) {
           const auto form_fields = PMA_HTTP::parse_form_fields(req.body);
 
           if (form_fields.find("answer") == form_fields.end() ||
-              form_fields.find("url") == form_fields.end() ||
               form_fields.find("id") == form_fields.end()) {
             content_type = "Content-Type: text/plain";
             status = "HTTP/1.0 400 Bad Request";
@@ -1444,7 +1443,7 @@ void thread_handle_connection_fn(void *ud) {
               }
             }
 
-            const auto [err, port] = PMA_MSQL::validate_interactive_client(
+            const auto [err, port, url] = PMA_MSQL::validate_interactive_client(
                 msql_conn_opt.value(),
                 data->args->interactive_challenge_timeout,
                 form_fields.find("id")->second,
@@ -1454,7 +1453,7 @@ void thread_handle_connection_fn(void *ud) {
               PMA_Println("Challenge success from {}:{} port {}",
                           data->addr_port_info.client_addr,
                           data->addr_port_info.remote_port, port);
-              body = PMA_HTTP::percent_decode(form_fields.find("url")->second);
+              body = url;
               forward_flags.set(3);
               std::unique_lock<std::mutex> cached_allowed_lock(
                   *data->cached_allowed_mutex);
@@ -1480,10 +1479,11 @@ void thread_handle_connection_fn(void *ud) {
               }
             }
           } else {
-            const auto [err, msg, port] = PMA_SQL::verify_interactive_answer(
-                sqliteCtx, form_fields.find("answer")->second,
-                data->addr_port_info.client_addr,
-                form_fields.find("id")->second, internal_blake3_hash_fn);
+            const auto [err, msg, port, url] =
+                PMA_SQL::verify_interactive_answer(
+                    sqliteCtx, form_fields.find("answer")->second,
+                    data->addr_port_info.client_addr,
+                    form_fields.find("id")->second, internal_blake3_hash_fn);
             if (err != PMA_SQL::ErrorT::SUCCESS) {
               PMA_EPrintln(
                   "Warning: Client {}:{} -> {} failed challenge due to {}, "
@@ -1499,7 +1499,7 @@ void thread_handle_connection_fn(void *ud) {
               PMA_Println("Challenge success from {}:{} port {}",
                           data->addr_port_info.client_addr,
                           data->addr_port_info.remote_port, port);
-              body = PMA_HTTP::percent_decode(form_fields.find("url")->second);
+              body = url;
               // PMA_EPrintln("redirect url is: {}", body);
               forward_flags.set(3);
               std::unique_lock<std::mutex> cached_allowed_lock(
@@ -1589,12 +1589,14 @@ void thread_handle_connection_fn(void *ud) {
                 }
               } else if (json_keyvals.find("type")->second == "interactive" &&
                          json_keyvals.find("answer") != json_keyvals.end()) {
-                const auto [err, port] = PMA_MSQL::validate_interactive_client(
-                    msql_conn_opt.value(),
-                    data->args->interactive_challenge_timeout,
-                    json_keyvals.find("id")->second,
-                    json_keyvals.find("answer")->second,
-                    data->addr_port_info.client_addr, internal_blake3_hash_fn);
+                const auto [err, port, url] =
+                    PMA_MSQL::validate_interactive_client(
+                        msql_conn_opt.value(),
+                        data->args->interactive_challenge_timeout,
+                        json_keyvals.find("id")->second,
+                        json_keyvals.find("answer")->second,
+                        data->addr_port_info.client_addr,
+                        internal_blake3_hash_fn);
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   PMA_Println("Challenge success from {}:{} port {}",
                               data->addr_port_info.client_addr,
@@ -1664,10 +1666,11 @@ void thread_handle_connection_fn(void *ud) {
               }
             } else if (json_keyvals.find("type")->second == "interactive" &&
                        json_keyvals.find("answer") != json_keyvals.end()) {
-              const auto [err, msg, port] = PMA_SQL::verify_interactive_answer(
-                  sqliteCtx, json_keyvals.find("answer")->second,
-                  data->addr_port_info.client_addr,
-                  json_keyvals.find("id")->second, internal_blake3_hash_fn);
+              const auto [err, msg, port, url] =
+                  PMA_SQL::verify_interactive_answer(
+                      sqliteCtx, json_keyvals.find("answer")->second,
+                      data->addr_port_info.client_addr,
+                      json_keyvals.find("id")->second, internal_blake3_hash_fn);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
                     "Warning: Client {}:{} -> {} failed challenge due to {}, "
@@ -1940,14 +1943,15 @@ void thread_handle_connection_fn(void *ud) {
                 auto [err, html, id] = PMA_MSQL::set_interactive_challenge(
                     msql_conn_opt.value(), data->addr_port_info.client_addr,
                     data->addr_port_info.local_port,
-                    data->args->interactive_challenge_timeout,
+                    data->args->interactive_challenge_timeout, req.full_url,
                     internal_blake3_hash_fn);
 
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   body = std::move(html);
                   PMA_HELPER::str_replace_all(body, "{REST_API_URL}",
                                               data->args->rest_api_url);
-                  PMA_HELPER::str_replace_all(body, "{URL}", req.full_url);
+                  // TODO DEBUG Remove this
+                  // PMA_HELPER::str_replace_all(body, "{URL}", req.full_url);
                 } else {
                   PMA_EPrintln(
                       "ERROR: Failed to set up interactive challenge for "
@@ -2062,13 +2066,13 @@ void thread_handle_connection_fn(void *ud) {
             } else if (challenge_type == 1) {
               auto [err, html, id] = PMA_SQL::generate_interactive_challenge(
                   sqliteCtx, data->addr_port_info.client_addr,
-                  data->addr_port_info.local_port, internal_blake3_hash_fn);
+                  data->addr_port_info.local_port, req.full_url,
+                  internal_blake3_hash_fn);
 
               if (err == PMA_SQL::ErrorT::SUCCESS) {
                 body = std::move(html);
                 PMA_HELPER::str_replace_all(body, "{REST_API_URL}",
                                             data->args->rest_api_url);
-                PMA_HELPER::str_replace_all(body, "{URL}", req.full_url);
               } else {
                 PMA_EPrintln(
                     "ERROR: Failed to set up interactive challenge for "

@@ -69,12 +69,13 @@ const MSQL_RUST_CHALLENGE_FACTORS_4_CREATE: &str = r"CREATE TABLE IF NOT EXISTS 
     )";
 
 #[allow(unused)]
-const MSQL_RUST_INTERACTIVE_CHALLENGE_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_INTERACTIVE_CHALLENGE (
+const MSQL_RUST_INTERACTIVE_CHALLENGE_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_INTERACTIVE_CHALLENGE_1 (
         ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
         ANSWER CHAR(64) CHARACTER SET ascii NOT NULL,
         PORT INT UNSIGNED NOT NULL,
         GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        DEST_URL TEXT,
         INDEX ON_TIME_INDEX USING BTREE (GEN_TIME),
         INDEX IP_PORT_INDEX USING HASH (IP, PORT)
     )";
@@ -116,11 +117,12 @@ const SQLITE_CHALLENGE_FACTOR_CREATE: &str = r"CREATE TABLE IF NOT EXISTS CHALLE
          ON_TIME TEXT DEFAULT ( datetime() ) )";
 
 #[allow(unused)]
-const SQLITE_INTERACTIVE_CHALLENGE_CREATE: &str = r"CREATE TABLE IF NOT EXISTS INTERACTIVE_CHALLENGE
+const SQLITE_INTERACTIVE_CHALLENGE_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS INTERACTIVE_CHALLENGE_1
         (ID TEXT NOT NULL PRIMARY KEY,
          ANSWER TEXT NOT NULL,
          IP TEXT NOT NULL,
          PORT INT NOT NULL,
+         DEST_URL TEXT,
          ON_TIME TEXT DEFAULT ( datetime() ) )";
 
 #[allow(unused)]
@@ -310,7 +312,9 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
 
     conn.query_drop(MSQL_RUST_ID_TO_PORT_3_CREATE)?;
 
-    conn.query_drop(MSQL_RUST_INTERACTIVE_CHALLENGE_CREATE)?;
+    conn.query_drop(r"DROP TABLE IF EXISTS RUST_INTERACTIVE_CHALLENGE")?;
+
+    conn.query_drop(MSQL_RUST_INTERACTIVE_CHALLENGE_1_CREATE)?;
 
     Ok(())
 }
@@ -349,17 +353,17 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
         (),
     )?;
 
-    conn.execute(SQLITE_INTERACTIVE_CHALLENGE_CREATE, ())?;
+    conn.execute(SQLITE_INTERACTIVE_CHALLENGE_1_CREATE, ())?;
 
     conn.execute(
-        r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_TIME
-        ON INTERACTIVE_CHALLENGE (ON_TIME)"#,
+        r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_1_TIME
+        ON INTERACTIVE_CHALLENGE_1 (ON_TIME)"#,
         (),
     )?;
 
     conn.execute(
-        r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_IP_PORT ON
-        INTERACTIVE_CHALLENGE (IP, PORT)"#,
+        r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_1_IP_PORT ON
+        INTERACTIVE_CHALLENGE_1 (IP, PORT)"#,
         (),
     )?;
 
@@ -631,7 +635,7 @@ async fn has_interactive_challenge_id_msql(depot: &Depot, hash: &str) -> Result<
     let mut params = MSQLParamsWrapper::new();
     params.append_str(hash)?;
     let rows_opt = conn.query_with_params_rows(
-        "SELECT ID FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ?",
+        "SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ?",
         &params,
     )?;
 
@@ -663,7 +667,7 @@ async fn has_interactive_challenge_id_sqlite(args: &args::Args, hash: &str) -> R
     let conn = Connection::open(&args.sqlite_db_file)?;
 
     match conn.query_one(
-        r"SELECT ID FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+        r"SELECT ID FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?1",
         (hash,),
         |r| r.get::<usize, String>(0),
     ) {
@@ -715,6 +719,7 @@ async fn set_interactive_challenge_msql(
     hash: &str,
     port: u16,
     answer_hash: &str,
+    url: Option<&str>,
 ) -> Result<(), Error> {
     let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
@@ -728,7 +733,7 @@ async fn set_interactive_challenge_msql(
 
     let mut locked = conn.lock().unwrap();
 
-    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE WRITE")?;
+    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE_1 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(hash)?;
@@ -736,10 +741,18 @@ async fn set_interactive_challenge_msql(
     params.append_uint64(port as u64);
     params.append_str(answer_hash)?;
 
-    locked.query_with_params_drop(
-        "INSERT INTO RUST_INTERACTIVE_CHALLENGE (ID, IP, PORT, ANSWER) VALUES (?, ?, ?, ?)",
-        &params,
-    )?;
+    if let Some(url) = url {
+        params.append_str(url)?;
+        locked.query_with_params_drop(
+            "INSERT INTO RUST_INTERACTIVE_CHALLENGE_1 (ID, IP, PORT, ANSWER, DEST_URL) VALUES (?, ?, ?, ?, ?)",
+            &params,
+        )?;
+    } else {
+        locked.query_with_params_drop(
+            "INSERT INTO RUST_INTERACTIVE_CHALLENGE_1 (ID, IP, PORT, ANSWER) VALUES (?, ?, ?, ?)",
+            &params,
+        )?;
+    }
 
     Ok(())
 }
@@ -767,13 +780,21 @@ async fn set_interactive_challenge_sqlite(
     hash: &str,
     port: u16,
     answer_hash: &str,
+    url: Option<&str>,
 ) -> Result<(), Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(
-        r"INSERT INTO INTERACTIVE_CHALLENGE (ID, ANSWER, IP, PORT) VALUES (?1, ?2, ?3, ?4)",
-        (hash, answer_hash, ip, port),
-    )?;
+    if let Some(url) = url {
+        conn.execute(
+            r"INSERT INTO INTERACTIVE_CHALLENGE_1 (ID, ANSWER, IP, PORT, DEST_URL) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (hash, answer_hash, ip, port, url),
+        )?;
+    } else {
+        conn.execute(
+            r"INSERT INTO INTERACTIVE_CHALLENGE_1 (ID, ANSWER, IP, PORT) VALUES (?1, ?2, ?3, ?4)",
+            (hash, answer_hash, ip, port),
+        )?;
+    }
 
     Ok(())
 }
@@ -834,6 +855,7 @@ async fn set_up_factors_challenge(
 
 async fn set_up_interactive_challenge(
     depot: &Depot,
+    req: &mut Request,
     ip: &str,
     port: u16,
 ) -> Result<(String, String, String, String), Error> {
@@ -912,9 +934,25 @@ async fn set_up_interactive_challenge(
         let answer_hash = blake3::hash(answer.as_bytes()).to_string();
 
         if args.mysql_has_priority {
-            set_interactive_challenge_msql(depot, ip, &hash, port, &answer_hash).await?;
+            set_interactive_challenge_msql(
+                depot,
+                ip,
+                &hash,
+                port,
+                &answer_hash,
+                Some(&req.uri().to_string()),
+            )
+            .await?;
         } else {
-            set_interactive_challenge_sqlite(args, ip, &hash, port, &answer_hash).await?;
+            set_interactive_challenge_sqlite(
+                args,
+                ip,
+                &hash,
+                port,
+                &answer_hash,
+                Some(&req.uri().to_string()),
+            )
+            .await?;
         }
         break;
     }
@@ -1143,13 +1181,15 @@ async fn validate_client_factors_mysql(
     }
 }
 
+/// Returns port and DEST_URL (if exists)
 async fn validate_client_interactive_msql(
     args: &args::Args,
     interactive_response: &json_types::InteractiveResponse,
     addr: &str,
-) -> Result<u16, Error> {
+) -> Result<(u16, Option<String>), Error> {
     let correct: bool;
     let mut port: u16 = 0;
+    let mut dest_url: Option<String> = None;
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     {
@@ -1162,13 +1202,13 @@ async fn validate_client_interactive_msql(
 
         let mut locked = conn.lock().unwrap();
 
-        locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE WRITE")?;
+        locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE_1 WRITE")?;
 
         {
             let mut params = MSQLParamsWrapper::new();
             params.append_uint64(args.interactive_challenge_timeout_mins);
 
-            locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
+            locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
         }
 
         let hashed_answer = blake3::hash(interactive_response.answer.as_bytes()).to_string();
@@ -1179,7 +1219,7 @@ async fn validate_client_interactive_msql(
 
         let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
             .query_with_params_rows(
-                "SELECT IP, PORT FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ? AND ANSWER = ?",
+                "SELECT IP, PORT, DEST_URL FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ? AND ANSWER = ?",
                 &params,
             )
             .map_err(|e| e.to_owned())?;
@@ -1200,11 +1240,12 @@ async fn validate_client_interactive_msql(
                         return Err(Error::as_str("No Port from InteractiveChallenges"));
                     }
                 };
+                match rows[0][2].clone() {
+                    MSQLValueEnum::Null => (),
+                    MSQLValueEnum::String(url) => dest_url = Some(url),
+                    _ => (),
+                }
                 correct = true;
-
-                let mut params = MSQLParamsWrapper::new();
-                params.append_str(addr)?;
-                params.append_uint64(port as u64);
             } else {
                 correct = false;
             }
@@ -1216,7 +1257,7 @@ async fn validate_client_interactive_msql(
         params.append_str(&interactive_response.id)?;
         locked
             .query_with_params_drop(
-                "DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE ID = ?",
+                "DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ?",
                 &params,
             )
             .map_err(|e| e.to_owned())?;
@@ -1234,7 +1275,7 @@ async fn validate_client_interactive_msql(
             &params,
         )?;
 
-        Ok(port)
+        Ok((port, dest_url))
     } else {
         Err(Error::as_str("Incorrect"))
     }
@@ -1280,40 +1321,52 @@ async fn validate_client_interactive_sqlite(
     args: &args::Args,
     interactive_response: &json_types::InteractiveResponse,
     addr: &str,
-) -> Result<u16, Error> {
+) -> Result<(u16, Option<String>), Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
     let hashed_answer = blake3::hash(interactive_response.answer.as_bytes()).to_string();
 
-    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
+    let mut dest_url: Option<String> = None;
+
+    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
 
     let res = conn.query_one(
-        r"SELECT IP, PORT FROM INTERACTIVE_CHALLENGE WHERE ID = ?1 AND ANSWER = ?2",
+        r"SELECT IP, PORT, DEST_URL FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?1 AND ANSWER = ?2",
         (&interactive_response.id, &hashed_answer),
-        |r| Ok((r.get::<usize, String>(0), r.get::<usize, u16>(1))),
+        |r| {
+            Ok((
+                r.get::<usize, String>(0),
+                r.get::<usize, u16>(1),
+                r.get::<usize, Option<String>>(2),
+            ))
+        },
     );
 
-    if let Ok((Ok(ip), Ok(port))) = res {
+    if let Ok((Ok(ip), Ok(port), url)) = res {
+        if let Ok(url) = url {
+            dest_url = url;
+        }
+
         if ip == addr && port != 0 {
             conn.execute(
-                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+                r"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?1",
                 (&interactive_response.id,),
             )?;
             conn.execute(
                 r"INSERT INTO ALLOWED_IP (IP, PORT) VALUES (?1, ?2)",
                 (&ip, &port),
             )?;
-            Ok(port)
+            Ok((port, dest_url))
         } else {
             conn.execute(
-                r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+                r"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?1",
                 (&interactive_response.id,),
             )?;
             Err(Error::as_str("Invalid entries from InteractiveChallenge"))
         }
     } else {
         conn.execute(
-            r"DELETE FROM INTERACTIVE_CHALLENGE WHERE ID = ?1",
+            r"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?1",
             (&interactive_response.id,),
         )?;
         Err(Error::as_str("Incorrect"))
@@ -1335,14 +1388,14 @@ async fn client_has_interactive_challenge_msql(
     });
 
     let mut locked = conn.lock().unwrap();
-    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE WRITE")?;
+    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE_1 WRITE")?;
 
     {
         // Cleanup stale entries first.
         let mut params = MSQLParamsWrapper::new();
         params.append_uint64(args.interactive_challenge_timeout_mins);
 
-        locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
+        locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
     }
 
     let mut params = MSQLParamsWrapper::new();
@@ -1351,7 +1404,7 @@ async fn client_has_interactive_challenge_msql(
 
     let rows = locked
         .query_with_params_rows(
-            r#"SELECT ID FROM RUST_INTERACTIVE_CHALLENGE WHERE IP = ? AND PORT = ?"#,
+            r#"SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE IP = ? AND PORT = ?"#,
             &params,
         )
         .map_err(|e| e.to_owned())?;
@@ -1370,10 +1423,10 @@ async fn client_has_interactive_challenge_sqlite(
 ) -> Result<u64, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
+    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
 
     let mut stmt =
-        conn.prepare(r#"SELECT PORT FROM INTERACTIVE_CHALLENGE WHERE IP = ?1 AND PORT = ?2"#)?;
+        conn.prepare(r#"SELECT PORT FROM INTERACTIVE_CHALLENGE_1 WHERE IP = ?1 AND PORT = ?2"#)?;
     let rows = stmt.query_map((ip, port), |row| row.get::<usize, i64>(0))?;
     Ok(rows.count() as u64)
 }
@@ -1430,7 +1483,8 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
         }
     } else if let Ok(interactive_response) = interactive_response_ret {
         #[allow(unused_assignments)]
-        let mut validate_result: Result<u16, Error> = Err(Error::as_str("Invalid state"));
+        let mut validate_result: Result<(u16, Option<String>), Error> =
+            Err(Error::as_str("Invalid state"));
         if args.mysql_has_priority {
             validate_result = validate_client_interactive_msql(
                 args,
@@ -1447,7 +1501,7 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             .await;
         }
 
-        if let Ok(port) = validate_result {
+        if let Ok((port, _)) = validate_result {
             eprintln!(
                 "Challenge response accepted from {}:{} -> {}",
                 client_info_ret.addr,
@@ -1830,7 +1884,8 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 res.body(html).status_code(StatusCode::OK);
             }
             Ok(args::ChallengeType::Interactive) => {
-                let ret = set_up_interactive_challenge(depot, &client_info_ret.addr, port).await;
+                let ret =
+                    set_up_interactive_challenge(depot, req, &client_info_ret.addr, port).await;
 
                 if let Ok((challenge_html, client_html, answer, hash_id)) = ret {
                     eprintln!("Set up challenge with answer: {}", answer);
@@ -1838,7 +1893,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     html.push_str(&challenge_html);
                     html.push_str(
                         &client_html
-                            .replace("{URL}", &req.uri().to_string())
                             .replace("{UUID}", &hash_id)
                             .replace("{REST_API_URL}", &args.rest_api_url),
                     );
@@ -1879,7 +1933,8 @@ async fn handle_rest_interactive_challenge(
     let form: form::RestForm = req.parse_form().await?;
 
     #[allow(unused_assignments)]
-    let mut validate_result: Result<u16, Error> = Err(Error::as_str("Invalid state"));
+    let mut validate_result: Result<(u16, Option<String>), Error> =
+        Err(Error::as_str("Invalid state"));
     if args.mysql_has_priority {
         validate_result =
             validate_client_interactive_msql(args, &(&form).into(), &client_info_ret.addr).await;
@@ -1888,14 +1943,26 @@ async fn handle_rest_interactive_challenge(
             validate_client_interactive_sqlite(args, &(&form).into(), &client_info_ret.addr).await;
     }
 
-    if let Ok(port) = validate_result {
-        eprintln!(
-            "Challenge response accepted from {}:{} -> {}",
-            client_info_ret.addr,
-            client_info_ret.remote_port.unwrap_or(0),
-            port
-        );
-        res.render(Redirect::found(form.url));
+    if let Ok((port, url)) = validate_result {
+        if let Some(url) = url {
+            eprintln!(
+                "Challenge response accepted from {}:{} -> {}",
+                client_info_ret.addr,
+                client_info_ret.remote_port.unwrap_or(0),
+                port
+            );
+            res.render(Redirect::found(url));
+        } else {
+            eprintln!(
+                "Internal Error (no url) but Challenge response accepted from {}:{} -> {}",
+                client_info_ret.addr,
+                client_info_ret.remote_port.unwrap_or(0),
+                port
+            );
+            res.status_code(StatusCode::INTERNAL_SERVER_ERROR)
+                .body("500 Internal Server Error")
+                .add_header("content-type", "text/plain", true)?;
+        }
     } else {
         eprintln!(
             "Challenge response DENIED from {}:{} -> {}",

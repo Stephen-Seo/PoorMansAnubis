@@ -152,7 +152,7 @@ std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
 // On error, first string is err message. On SUCCESS, first string is challenge
 // html. Last string is id.
 std::tuple<ErrorT, std::string, std::string> generate_interactive_challenge(
-    SQLITECtx &ctx, std::string client_ip, uint16_t port,
+    SQLITECtx &ctx, std::string client_ip, uint16_t port, std::string url,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // string is error msg, uint16_t is destination port of initial challenge
@@ -162,10 +162,12 @@ std::tuple<ErrorT, std::string, uint16_t> verify_factors_answer(
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // string is error msg, uint16_t is destination port of initial challenge
-// generation request.
-std::tuple<ErrorT, std::string, uint16_t> verify_interactive_answer(
-    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
-    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+// generation request, last string is url (empty if NULL).
+std::tuple<ErrorT, std::string, uint16_t, std::string>
+verify_interactive_answer(SQLITECtx &ctx, std::string answer,
+                          std::string ipaddr, std::string id,
+                          std::vector<uint8_t> (*hasher_fn)(void *data,
+                                                            size_t size));
 
 std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
 get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
@@ -328,8 +330,13 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_fetch_rows(
       std::get<IDX>(v.back().row) = val;
     }
   } else if constexpr (std::is_same_v<Arg, std::string>) {
-    std::string val = reinterpret_cast<const char *>(
+    const char *sqli3_ret = reinterpret_cast<const char *>(
         sqlite3_column_text(sqli3_stmt.value(), IDX));
+    std::string val;
+    if (sqli3_ret) {
+      // If not NULL, set the string.
+      val = sqli3_ret;
+    }
     std::get<IDX>(v.back().row) = val;
   } else {
     sqlite3_finalize(sqli3_stmt.value());

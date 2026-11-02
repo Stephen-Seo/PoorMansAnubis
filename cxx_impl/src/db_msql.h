@@ -238,6 +238,7 @@ std::tuple<Error, std::string, std::string> set_challenge_factor(
 
 std::tuple<Error, std::string, std::string> set_interactive_challenge(
     Connection &c, std::string ip, uint16_t port, uint64_t chall_timeout,
+    std::string url,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 /// First value is SUCCESS on not error. Second value is port.
@@ -248,7 +249,8 @@ std::tuple<Error, uint16_t> validate_factors_client(
     std::string factors, std::string client_ip,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
-std::tuple<Error, uint16_t> validate_interactive_client(
+/// Returns error-type, port, and url.
+std::tuple<Error, uint16_t, std::string> validate_interactive_client(
     Connection &c, uint64_t chall_timeout, std::string id, std::string answer,
     std::string client_ip,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));

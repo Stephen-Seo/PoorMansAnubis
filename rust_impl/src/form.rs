@@ -20,5 +20,4 @@ use serde::{Deserialize, Serialize};
 pub struct RestForm {
     pub id: String,
     pub answer: String,
-    pub url: String,
 }
