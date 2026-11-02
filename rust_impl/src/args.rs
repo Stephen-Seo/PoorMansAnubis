@@ -62,6 +62,8 @@ pub struct Args {
     pub only_factors_challenge: bool,
     pub only_i_challenge: bool,
     pub use_rest_api: bool,
+    pub timeout_time_mins: u64,
+    pub fails_max: u64,
 }
 
 pub fn print_args() {
@@ -101,6 +103,8 @@ pub fn print_args() {
     println!(
         "  --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again"
     );
+    println!("  --timeout-time=<minutes> : Set how long a client must wait if put on a timeout");
+    println!("  --fails-max=<count> : Set how many times a client must fail to be put on timeout");
     println!(
         "  --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)"
     );
@@ -146,6 +150,8 @@ pub fn parse_args() -> Result<Args, Error> {
         only_factors_challenge: false,
         only_i_challenge: false,
         use_rest_api: false,
+        timeout_time_mins: crate::constants::DEFAULT_TIMEOUT_TIME_MINUTES,
+        fails_max: crate::constants::DEFAULT_FAILS_MAX,
     };
 
     let p_args = args_fn();
@@ -209,6 +215,24 @@ pub fn parse_args() -> Result<Args, Error> {
             args.challenge_timeout_mins = end
                 .parse()
                 .expect("challenge timeout should be a valid integer");
+        } else if arg.starts_with("--timeout-time=") {
+            let end = arg.split_off(15);
+            args.timeout_time_mins = end
+                .parse()
+                .expect("Should be able to parse --timeout-time=<minutes>");
+            if args.timeout_time_mins == 0 {
+                args.timeout_time_mins = 1;
+                eprintln!("WARNING: --timeout-time=0, defaulted to 1 minute");
+            }
+        } else if arg.starts_with("--fails-max=") {
+            let end = arg.split_off(12);
+            args.fails_max = end
+                .parse()
+                .expect("Should be able to parse --fails-max=<count>");
+            if args.fails_max < 2 {
+                args.fails_max = 2;
+                eprintln!("WARNING: --fails-max was set too low, defaulted to 2 fails");
+            }
         } else if arg.starts_with("--allowed-timeout=") {
             let end = arg.split_off(18);
             args.allowed_timeout_mins = end

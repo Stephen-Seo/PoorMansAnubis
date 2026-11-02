@@ -99,6 +99,19 @@ const MSQL_RUST_ID_TO_PORT_3_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ID
     )";
 
 #[allow(unused)]
+const MSQL_RUST_TIMEOUT_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_TIMEOUT (
+        IP VARCHAR(45) NOT NULL PRIMARY KEY,
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
+    )";
+
+#[allow(unused)]
+const MSQL_RUST_FAILS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_FAILS (
+        IP VARCHAR(45) NOT NULL PRIMARY KEY,
+        COUNT INT UNSIGNED NOT NULL
+    )";
+
+#[allow(unused)]
 const SQLITE_SEQ_ID_CREATE: &str = r"CREATE TABLE IF NOT EXISTS SEQ_ID
         (ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)";
 
@@ -131,6 +144,16 @@ const SQLITE_ALLOWED_IP_CREATE: &str = r"CREATE TABLE IF NOT EXISTS ALLOWED_IP
          IP TEXT NOT NULL,
          PORT INTEGER NOT NULL,
          ON_TIME TEXT NOT NULL DEFAULT ( datetime() ) )";
+
+#[allow(unused)]
+const SQLITE_TIMEOUT_CREATE: &str = r"CREATE TABLE IF NOT EXISTS TIMEOUT
+        (IP TEXT NOT NULL PRIMARY KEY,
+         ON_TIME TEXT DEFAULT ( datetime() ) )";
+
+#[allow(unused)]
+const SQLITE_FAILS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS FAILS
+        (IP TEXT NOT NULL PRIMARY KEY,
+         COUNT INT NOT NULL)";
 
 #[derive(Clone, Debug)]
 struct CachedAllow {
@@ -316,12 +339,14 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
 
     conn.query_drop(MSQL_RUST_INTERACTIVE_CHALLENGE_1_CREATE)?;
 
+    conn.query_drop(MSQL_RUST_TIMEOUT_CREATE)?;
+
+    conn.query_drop(MSQL_RUST_FAILS_CREATE)?;
+
     Ok(())
 }
 
 async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
-    use rusqlite::Connection;
-
     let conn = Connection::open(&args.sqlite_db_file)?;
 
     conn.execute(SQLITE_SEQ_ID_CREATE, ())?;
@@ -366,6 +391,15 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
         INTERACTIVE_CHALLENGE_1 (IP, PORT)"#,
         (),
     )?;
+
+    conn.execute(SQLITE_TIMEOUT_CREATE, ())?;
+
+    conn.execute(
+        r#"CREATE INDEX IF NOT EXISTS TIMEOUT_ON_TIME ON TIMEOUT (ON_TIME)"#,
+        (),
+    )?;
+
+    conn.execute(SQLITE_FAILS_CREATE, ())?;
 
     Ok(())
 }
@@ -1445,6 +1479,22 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
     let args = depot.get_typed::<args::Args>().unwrap();
     let client_info_ret = get_client_ip_addr(depot, req).await?;
     //eprintln!("API: {}", &addr_string);
+
+    // Check if timeout
+    if args.mysql_has_priority {
+        if is_timeout_msql(args, &client_info_ret.addr).await? {
+            res.body("Timeout")
+                .add_header("content-type", "text/plain", true)?
+                .status_code(StatusCode::FORBIDDEN);
+            return Ok(());
+        }
+    } else if is_timeout_sqlite(args, &client_info_ret.addr).await? {
+        res.body("Timeout")
+            .add_header("content-type", "text/plain", true)?
+            .status_code(StatusCode::FORBIDDEN);
+        return Ok(());
+    }
+
     let factors_response_ret: Result<json_types::FactorsResponse, _> = req
         .parse_json_with_max_size(constants::DEFAULT_JSON_MAX_SIZE)
         .await
@@ -1489,6 +1539,17 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             res.body("Incorrect")
                 .add_header("content-type", "text/plain", true)?
                 .status_code(StatusCode::BAD_REQUEST);
+            if args.mysql_has_priority {
+                let ret = on_failure_msql(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: on_failure_msql failed: {}", e);
+                }
+            } else {
+                let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                }
+            }
         }
     } else if let Ok(interactive_response) = interactive_response_ret
         && !args.use_rest_api
@@ -1532,12 +1593,34 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             res.body("Incorrect")
                 .add_header("content-type", "text/plain", true)?
                 .status_code(StatusCode::BAD_REQUEST);
+            if args.mysql_has_priority {
+                let ret = on_failure_msql(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: on_failure_msql failed: {}", e);
+                }
+            } else {
+                let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                }
+            }
         }
     } else {
         eprintln!("WARNING Invalid json from {}", client_info_ret.addr);
         res.body("Incorrect")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::BAD_REQUEST);
+        if args.mysql_has_priority {
+            let ret = on_failure_msql(args, &client_info_ret.addr).await;
+            if let Err(e) = ret {
+                eprintln!("ERROR: on_failure_msql failed: {}", e);
+            }
+        } else {
+            let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
+            if let Err(e) = ret {
+                eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+            }
+        }
     }
 
     Ok(())
@@ -1729,6 +1812,149 @@ async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, 
     Ok(hash)
 }
 
+async fn cleanup_timeout_msql(args: &args::Args) -> Result<(), Error> {
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
+
+    let mut locked = conn.lock().unwrap();
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_uint64(args.timeout_time_mins);
+
+    locked
+        .query_with_params_drop(
+            "DELETE FROM RUST_TIMEOUT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
+            &params,
+        )
+        .map_err(|e| e.to_owned())?;
+
+    Ok(())
+}
+
+async fn is_timeout_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
+
+    let mut locked = conn.lock().unwrap();
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(ip)?;
+
+    let ret = locked.query_with_params_rows("SELECT IP FROM RUST_TIMEOUT WHERE IP = ?", &params)?;
+
+    if let Some(v) = ret
+        && !v.is_empty()
+        && !v[0].is_empty()
+    {
+        match v[0][0] {
+            MSQLValueEnum::String(_) => Ok(true),
+            _ => Ok(false),
+        }
+    } else {
+        Ok(false)
+    }
+}
+
+async fn on_failure_msql(args: &args::Args, ip: &str) -> Result<(), Error> {
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
+
+    let mut locked = conn.lock().unwrap();
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(ip)?;
+
+    let ret =
+        locked.query_with_params_rows("SELECT COUNT FROM RUST_FAILS WHERE IP = ?", &params)?;
+
+    if let Some(rows) = ret
+        && !rows.is_empty()
+        && !rows[0].is_empty()
+    {
+        let count = match rows[0][0] {
+            MSQLValueEnum::Int64(i) => i as u64,
+            MSQLValueEnum::UInt64(u) => u,
+            _ => 0,
+        };
+        if count >= args.fails_max - 1 {
+            // Fails max reached
+            params = MSQLParamsWrapper::new();
+            params.append_str(ip)?;
+            locked.query_with_params_drop("DELETE FROM RUST_FAILS WHERE IP = ?", &params)?;
+
+            // Put on timeout
+            params = MSQLParamsWrapper::new();
+            params.append_str(ip)?;
+            locked.query_with_params_drop("INSERT INTO RUST_TIMEOUT (IP) VALUES (?)", &params)?;
+        } else {
+            // Increment count
+            params = MSQLParamsWrapper::new();
+            params.append_uint64(count + 1);
+            params.append_str(ip)?;
+            locked
+                .query_with_params_drop("UPDATE RUST_FAILS SET COUNT = ? WHERE IP = ?", &params)?;
+        }
+    } else {
+        // Add count of 1
+        params = MSQLParamsWrapper::new();
+        params.append_str(ip)?;
+        locked
+            .query_with_params_drop("INSERT INTO RUST_FAILS (IP, COUNT) VALUES (?, 1)", &params)?;
+    }
+
+    Ok(())
+}
+
+async fn cleanup_timeout_sqlite(args: &args::Args) -> Result<(), Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    conn.execute(
+        &format!(
+            "DELETE FROM TIMEOUT WHERE datetime(ON_TIME, '{} minutes') < datetime('now')",
+            args.timeout_time_mins
+        ),
+        (),
+    )?;
+
+    Ok(())
+}
+
+async fn is_timeout_sqlite(args: &args::Args, ip: &str) -> Result<bool, Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    let ret = conn.query_one("SELECT IP FROM TIMEOUT WHERE IP = ?1", (ip,), |r| {
+        r.get::<usize, String>(0)
+    });
+
+    Ok(ret.is_ok())
+}
+
+async fn on_failure_sqlite(args: &args::Args, ip: &str) -> Result<(), Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    let ret = conn.query_one("SELECT COUNT FROM FAILS WHERE IP = ?", (ip,), |r| {
+        r.get::<usize, i64>(0)
+    });
+
+    if let Ok(count) = ret {
+        if count <= 0 {
+            // Invalid count, treat as zero
+            conn.execute("UPDATE FAILS SET COUNT = 1 WHERE IP = ?", (ip,))?;
+        } else if count as u64 >= args.fails_max - 1 {
+            // Fails max reached
+            conn.execute("DELETE FROM FAILS WHERE IP = ?", (ip,))?;
+
+            // Put on timeout
+            conn.execute("INSERT INTO TIMEOUT (IP) VALUES (?)", (ip,))?;
+        } else {
+            // Increment count
+            conn.execute("UPDATE FAILS SET COUNT = ? WHERE IP = ?", (count + 1, ip))?;
+        }
+    } else {
+        // Add count of 1
+        conn.execute("INSERT INTO FAILS (IP, COUNT) VALUES (?, 1)", (ip,))?;
+    }
+
+    Ok(())
+}
+
 #[handler]
 async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
     let args = depot.get_typed::<args::Args>().unwrap();
@@ -1768,6 +1994,31 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
             if is_allowed {
                 cached_allow.add_allowed(&req.remote_addr().to_string())?;
             }
+        }
+    }
+
+    // Check if timed out.
+    if !is_allowed {
+        // Cleanup timeout table first.
+        if args.mysql_has_priority {
+            cleanup_timeout_msql(args).await?;
+        } else {
+            cleanup_timeout_sqlite(args).await?;
+        }
+
+        // Check if timed out.
+        if args.mysql_has_priority {
+            if is_timeout_msql(args, &client_info_ret.addr).await? {
+                res.status_code(StatusCode::FORBIDDEN)
+                    .body("403 Forbidden: Timed out")
+                    .add_header("content-type", "text/plain", true)?;
+                return Ok(());
+            }
+        } else if is_timeout_sqlite(args, &client_info_ret.addr).await? {
+            res.status_code(StatusCode::FORBIDDEN)
+                .body("403 Forbidden: Timed out")
+                .add_header("content-type", "text/plain", true)?;
+            return Ok(());
         }
     }
 
@@ -1956,6 +2207,21 @@ async fn handle_rest_interactive_challenge(
 
     let client_info_ret = get_client_ip_addr(depot, req).await?;
 
+    // Check if timeout
+    if args.mysql_has_priority {
+        if is_timeout_msql(args, &client_info_ret.addr).await? {
+            res.body("Timeout")
+                .add_header("content-type", "text/plain", true)?
+                .status_code(StatusCode::FORBIDDEN);
+            return Ok(());
+        }
+    } else if is_timeout_sqlite(args, &client_info_ret.addr).await? {
+        res.body("Timeout")
+            .add_header("content-type", "text/plain", true)?
+            .status_code(StatusCode::FORBIDDEN);
+        return Ok(());
+    }
+
     let form: form::RestForm = req.parse_form().await?;
 
     #[allow(unused_assignments)]
@@ -1999,6 +2265,17 @@ async fn handle_rest_interactive_challenge(
         res.body("Incorrect")
             .add_header("content-type", "text/plain", true)?
             .status_code(StatusCode::BAD_REQUEST);
+        if args.mysql_has_priority {
+            let ret = on_failure_msql(args, &client_info_ret.addr).await;
+            if let Err(e) = ret {
+                eprintln!("ERROR: on_failure_msql failed: {}", e);
+            }
+        } else {
+            let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
+            if let Err(e) = ret {
+                eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+            }
+        }
     }
 
     Ok(())
