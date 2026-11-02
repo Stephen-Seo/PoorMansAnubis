@@ -1415,7 +1415,8 @@ void thread_handle_connection_fn(void *ud) {
           body =
               "<html><p>500 Internal Server Error</p><p>Failed to init "
               "db</p></html>";
-        } else if (req.url_or_err_msg == data->args->rest_api_url) {
+        } else if (req.url_or_err_msg == data->args->rest_api_url &&
+                   data->args->flags.test(12)) {
           const auto form_fields = PMA_HTTP::parse_form_fields(req.body);
 
           if (form_fields.find("answer") == form_fields.end() ||
@@ -1588,7 +1589,8 @@ void thread_handle_connection_fn(void *ud) {
                   }
                 }
               } else if (json_keyvals.find("type")->second == "interactive" &&
-                         json_keyvals.find("answer") != json_keyvals.end()) {
+                         json_keyvals.find("answer") != json_keyvals.end() &&
+                         !data->args->flags.test(12)) {
                 const auto [err, port, url] =
                     PMA_MSQL::validate_interactive_client(
                         msql_conn_opt.value(),

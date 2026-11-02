@@ -1490,7 +1490,9 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
                 .add_header("content-type", "text/plain", true)?
                 .status_code(StatusCode::BAD_REQUEST);
         }
-    } else if let Ok(interactive_response) = interactive_response_ret {
+    } else if let Ok(interactive_response) = interactive_response_ret
+        && !args.use_rest_api
+    {
         #[allow(unused_assignments)]
         let mut validate_result: Result<(u16, Option<String>), Error> =
             Err(Error::as_str("Invalid state"));
@@ -1944,6 +1946,14 @@ async fn handle_rest_interactive_challenge(
     res: &mut Response,
 ) -> salvo::Result<()> {
     let args = depot.get_typed::<args::Args>().unwrap();
+
+    if !args.use_rest_api {
+        res.status_code(StatusCode::FORBIDDEN)
+            .body("403 Forbidden")
+            .add_header("content-type", "text/plain", true)?;
+        return Ok(());
+    }
+
     let client_info_ret = get_client_ip_addr(depot, req).await?;
 
     let form: form::RestForm = req.parse_form().await?;
