@@ -236,9 +236,11 @@ std::tuple<Error, std::string, std::string> set_challenge_factor(
     uint64_t chall_factors_timeout,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
+// flags:
+// 0 - rest api enabled
 std::tuple<Error, std::string, std::string> set_interactive_challenge(
     Connection &c, std::string ip, uint16_t port, uint64_t chall_timeout,
-    std::string url,
+    std::string url, const std::bitset<32> flags,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 /// First value is SUCCESS on not error. Second value is port.

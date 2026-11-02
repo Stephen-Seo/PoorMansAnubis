@@ -30,7 +30,8 @@ typedef struct InteractiveChallenge {
     char *answer;
 } InteractiveChallenge;
 
-InteractiveChallenge i_challenge_generate(void);
+/// Set use_rest_api to non-zero to use rest-api client html.
+InteractiveChallenge i_challenge_generate(int use_rest_api);
 
 void i_challenge_cleanup(InteractiveChallenge challenge);
 void i_challenge_cleanup_ptr(InteractiveChallenge *challenge);

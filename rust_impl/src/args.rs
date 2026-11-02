@@ -61,6 +61,7 @@ pub struct Args {
     pub interactive_challenge_timeout_mins: u64,
     pub only_factors_challenge: bool,
     pub only_i_challenge: bool,
+    pub use_rest_api: bool,
 }
 
 pub fn print_args() {
@@ -109,6 +110,9 @@ pub fn print_args() {
     println!("  --only-factors-challenge : Only allow factors challenge to be used");
     println!("  --only-interactive-challenge : Only allow interactive challenge to be used");
     println!(
+        "  --enable-rest-api : Enable using the REST api for interactive challenges; default false"
+    );
+    println!(
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
     println!(
@@ -141,6 +145,7 @@ pub fn parse_args() -> Result<Args, Error> {
         interactive_challenge_timeout_mins: crate::constants::INTERACTIVE_CHALLENGE_TIMEOUT_MINUTES,
         only_factors_challenge: false,
         only_i_challenge: false,
+        use_rest_api: false,
     };
 
     let p_args = args_fn();
@@ -233,6 +238,9 @@ pub fn parse_args() -> Result<Args, Error> {
         } else if arg == "--only-interactive-challenge" {
             args.only_i_challenge = true;
             eprintln!("Enabling only Interactive challenge...");
+        } else if arg == "--enable-rest-api" {
+            args.use_rest_api = true;
+            eprintln!("Enabling REST-api for interactive challenge...");
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;
         } else if arg == "--important-warning-has-been-read" {

@@ -98,6 +98,9 @@ void pma_print_usage() {
       "  --only-interactive-challenge : Only allow interactive challenge to "
       "be used");
   PMA_Println(
+      "  --enable-rest-api : Enable using the REST api for interactive "
+      "challenges; default false");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -481,6 +484,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     } else if (std::strcmp(argv[0], "--only-interactive-challenge") == 0) {
       flags.set(11);
       PMA_EPrintln("Enabling only Interactive challenge...");
+    } else if (std::strcmp(argv[0], "--enable-rest-api") == 0) {
+      flags.set(12);
+      PMA_EPrintln("Enabling REST api for interactive challenge...");
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

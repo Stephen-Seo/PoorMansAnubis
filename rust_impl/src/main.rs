@@ -858,6 +858,7 @@ async fn set_up_interactive_challenge(
     req: &mut Request,
     ip: &str,
     port: u16,
+    uses_rest: bool,
 ) -> Result<(String, String, String, String), Error> {
     let args = depot.get_typed::<args::Args>().unwrap();
 
@@ -877,7 +878,7 @@ async fn set_up_interactive_challenge(
     let mut answer: String = String::new();
 
     {
-        let challenge = crate::ffi::InteractiveChallengeWrapper::new();
+        let challenge = crate::ffi::InteractiveChallengeWrapper::new(uses_rest);
 
         if let Ok(ch_html_raw) = challenge.get_challenge_html()
             && let Ok(utf8_ch_html) = ch_html_raw.to_str()
@@ -933,26 +934,34 @@ async fn set_up_interactive_challenge(
 
         let answer_hash = blake3::hash(answer.as_bytes()).to_string();
 
-        if args.mysql_has_priority {
-            set_interactive_challenge_msql(
-                depot,
-                ip,
-                &hash,
-                port,
-                &answer_hash,
-                Some(&req.uri().to_string()),
-            )
-            .await?;
+        if uses_rest {
+            if args.mysql_has_priority {
+                set_interactive_challenge_msql(
+                    depot,
+                    ip,
+                    &hash,
+                    port,
+                    &answer_hash,
+                    Some(&req.uri().to_string()),
+                )
+                .await?;
+            } else {
+                set_interactive_challenge_sqlite(
+                    args,
+                    ip,
+                    &hash,
+                    port,
+                    &answer_hash,
+                    Some(&req.uri().to_string()),
+                )
+                .await?;
+            }
         } else {
-            set_interactive_challenge_sqlite(
-                args,
-                ip,
-                &hash,
-                port,
-                &answer_hash,
-                Some(&req.uri().to_string()),
-            )
-            .await?;
+            if args.mysql_has_priority {
+                set_interactive_challenge_msql(depot, ip, &hash, port, &answer_hash, None).await?;
+            } else {
+                set_interactive_challenge_sqlite(args, ip, &hash, port, &answer_hash, None).await?;
+            }
         }
         break;
     }
@@ -1884,8 +1893,14 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 res.body(html).status_code(StatusCode::OK);
             }
             Ok(args::ChallengeType::Interactive) => {
-                let ret =
-                    set_up_interactive_challenge(depot, req, &client_info_ret.addr, port).await;
+                let ret = set_up_interactive_challenge(
+                    depot,
+                    req,
+                    &client_info_ret.addr,
+                    port,
+                    args.use_rest_api,
+                )
+                .await;
 
                 if let Ok((challenge_html, client_html, answer, hash_id)) = ret {
                     eprintln!("Set up challenge with answer: {}", answer);
@@ -1894,6 +1909,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                     html.push_str(
                         &client_html
                             .replace("{UUID}", &hash_id)
+                            .replace("{API_URL}", &args.api_url)
                             .replace("{REST_API_URL}", &args.rest_api_url),
                     );
                     html.push_str(HTML_END_GENERIC);
@@ -1998,7 +2014,7 @@ async fn main() {
         return;
     } else if parsed_args.i_challenge {
         crate::ffi::InteractiveChallengeWrapper::global_init();
-        let challenge = crate::ffi::InteractiveChallengeWrapper::new();
+        let challenge = crate::ffi::InteractiveChallengeWrapper::new(parsed_args.use_rest_api);
         let challenge_html = challenge
             .get_challenge_html()
             .expect(r#"Interactive Challenge: Should have "challenge_html""#);

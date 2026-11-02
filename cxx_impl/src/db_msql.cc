@@ -3141,13 +3141,13 @@ PMA_MSQL::set_challenge_factor(Connection &c, std::string ip, uint16_t port,
 std::tuple<PMA_MSQL::Error, std::string, std::string>
 PMA_MSQL::set_interactive_challenge(
     Connection &c, std::string ip, uint16_t port, uint64_t chall_timeout,
-    std::string url,
+    std::string url, const std::bitset<32> flags,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
   if (!c.is_valid()) {
     return {Error::INVALID_MSQL_CONNECTION, {}, {}};
   }
 
-  InteractiveChallenge challenge = i_challenge_generate();
+  InteractiveChallenge challenge = i_challenge_generate(flags.test(0) ? 1 : 0);
   GenericCleanup<InteractiveChallenge> interactive_challenge_cleanup(
       challenge, [](InteractiveChallenge *c) { i_challenge_cleanup_ptr(c); });
 

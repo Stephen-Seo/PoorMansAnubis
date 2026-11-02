@@ -18,6 +18,7 @@
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_SQL_DB_H_
 
 // standard library includes
+#include <bitset>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -151,8 +152,11 @@ std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
 
 // On error, first string is err message. On SUCCESS, first string is challenge
 // html. Last string is id.
+// flags:
+// 0 - rest api enabled
 std::tuple<ErrorT, std::string, std::string> generate_interactive_challenge(
     SQLITECtx &ctx, std::string client_ip, uint16_t port, std::string url,
+    const std::bitset<32> flags,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // string is error msg, uint16_t is destination port of initial challenge

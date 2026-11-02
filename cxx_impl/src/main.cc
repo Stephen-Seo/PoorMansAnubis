@@ -1940,18 +1940,24 @@ void thread_handle_connection_fn(void *ud) {
                   }
                 }
               } else if (challenge_type == 1) {
+                std::bitset<32> interactive_challenge_flags;
+                if (data->args->flags.test(12)) {
+                  interactive_challenge_flags.set(0);
+                }
                 auto [err, html, id] = PMA_MSQL::set_interactive_challenge(
                     msql_conn_opt.value(), data->addr_port_info.client_addr,
                     data->addr_port_info.local_port,
-                    data->args->interactive_challenge_timeout, req.full_url,
-                    internal_blake3_hash_fn);
+                    data->args->interactive_challenge_timeout,
+                    interactive_challenge_flags.test(0) ? req.full_url
+                                                        : std::string{},
+                    interactive_challenge_flags, internal_blake3_hash_fn);
 
                 if (err == PMA_MSQL::Error::SUCCESS) {
                   body = std::move(html);
                   PMA_HELPER::str_replace_all(body, "{REST_API_URL}",
                                               data->args->rest_api_url);
-                  // TODO DEBUG Remove this
-                  // PMA_HELPER::str_replace_all(body, "{URL}", req.full_url);
+                  PMA_HELPER::str_replace_all(body, "{API_URL}",
+                                              data->args->api_url);
                 } else {
                   PMA_EPrintln(
                       "ERROR: Failed to set up interactive challenge for "
@@ -2064,15 +2070,23 @@ void thread_handle_connection_fn(void *ud) {
                   body, "{JS_FACTORS_URL}",
                   std::format("{}?id={}", data->args->js_factors_url, id));
             } else if (challenge_type == 1) {
+              std::bitset<32> interactive_challenge_flags;
+              if (data->args->flags.test(12)) {
+                interactive_challenge_flags.set(0);
+              }
               auto [err, html, id] = PMA_SQL::generate_interactive_challenge(
                   sqliteCtx, data->addr_port_info.client_addr,
-                  data->addr_port_info.local_port, req.full_url,
-                  internal_blake3_hash_fn);
+                  data->addr_port_info.local_port,
+                  interactive_challenge_flags.test(0) ? req.full_url
+                                                      : std::string{},
+                  interactive_challenge_flags, internal_blake3_hash_fn);
 
               if (err == PMA_SQL::ErrorT::SUCCESS) {
                 body = std::move(html);
                 PMA_HELPER::str_replace_all(body, "{REST_API_URL}",
                                             data->args->rest_api_url);
+                PMA_HELPER::str_replace_all(body, "{API_URL}",
+                                            data->args->api_url);
               } else {
                 PMA_EPrintln(
                     "ERROR: Failed to set up interactive challenge for "

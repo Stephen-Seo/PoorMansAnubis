@@ -531,9 +531,9 @@ PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
 std::tuple<PMA_SQL::ErrorT, std::string, std::string>
 PMA_SQL::generate_interactive_challenge(
     PMA_SQL::SQLITECtx &ctx, std::string client_ip, uint16_t port,
-    std::string url,
+    std::string url, const std::bitset<32> flags,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
-  InteractiveChallenge challenge = i_challenge_generate();
+  InteractiveChallenge challenge = i_challenge_generate(flags.test(0) ? 1 : 0);
   GenericCleanup<InteractiveChallenge> interactive_challenge_cleanup(
       challenge, [](InteractiveChallenge *c) { i_challenge_cleanup_ptr(c); });
 
