@@ -50,6 +50,7 @@ pub struct Args {
     pub enable_x_real_ip_header: bool,
     pub api_url: String,
     pub js_factors_url: String,
+    pub rest_api_url: String,
     pub challenge_timeout_mins: u64,
     pub allowed_timeout_mins: u64,
     pub enable_override_dest_url: bool,
@@ -60,6 +61,9 @@ pub struct Args {
     pub interactive_challenge_timeout_mins: u64,
     pub only_factors_challenge: bool,
     pub only_i_challenge: bool,
+    pub use_rest_api: bool,
+    pub timeout_time_mins: u64,
+    pub fails_max: u64,
 }
 
 pub fn print_args() {
@@ -91,11 +95,16 @@ pub fn print_args() {
         "  --js-factors-url=<url> : Set endpoint for client to request factors.js from this software;\n    example: \"--js-factors-url=/pma_factors.js\""
     );
     println!(
+        "  --rest-api-url=<url> : Set endpoint for client to POST for interactive challenge;\n    example: \"--rest-api-rul=/pma_rest_api\""
+    );
+    println!(
         "  --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db"
     );
     println!(
         "  --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again"
     );
+    println!("  --timeout-time=<minutes> : Set how long a client must wait if put on a timeout");
+    println!("  --fails-max=<count> : Set how many times a client must fail to be put on timeout");
     println!(
         "  --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)"
     );
@@ -104,6 +113,9 @@ pub fn print_args() {
     );
     println!("  --only-factors-challenge : Only allow factors challenge to be used");
     println!("  --only-interactive-challenge : Only allow interactive challenge to be used");
+    println!(
+        "  --enable-rest-api : Enable using the REST api for interactive challenges; default false"
+    );
     println!(
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
@@ -126,6 +138,7 @@ pub fn parse_args() -> Result<Args, Error> {
         enable_x_real_ip_header: false,
         api_url: "/pma_api".into(),
         js_factors_url: "/pma_factors.js".into(),
+        rest_api_url: "/pma_rest_api".into(),
         challenge_timeout_mins: crate::constants::CHALLENGE_FACTORS_TIMEOUT_MINUTES,
         allowed_timeout_mins: crate::constants::ALLOWED_IP_TIMEOUT_MINUTES,
         enable_override_dest_url: false,
@@ -136,6 +149,9 @@ pub fn parse_args() -> Result<Args, Error> {
         interactive_challenge_timeout_mins: crate::constants::INTERACTIVE_CHALLENGE_TIMEOUT_MINUTES,
         only_factors_challenge: false,
         only_i_challenge: false,
+        use_rest_api: false,
+        timeout_time_mins: crate::constants::DEFAULT_TIMEOUT_TIME_MINUTES,
+        fails_max: crate::constants::DEFAULT_FAILS_MAX,
     };
 
     let p_args = args_fn();
@@ -191,11 +207,32 @@ pub fn parse_args() -> Result<Args, Error> {
         } else if arg.starts_with("--js-factors-url=") {
             let end = arg.split_off(17);
             args.js_factors_url = end;
+        } else if arg.starts_with("--rest-api-url=") {
+            let end = arg.split_off(15);
+            args.rest_api_url = end;
         } else if arg.starts_with("--challenge-timeout=") {
             let end = arg.split_off(20);
             args.challenge_timeout_mins = end
                 .parse()
                 .expect("challenge timeout should be a valid integer");
+        } else if arg.starts_with("--timeout-time=") {
+            let end = arg.split_off(15);
+            args.timeout_time_mins = end
+                .parse()
+                .expect("Should be able to parse --timeout-time=<minutes>");
+            if args.timeout_time_mins == 0 {
+                args.timeout_time_mins = 1;
+                eprintln!("WARNING: --timeout-time=0, defaulted to 1 minute");
+            }
+        } else if arg.starts_with("--fails-max=") {
+            let end = arg.split_off(12);
+            args.fails_max = end
+                .parse()
+                .expect("Should be able to parse --fails-max=<count>");
+            if args.fails_max < 2 {
+                args.fails_max = 2;
+                eprintln!("WARNING: --fails-max was set too low, defaulted to 2 fails");
+            }
         } else if arg.starts_with("--allowed-timeout=") {
             let end = arg.split_off(18);
             args.allowed_timeout_mins = end
@@ -225,6 +262,9 @@ pub fn parse_args() -> Result<Args, Error> {
         } else if arg == "--only-interactive-challenge" {
             args.only_i_challenge = true;
             eprintln!("Enabling only Interactive challenge...");
+        } else if arg == "--enable-rest-api" {
+            args.use_rest_api = true;
+            eprintln!("Enabling REST-api for interactive challenge...");
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;
         } else if arg == "--important-warning-has-been-read" {

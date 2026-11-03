@@ -29,3 +29,13 @@ pub struct InteractiveResponse {
     pub id: String,
     pub answer: String,
 }
+
+impl From<&crate::form::RestForm> for InteractiveResponse {
+    fn from(value: &crate::form::RestForm) -> Self {
+        Self {
+            r#type: "interactive".into(),
+            id: value.id.to_owned(),
+            answer: value.answer.to_owned(),
+        }
+    }
+}

@@ -49,6 +49,12 @@ enum class Error {
   FAILED_DB_ADD_INTERACTIVE_CHALL,
   FAILED_DB_CLEANUP_ALLOWED,
   FAILED_DB_ADD_ID_TO_PORT,
+  FAILED_DB_CLEANUP_TIMEOUT,
+  FAILED_DB_ADD_TIMEOUT,
+  FAILED_DB_SEL_TIMEOUT,
+  FAILED_DB_UPDATE_FAILS,
+  FAILED_DB_INSERT_FAILS,
+  FAILED_DB_REMOVE_FAILS
 };
 
 const char *error_to_str(Error);
@@ -236,8 +242,11 @@ std::tuple<Error, std::string, std::string> set_challenge_factor(
     uint64_t chall_factors_timeout,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
+// flags:
+// 0 - rest api enabled
 std::tuple<Error, std::string, std::string> set_interactive_challenge(
     Connection &c, std::string ip, uint16_t port, uint64_t chall_timeout,
+    std::string url, const std::bitset<32> flags,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 /// First value is SUCCESS on not error. Second value is port.
@@ -248,7 +257,8 @@ std::tuple<Error, uint16_t> validate_factors_client(
     std::string factors, std::string client_ip,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
-std::tuple<Error, uint16_t> validate_interactive_client(
+/// Returns error-type, port, and url.
+std::tuple<Error, uint16_t, std::string> validate_interactive_client(
     Connection &c, uint64_t chall_timeout, std::string id, std::string answer,
     std::string client_ip,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
@@ -274,6 +284,18 @@ struct Conf {
 };
 
 std::optional<Conf> parse_conf_file(std::string msql_conf_path);
+
+Error cleanup_timeouts(Connection &c, uint64_t timeout_time);
+
+Error add_timeout(Connection &c, std::string ip);
+
+std::tuple<Error, bool> has_timeout(Connection &c, std::string ip);
+
+/// bool is true if fail count is at least max-fails
+std::tuple<Error, bool> increment_fail(Connection &c, std::string ip,
+                                       uint64_t max_fails);
+
+Error remove_fails(Connection &c, std::string ip);
 
 #endif
 

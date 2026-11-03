@@ -641,7 +641,7 @@ void global_cleanup_i_challenge(void) {
     CloseWindow();
 }
 
-InteractiveChallenge i_challenge_generate(void) {
+InteractiveChallenge i_challenge_generate(int use_rest_api) {
     void *r_state = rand_state_init();
 
     InteractiveChallenge c;
@@ -761,7 +761,15 @@ InteractiveChallenge i_challenge_generate(void) {
     }
 
     if (c.challenge_html) {
-#define CLI_ANSWER_OUTPUT_HTML_FMT \
+#define CLI_ANSWER_OUTPUT_HTML_FMT_REST_API \
+        "<br />\n" \
+        "<h3>If you respond incorrectly, you must refresh this page.</h3>\n" \
+        "<form name=\"text_input_form\" method=\"post\" action=\"{REST_API_URL}\">\n" \
+        "<input name=\"id\" type=\"hidden\" id=\"id\" name=\"id\" value=\"{UUID}\" />\n" \
+        "<label for=\"answer\">The text:<input name=\"answer\" id=\"answer\" type=\"text\" required /></label>\n" \
+        "<br /><button type=\"submit\">Submit</button>\n" \
+        "</form>\n"
+#define CLI_ANSWER_OUTPUT_HTML_FMT_JS_API \
         "<br /><label for=\"answer\">The text:</label>" \
         "<input type=\"text\" name=\"answer\" id=\"answer\" required />" \
         "<br />" \
@@ -792,9 +800,15 @@ InteractiveChallenge i_challenge_generate(void) {
         "}); // answer_button on click fn\n" \
         "</script>\n"
 
-        int cli_html_size = snprintf(NULL, 0, CLI_ANSWER_OUTPUT_HTML_FMT);
-        c.client_resp_html = malloc((size_t)(cli_html_size + 1));
-        snprintf(c.client_resp_html, (size_t)(cli_html_size + 1), CLI_ANSWER_OUTPUT_HTML_FMT);
+        if (use_rest_api != 0) {
+            int cli_html_size = snprintf(NULL, 0, CLI_ANSWER_OUTPUT_HTML_FMT_REST_API);
+            c.client_resp_html = malloc((size_t)(cli_html_size + 1));
+            snprintf(c.client_resp_html, (size_t)(cli_html_size + 1), CLI_ANSWER_OUTPUT_HTML_FMT_REST_API);
+        } else {
+            int cli_html_size = snprintf(NULL, 0, CLI_ANSWER_OUTPUT_HTML_FMT_JS_API);
+            c.client_resp_html = malloc((size_t)(cli_html_size + 1));
+            snprintf(c.client_resp_html, (size_t)(cli_html_size + 1), CLI_ANSWER_OUTPUT_HTML_FMT_JS_API);
+        }
 
         c.answer = strdup(text);
     }
@@ -825,7 +839,8 @@ void i_challenge_cleanup_ptr(InteractiveChallenge *challenge) {
 }
 
 void i_challenge_debug_quick_print(void) {
-    InteractiveChallenge challenge = i_challenge_generate();
+    // By default print the JS api version.
+    InteractiveChallenge challenge = i_challenge_generate(0);
 
     if (challenge.challenge_html) {
         printf("challenge_html:\n%s\n", challenge.challenge_html);

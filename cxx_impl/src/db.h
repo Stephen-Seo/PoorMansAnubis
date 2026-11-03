@@ -18,6 +18,7 @@
 #define SEODISPARATE_COM_POOR_MANS_ANUBIS_SQL_DB_H_
 
 // standard library includes
+#include <bitset>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -46,7 +47,11 @@ enum class ErrorT {
   CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
   FAILED_TO_FETCH_FROM_ALLOWED_IPS,
   FAILED_TO_FETCH_FROM_ID_TO_PORT,
-  FAILED_TO_FETCH_FROM_INTERACTIVE_CHAL
+  FAILED_TO_FETCH_FROM_INTERACTIVE_CHAL,
+  FAILED_TO_FETCH_FROM_TIMEOUT,
+  FAILED_TO_FETCH_FROM_FAIL,
+  FAILED_TO_UPDATE_FAIL,
+  FAILED_TO_REMOVE_FROM_FAIL
 };
 
 std::string error_t_to_string(ErrorT err);
@@ -151,8 +156,11 @@ std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
 
 // On error, first string is err message. On SUCCESS, first string is challenge
 // html. Last string is id.
+// flags:
+// 0 - rest api enabled
 std::tuple<ErrorT, std::string, std::string> generate_interactive_challenge(
-    SQLITECtx &ctx, std::string client_ip, uint16_t port,
+    SQLITECtx &ctx, std::string client_ip, uint16_t port, std::string url,
+    const std::bitset<32> flags,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // string is error msg, uint16_t is destination port of initial challenge
@@ -162,10 +170,12 @@ std::tuple<ErrorT, std::string, uint16_t> verify_factors_answer(
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 // string is error msg, uint16_t is destination port of initial challenge
-// generation request.
-std::tuple<ErrorT, std::string, uint16_t> verify_interactive_answer(
-    SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
-    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+// generation request, last string is url (empty if NULL).
+std::tuple<ErrorT, std::string, uint16_t, std::string>
+verify_interactive_answer(SQLITECtx &ctx, std::string answer,
+                          std::string ipaddr, std::string id,
+                          std::vector<uint8_t> (*hasher_fn)(void *data,
+                                                            size_t size));
 
 std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
 get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
@@ -178,6 +188,18 @@ std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
 std::tuple<ErrorT, uint64_t> has_interactive_challenge(SQLITECtx &ctx,
                                                        std::string addr,
                                                        uint16_t port);
+
+ErrorT cleanup_timeouts(SQLITECtx &ctx, uint64_t timeout_time);
+
+ErrorT add_timeout(SQLITECtx &ctx, std::string ip);
+
+std::tuple<ErrorT, bool> has_timeout(SQLITECtx &ctx, std::string ip);
+
+std::tuple<ErrorT, bool> increment_fail(SQLITECtx &ctx, std::string ip,
+                                        uint64_t max_fails);
+
+ErrorT remove_fails(SQLITECtx &ctx, std::string ip);
+
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -328,8 +350,13 @@ PMA_SQL::SqliteStmtRow<SArgs...>::exec_sqlite_stmt_fetch_rows(
       std::get<IDX>(v.back().row) = val;
     }
   } else if constexpr (std::is_same_v<Arg, std::string>) {
-    std::string val = reinterpret_cast<const char *>(
+    const char *sqli3_ret = reinterpret_cast<const char *>(
         sqlite3_column_text(sqli3_stmt.value(), IDX));
+    std::string val;
+    if (sqli3_ret) {
+      // If not NULL, set the string.
+      val = sqli3_ret;
+    }
     std::get<IDX>(v.back().row) = val;
   } else {
     sqlite3_finalize(sqli3_stmt.value());

@@ -99,9 +99,9 @@ impl InteractiveChallengeWrapper {
         }
     }
 
-    pub fn new() -> Self {
+    pub fn new(uses_rest: bool) -> Self {
         Self {
-            challenge_value: unsafe { i_challenge_generate() },
+            challenge_value: unsafe { i_challenge_generate(if uses_rest { 1 } else { 0 }) },
         }
     }
 

@@ -60,17 +60,27 @@ void pma_print_usage() {
       "client ip addr");
   PMA_Println(
       "  --api-url=<url> : Set endpoint for client to POST to this software;");
-  PMA_Println("    example: \"--api-url=/pma_api\"");
+  PMA_Println("    example: \"--api-url=/pma_api/\"");
   PMA_Println(
       "  --js-factors-url=<url> : Set endpoint for client to request "
       "factors.js from this software;");
   PMA_Println("    example: \"--js-factors-url=/pma_factors.js\"");
+  PMA_Println(
+      "  --rest-api-url=<url> : Set REST API endpoint for interactive "
+      "challenge verification;");
+  PMA_Println("    example: \"--rest-api-url=/pma_rest_api/\"");
   PMA_Println(
       "  --challenge-timeout=<minutes> : Set minutes for how long challenge "
       "answers are stored in db");
   PMA_Println(
       "  --allowed-timeout=<minutes> : Set how long a client is allowed to "
       "access before requiring challenge again");
+  PMA_Println(
+      "  --timeout-time=<minutes> : Set how long a client must wait if put on "
+      "a timeout");
+  PMA_Println(
+      "  --fails-max=<count> : Set how many times a client must fail to be put "
+      "on timeout");
   PMA_Println(
       "  --threads=<integer> : Defaults to 4. Setting it to 3x of your maximum "
       "thread count is a sane value");
@@ -93,6 +103,9 @@ void pma_print_usage() {
   PMA_Println(
       "  --only-interactive-challenge : Only allow interactive challenge to "
       "be used");
+  PMA_Println(
+      "  --enable-rest-api : Enable using the REST api for interactive "
+      "challenges; default false");
   PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
@@ -121,11 +134,14 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       port_to_dest_urls(),
       api_url("/pma_api/"),
       js_factors_url("/pma_factors.js"),
+      rest_api_url("/pma_rest_api/"),
       sqlite_path("sqlite_db"),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
       interactive_challenge_timeout(INTERACTIVE_CHALLENGE_TIMEOUT_MINS),
       challenge_factors_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
+      timeout_time(DEFAULT_TIMEOUT_TIME_MINS),
+      fails_max(DEFAULT_FAILS_MAX),
       thread_count(),
       flags(),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
@@ -322,6 +338,14 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         flags.set(2);
         return;
       }
+    } else if (std::strncmp(argv[0], "--rest-api-url=", 15) == 0) {
+      this->rest_api_url = std::string(argv[0] + 15);
+      if (this->rest_api_url.empty()) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --rest-api-url=<url> (url is empty)!");
+        flags.set(2);
+        return;
+      }
     } else if (std::strncmp(argv[0], "--challenge-timeout=", 20) == 0) {
       try {
         unsigned long long parsed = std::stoull(std::string(argv[0] + 20));
@@ -367,6 +391,47 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln(
             "ERROR: Failed to parse timeout from "
             "--allowed-timeout=<minutes> (out of range)!");
+        flags.set(2);
+        return;
+      }
+    } else if (std::strncmp(argv[0], "--timeout-time=", 15) == 0) {
+      try {
+        unsigned long long parsed = std::stoull(argv[0] + 15);
+        if (parsed == 0) {
+          this->timeout_time = 1;
+          PMA_EPrintln("WARNING: --timeout-time=0, defaulting to 1...");
+        } else {
+          this->timeout_time = parsed;
+        }
+      } catch (const std::invalid_argument &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --timeout-time=<minutes> (invalid "
+            "argument)!");
+        flags.set(2);
+        return;
+      } catch (const std::out_of_range &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --timeout-time=<minutes> (out of range)!");
+        flags.set(2);
+        return;
+      }
+    } else if (std::strncmp(argv[0], "--fails-max=", 12) == 0) {
+      try {
+        unsigned long long parsed = std::stoull(argv[0] + 12);
+        if (parsed < 2) {
+          this->fails_max = 2;
+          PMA_EPrintln("WARNING: --fails-max= less than 2, defaulting to 2...");
+        } else {
+          this->fails_max = parsed;
+        }
+      } catch (const std::invalid_argument &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --fails-max=<count> (invalid argument)!");
+        flags.set(2);
+        return;
+      } catch (const std::out_of_range &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --fails-max=<count> (out of range)!");
         flags.set(2);
         return;
       }
@@ -468,6 +533,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     } else if (std::strcmp(argv[0], "--only-interactive-challenge") == 0) {
       flags.set(11);
       PMA_EPrintln("Enabling only Interactive challenge...");
+    } else if (std::strcmp(argv[0], "--enable-rest-api") == 0) {
+      flags.set(12);
+      PMA_EPrintln("Enabling REST api for interactive challenge...");
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

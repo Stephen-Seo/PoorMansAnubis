@@ -1361,3 +1361,79 @@ PMA_HTTP::parse_simple_json(std::string json) {
 
   return {ErrorT::SUCCESS, unordmap};
 }
+
+std::unordered_map<std::string, std::string> PMA_HTTP::parse_form_fields(
+    std::string body) {
+  std::unordered_map<std::string, std::string> map;
+  std::string key, value;
+
+  int_fast8_t fetching_key = 1;
+  int_fast8_t fetching_value = 0;
+  for (char c : body) {
+    if (c == ' ' || c == '\r' || c == '\n') {
+      continue;
+    } else if (fetching_key) {
+      if (c != '=') {
+        key.push_back(c);
+      } else {
+        fetching_key = 0;
+        fetching_value = 1;
+      }
+    } else if (fetching_value) {
+      if (c != '&') {
+        value.push_back(c);
+      } else {
+        fetching_key = 1;
+        fetching_value = 0;
+        map.insert(std::make_pair(key, value));
+        key.clear();
+        value.clear();
+      }
+    }
+  }
+
+  if (!fetching_key && fetching_value && !key.empty() && !value.empty()) {
+    map.insert(std::make_pair(key, value));
+  }
+
+  return map;
+}
+
+std::string PMA_HTTP::percent_decode(std::string text) {
+  std::string result;
+
+  std::string temp;
+  uint_fast8_t parsing_percent_enc = 0;
+  for (char c : text) {
+    if (c == '%' && !parsing_percent_enc) {
+      parsing_percent_enc = 1;
+      temp.clear();
+    } else if (parsing_percent_enc) {
+      temp.push_back(c);
+      if (temp.size() == 2) {
+        int next = 0;
+        if (temp[1] >= '0' && temp[1] <= '9') {
+          next += temp[1] - '0';
+        } else if (temp[1] >= 'A' && temp[1] >= 'F') {
+          next += temp[1] - 'A' + 10;
+        } else if (temp[1] >= 'a' && temp[1] >= 'f') {
+          next += temp[1] - 'a' + 10;
+        }
+
+        if (temp[0] >= '0' && temp[0] <= '9') {
+          next |= (temp[0] - '0') << 4;
+        } else if (temp[0] >= 'A' && temp[0] <= 'F') {
+          next |= (temp[0] - 'A' + 10) << 4;
+        } else if (temp[0] >= 'a' && temp[0] <= 'f') {
+          next |= (temp[0] - 'a' + 10) << 4;
+        }
+        result.push_back(static_cast<char>(next));
+        parsing_percent_enc = 0;
+      }
+    } else {
+      result.push_back(c);
+    }
+  }
+
+  return result;
+}

@@ -46,12 +46,15 @@ struct Args {
   std::unordered_map<uint16_t, std::string> port_to_dest_urls;
   std::string api_url;
   std::string js_factors_url;
+  std::string rest_api_url;
   std::string sqlite_path;
   std::string mysql_conf_path;
   uint64_t factors;
   uint64_t max_interactive_challenges;
   uint64_t interactive_challenge_timeout;
   uint64_t challenge_factors_timeout;
+  uint64_t timeout_time;
+  uint64_t fails_max;
   std::optional<uint32_t> thread_count;
   // 0 - enable trusting "x-real-ip" header
   // 1 - enable "override-dest-url" header
@@ -65,6 +68,7 @@ struct Args {
   // 9 - test interactive challenge
   // 10 - only factors challenge
   // 11 - only interactive challenge
+  // 12 - enable rest api for interactive challenge
   std::bitset<32> flags;
   uint32_t allowed_timeout;
   uint32_t req_timeout_milliseconds;

@@ -388,7 +388,7 @@ int main() {
 
         for (size_t idx = 0; idx < challenges.size(); ++idx) {
             gen_threads.emplace_back([] (InteractiveChallenge *c) {
-                *c = i_challenge_generate();
+                *c = i_challenge_generate(0);
             }, &challenges[idx]);
         }
 
