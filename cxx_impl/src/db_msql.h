@@ -49,6 +49,12 @@ enum class Error {
   FAILED_DB_ADD_INTERACTIVE_CHALL,
   FAILED_DB_CLEANUP_ALLOWED,
   FAILED_DB_ADD_ID_TO_PORT,
+  FAILED_DB_CLEANUP_TIMEOUT,
+  FAILED_DB_ADD_TIMEOUT,
+  FAILED_DB_SEL_TIMEOUT,
+  FAILED_DB_UPDATE_FAILS,
+  FAILED_DB_INSERT_FAILS,
+  FAILED_DB_REMOVE_FAILS
 };
 
 const char *error_to_str(Error);
@@ -278,6 +284,18 @@ struct Conf {
 };
 
 std::optional<Conf> parse_conf_file(std::string msql_conf_path);
+
+Error cleanup_timeouts(Connection &c, uint64_t timeout_time);
+
+Error add_timeout(Connection &c, std::string ip);
+
+std::tuple<Error, bool> has_timeout(Connection &c, std::string ip);
+
+/// bool is true if fail count is at least max-fails
+std::tuple<Error, bool> increment_fail(Connection &c, std::string ip,
+                                       uint64_t max_fails);
+
+Error remove_fails(Connection &c, std::string ip);
 
 #endif
 

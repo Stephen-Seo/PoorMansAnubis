@@ -95,6 +95,19 @@ static const char *DB_INIT_TABLE_ID_TO_PORT =
     "  INDEX ON_TIME_INDEX USING BTREE (ON_TIME)"
     ")";
 
+static const char *DB_INIT_TABLE_TIMEOUTS =
+    "CREATE TABLE IF NOT EXISTS CXX_TIMEOUTS ("
+    "  IP VARCHAR(45) NOT NULL PRIMARY KEY,"
+    "  ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+    "  INDEX ON_TIME_INDEX USING BTREE (ON_TIME)"
+    ")";
+
+static const char *DB_INIT_TABLE_FAILS =
+    "CREATE TABLE IF NOT EXISTS CXX_FAILS ("
+    "  IP VARCHAR(45) NOT NULL PRIMARY KEY,"
+    "  COUNT INT NOT NULL"
+    ")";
+
 static const char *DB_GET_SEQ_ID = "SELECT ID, SEQ_ID FROM CXX_SEQ_ID_1";
 static const char *DB_REMOVE_SEQ_ID = "DELETE FROM CXX_SEQ_ID_1 WHERE ID = ?";
 static const char *DB_ADD_SEQ_ID =
@@ -156,6 +169,19 @@ static const char *DB_CLEANUP_ID_TO_PORT =
     "DELETE FROM CXX_ID_TO_PORT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= "
     "?";
 
+static const char *DB_CLEANUP_TIMEOUTS =
+    "DELETE FROM CXX_TIMEOUTS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?";
+static const char *DB_ADD_TIMEOUTS = "INSERT INTO CXX_TIMEOUTS (IP) VALUES (?)";
+static const char *DB_SELECT_TIMEOUTS =
+    "SELECT IP FROM CXX_TIMEOUTS WHERE IP = ?";
+
+static const char *DB_INSERT_FAILS =
+    "INSERT INTO CXX_FAILS (IP, COUNT) VALUES (?, 1)";
+static const char *DB_SELECT_FAILS = "SELECT COUNT FROM CXX_FAILS WHERE IP = ?";
+static const char *DB_UPDATE_FAILS =
+    "UPDATE CXX_FAILS SET COUNT = ? WHERE IP = ?";
+static const char *DB_REMOVE_FAILS = "DELETE FROM CXX_FAILS WHERE IP = ?";
+
 #endif
 
 const char *PMA_MSQL::error_to_str(PMA_MSQL::Error e) {
@@ -190,6 +216,18 @@ const char *PMA_MSQL::error_to_str(PMA_MSQL::Error e) {
       return "MSQL failed to cleanup allowed";
     case Error::FAILED_DB_ADD_ID_TO_PORT:
       return "MSQL failed to add id-to-port";
+    case Error::FAILED_DB_CLEANUP_TIMEOUT:
+      return "MSQL failed to cleanup timeout";
+    case Error::FAILED_DB_ADD_TIMEOUT:
+      return "MSQL failed to add to timeout";
+    case Error::FAILED_DB_SEL_TIMEOUT:
+      return "MSQL failed to select from timeout";
+    case Error::FAILED_DB_UPDATE_FAILS:
+      return "MSQL failed to update fails";
+    case Error::FAILED_DB_INSERT_FAILS:
+      return "MSQL failed to insert into fails";
+    case Error::FAILED_DB_REMOVE_FAILS:
+      return "MSQL failed to remove from fails";
     default:
       return "Unknown Error";
   }
@@ -197,36 +235,10 @@ const char *PMA_MSQL::error_to_str(PMA_MSQL::Error e) {
 
 bool PMA_MSQL::error_is_client_err(Error e) {
   switch (e) {
-    case Error::SUCCESS:
-      return false;
-    case Error::INVALID_MSQL_CONNECTION:
-      return false;
-    case Error::FAILED_TO_LOCK_TABLE:
-      return false;
-    case Error::BAD_QUERY_RESULT:
-      return false;
     case Error::EMPTY_QUERY_RESULT:
-      return true;
-    case Error::INVALID_QUERY_RET_TYPE:
-      return false;
-    case Error::FAILED_DB_EXEC:
-      return false;
-    case Error::FAILED_DB_CLEANUP_CHALLENGES:
-      return false;
+      [[fallthrough]];
     case Error::DB_IP_MISMATCH:
       return true;
-    case Error::FAILED_DB_ADD_ALLOWED:
-      return false;
-    case Error::FAILED_GET_NEXT_SEQ:
-      return false;
-    case Error::FAILED_DB_ADD_CHALL_FACT:
-      return false;
-    case Error::FAILED_DB_ADD_INTERACTIVE_CHALL:
-      return false;
-    case Error::FAILED_DB_CLEANUP_ALLOWED:
-      return false;
-    case Error::FAILED_DB_ADD_ID_TO_PORT:
-      return false;
     default:
       return false;
   }
@@ -2973,6 +2985,8 @@ void PMA_MSQL::init_db(PMA_MSQL::Connection &c) {
   c.execute_stmt(DB_INIT_TABLE_INTERACTIVE_CHALLENGES_1, {});
   c.execute_stmt(DB_INIT_TABLE_ALLOWED_IPS, {});
   c.execute_stmt(DB_INIT_TABLE_ID_TO_PORT, {});
+  c.execute_stmt(DB_INIT_TABLE_TIMEOUTS, {});
+  c.execute_stmt(DB_INIT_TABLE_FAILS, {});
 }
 
 std::optional<uint64_t> PMA_MSQL::get_next_seq_id(Connection &c) {
@@ -3594,6 +3608,118 @@ std::optional<PMA_MSQL::Conf> PMA_MSQL::parse_conf_file(
 
   PMA_EPrintln("ERROR: Config file {} missing opts!", msql_conf_path);
   return std::nullopt;
+}
+
+PMA_MSQL::Error PMA_MSQL::cleanup_timeouts(Connection &c,
+                                           uint64_t timeout_time) {
+  if (!c.is_valid()) {
+    return Error::INVALID_MSQL_CONNECTION;
+  }
+
+  auto ret =
+      c.execute_stmt(DB_CLEANUP_TIMEOUTS, {Value::new_uint(timeout_time)});
+
+  if (ret.has_value()) {
+    return Error::SUCCESS;
+  } else {
+    return Error::FAILED_DB_CLEANUP_TIMEOUT;
+  }
+}
+
+PMA_MSQL::Error PMA_MSQL::add_timeout(Connection &c, std::string ip) {
+  if (!c.is_valid()) {
+    return Error::INVALID_MSQL_CONNECTION;
+  }
+
+  auto ret = c.execute_stmt(DB_ADD_TIMEOUTS, {ip});
+
+  if (ret.has_value()) {
+    return Error::SUCCESS;
+  } else {
+    return Error::FAILED_DB_ADD_TIMEOUT;
+  }
+}
+
+std::tuple<PMA_MSQL::Error, bool> PMA_MSQL::has_timeout(Connection &c,
+                                                        std::string ip) {
+  if (!c.is_valid()) {
+    return {Error::INVALID_MSQL_CONNECTION, false};
+  }
+
+  auto ret = c.execute_stmt(DB_SELECT_TIMEOUTS, {ip});
+
+  if (ret.has_value()) {
+    if (ret.value().empty() || ret.value()[0].empty()) {
+      return {Error::SUCCESS, false};
+    } else {
+      return {Error::SUCCESS, true};
+    }
+  } else {
+    return {Error::FAILED_DB_SEL_TIMEOUT, false};
+  }
+}
+
+std::tuple<PMA_MSQL::Error, bool> PMA_MSQL::increment_fail(Connection &c,
+                                                           std::string ip,
+                                                           uint64_t max_fails) {
+  if (!c.is_valid()) {
+    return {Error::INVALID_MSQL_CONNECTION, false};
+  }
+
+  auto ret = c.execute_stmt(DB_SELECT_FAILS, {ip});
+
+  if (ret.has_value()) {
+    if (!ret.value().empty() && !ret.value()[0].empty()) {
+      uint64_t count = 0;
+      switch (ret.value()[0][0].get_type()) {
+        case Value::SIGNED_INT:
+          count = static_cast<uint64_t>(
+              *ret.value()[0][0].get_signed_int().value());
+          break;
+        case Value::UNSIGNED_INT:
+          count = *ret.value()[0][0].get_unsigned_int().value();
+          break;
+        default:
+          return {Error::FAILED_DB_UPDATE_FAILS, false};
+      }
+      if (count >= max_fails - 1) {
+        c.execute_stmt(DB_REMOVE_FAILS, {ip});
+        return {add_timeout(c, ip), true};
+      } else {
+        auto ret =
+            c.execute_stmt(DB_UPDATE_FAILS, {Value::new_uint(count + 1), ip});
+        if (ret.has_value()) {
+          return {Error::SUCCESS, false};
+        } else {
+          return {Error::FAILED_DB_UPDATE_FAILS, false};
+        }
+      }
+    } else {
+      // No entry matching ip
+      auto ret = c.execute_stmt(DB_INSERT_FAILS, {ip});
+      if (ret.has_value()) {
+        return {Error::SUCCESS, false};
+      } else {
+        return {Error::FAILED_DB_UPDATE_FAILS, false};
+      }
+    }
+  } else {
+    return {Error::FAILED_DB_UPDATE_FAILS, false};
+  }
+}
+
+PMA_MSQL::Error PMA_MSQL::remove_fails(Connection &c, std::string ip) {
+  if (!c.is_valid()) {
+    return Error::INVALID_MSQL_CONNECTION;
+  }
+
+  auto ret = c.execute_stmt(DB_REMOVE_FAILS, {ip});
+
+  if (ret.has_value()) {
+    return Error::SUCCESS;
+  } else {
+    return Error::FAILED_DB_REMOVE_FAILS;
+  }
 }
 
 #endif

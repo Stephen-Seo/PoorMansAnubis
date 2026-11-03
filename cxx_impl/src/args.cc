@@ -76,6 +76,12 @@ void pma_print_usage() {
       "  --allowed-timeout=<minutes> : Set how long a client is allowed to "
       "access before requiring challenge again");
   PMA_Println(
+      "  --timeout-time=<minutes> : Set how long a client must wait if put on "
+      "a timeout");
+  PMA_Println(
+      "  --fails-max=<count> : Set how many times a client must fail to be put "
+      "on timeout");
+  PMA_Println(
       "  --threads=<integer> : Defaults to 4. Setting it to 3x of your maximum "
       "thread count is a sane value");
   PMA_Println(
@@ -134,6 +140,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
       interactive_challenge_timeout(INTERACTIVE_CHALLENGE_TIMEOUT_MINS),
       challenge_factors_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
+      timeout_time(DEFAULT_TIMEOUT_TIME_MINS),
+      fails_max(DEFAULT_FAILS_MAX),
       thread_count(),
       flags(),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
@@ -383,6 +391,47 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln(
             "ERROR: Failed to parse timeout from "
             "--allowed-timeout=<minutes> (out of range)!");
+        flags.set(2);
+        return;
+      }
+    } else if (std::strncmp(argv[0], "--timeout-time=", 15) == 0) {
+      try {
+        unsigned long long parsed = std::stoull(argv[0] + 15);
+        if (parsed == 0) {
+          this->timeout_time = 1;
+          PMA_EPrintln("WARNING: --timeout-time=0, defaulting to 1...");
+        } else {
+          this->timeout_time = parsed;
+        }
+      } catch (const std::invalid_argument &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --timeout-time=<minutes> (invalid "
+            "argument)!");
+        flags.set(2);
+        return;
+      } catch (const std::out_of_range &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --timeout-time=<minutes> (out of range)!");
+        flags.set(2);
+        return;
+      }
+    } else if (std::strncmp(argv[0], "--fails-max=", 12) == 0) {
+      try {
+        unsigned long long parsed = std::stoull(argv[0] + 12);
+        if (parsed < 2) {
+          this->fails_max = 2;
+          PMA_EPrintln("WARNING: --fails-max= less than 2, defaulting to 2...");
+        } else {
+          this->fails_max = parsed;
+        }
+      } catch (const std::invalid_argument &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --fails-max=<count> (invalid argument)!");
+        flags.set(2);
+        return;
+      } catch (const std::out_of_range &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse --fails-max=<count> (out of range)!");
         flags.set(2);
         return;
       }

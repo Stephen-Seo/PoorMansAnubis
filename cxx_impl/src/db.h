@@ -47,7 +47,11 @@ enum class ErrorT {
   CLIENT_IP_DOES_NOT_MATCH_STORED_IP,
   FAILED_TO_FETCH_FROM_ALLOWED_IPS,
   FAILED_TO_FETCH_FROM_ID_TO_PORT,
-  FAILED_TO_FETCH_FROM_INTERACTIVE_CHAL
+  FAILED_TO_FETCH_FROM_INTERACTIVE_CHAL,
+  FAILED_TO_FETCH_FROM_TIMEOUT,
+  FAILED_TO_FETCH_FROM_FAIL,
+  FAILED_TO_UPDATE_FAIL,
+  FAILED_TO_REMOVE_FROM_FAIL
 };
 
 std::string error_t_to_string(ErrorT err);
@@ -184,6 +188,18 @@ std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
 std::tuple<ErrorT, uint64_t> has_interactive_challenge(SQLITECtx &ctx,
                                                        std::string addr,
                                                        uint16_t port);
+
+ErrorT cleanup_timeouts(SQLITECtx &ctx, uint64_t timeout_time);
+
+ErrorT add_timeout(SQLITECtx &ctx, std::string ip);
+
+std::tuple<ErrorT, bool> has_timeout(SQLITECtx &ctx, std::string ip);
+
+std::tuple<ErrorT, bool> increment_fail(SQLITECtx &ctx, std::string ip,
+                                        uint64_t max_fails);
+
+ErrorT remove_fails(SQLITECtx &ctx, std::string ip);
+
 }  // namespace PMA_SQL
 
 ////////////////////////////////////////////////////////////////////////////////

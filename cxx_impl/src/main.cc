@@ -1415,8 +1415,62 @@ void thread_handle_connection_fn(void *ud) {
           body =
               "<html><p>500 Internal Server Error</p><p>Failed to init "
               "db</p></html>";
-        } else if (req.url_or_err_msg == data->args->rest_api_url &&
-                   data->args->flags.test(12)) {
+          goto PMA_RESPONSE_AFTER_SENDING;
+        }
+
+        // Check if timeout
+        if (data->args->flags.test(4)) {
+          // Init msql if not initilalized
+          if (!msql_conn_opt.has_value() || !msql_conn_opt->is_valid()) {
+            msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+                (*data->msql_conf_opt)->addr, (*data->msql_conf_opt)->port,
+                (*data->msql_conf_opt)->user, (*data->msql_conf_opt)->pass,
+                (*data->msql_conf_opt)->db);
+            if (!msql_conn_opt.has_value() || !msql_conn_opt->ping_check()) {
+              PMA_EPrintln("ERROR: Thread failed to connect with MSQL server!");
+              status = "HTTP/1.0 500 Internal Server Error";
+              body =
+                  "<html><p>500 Internal Server Error</p><p>Problem with "
+                  "DB</p></html>";
+              goto PMA_RESPONSE_AFTER_SENDING;
+            }
+          }
+
+          const auto [err, is_timeout] = PMA_MSQL::has_timeout(
+              msql_conn_opt.value(), data->addr_port_info.client_addr);
+          if (err != PMA_MSQL::Error::SUCCESS) {
+            PMA_EPrintln("ERROR: Failed to check timeout msql: {}",
+                         PMA_MSQL::error_to_str(err));
+            status = "HTTP/1.0 500 Internal Server Error";
+            body =
+                "<html><p>500 Internal Server Error</p><p>Problem with "
+                "DB</p></html>";
+            goto PMA_RESPONSE_AFTER_SENDING;
+          } else if (is_timeout) {
+            status = "HTTP/1.0 403 Forbidden";
+            body = "<html><p>403 Forbidden</p><p>Timed out</p></html>";
+            goto PMA_RESPONSE_AFTER_SENDING;
+          }
+        } else {
+          const auto [err, is_timeout] =
+              PMA_SQL::has_timeout(sqliteCtx, data->addr_port_info.client_addr);
+          if (err != PMA_SQL::ErrorT::SUCCESS) {
+            PMA_EPrintln("ERROR: Failed to check timeout sqlite: {}",
+                         PMA_SQL::error_t_to_string(err));
+            status = "HTTP/1.0 500 Internal Server Error";
+            body =
+                "<html><p>500 Internal Server Error</p><p>Problem with "
+                "DB</p></html>";
+            goto PMA_RESPONSE_AFTER_SENDING;
+          } else if (is_timeout) {
+            status = "HTTP/1.0 403 Forbidden";
+            body = "<html><p>403 Forbidden</p><p>Timed out</p></html>";
+            goto PMA_RESPONSE_AFTER_SENDING;
+          }
+        }
+
+        if (req.url_or_err_msg == data->args->rest_api_url &&
+            data->args->flags.test(12)) {
           const auto form_fields = PMA_HTTP::parse_form_fields(req.body);
 
           if (form_fields.find("answer") == form_fields.end() ||
@@ -1454,6 +1508,8 @@ void thread_handle_connection_fn(void *ud) {
               PMA_Println("Challenge success from {}:{} port {}",
                           data->addr_port_info.client_addr,
                           data->addr_port_info.remote_port, port);
+              PMA_MSQL::remove_fails(msql_conn_opt.value(),
+                                     data->addr_port_info.client_addr);
               body = url;
               forward_flags.set(3);
               std::unique_lock<std::mutex> cached_allowed_lock(
@@ -1478,6 +1534,9 @@ void thread_handle_connection_fn(void *ud) {
                     "<html><p>500 Internal Server Error</p><p>Failed to "
                     "validate req</p></html>";
               }
+              PMA_MSQL::increment_fail(msql_conn_opt.value(),
+                                       data->addr_port_info.client_addr,
+                                       data->args->fails_max);
             }
           } else {
             const auto [err, msg, port, url] =
@@ -1496,6 +1555,9 @@ void thread_handle_connection_fn(void *ud) {
               status = "HTTP/1.0 400 Bad Request";
               content_type = "Content-type: text/plain";
               body = "Incorrect";
+              PMA_SQL::increment_fail(sqliteCtx,
+                                      data->addr_port_info.client_addr,
+                                      data->args->fails_max);
             } else {
               PMA_Println("Challenge success from {}:{} port {}",
                           data->addr_port_info.client_addr,
@@ -1503,6 +1565,8 @@ void thread_handle_connection_fn(void *ud) {
               body = url;
               // PMA_EPrintln("redirect url is: {}", body);
               forward_flags.set(3);
+              PMA_SQL::remove_fails(sqliteCtx,
+                                    data->addr_port_info.client_addr);
               std::unique_lock<std::mutex> cached_allowed_lock(
                   *data->cached_allowed_mutex);
               data->cached_allowed->insert(std::make_pair(
@@ -1564,6 +1628,8 @@ void thread_handle_connection_fn(void *ud) {
                               data->addr_port_info.remote_port, port);
                   content_type = "Content-type: text/plain";
                   body = "Correct";
+                  PMA_MSQL::remove_fails(msql_conn_opt.value(),
+                                         data->addr_port_info.client_addr);
                   std::unique_lock<std::mutex> cached_allowed_lock(
                       *data->cached_allowed_mutex);
                   data->cached_allowed->insert(std::make_pair(
@@ -1587,6 +1653,9 @@ void thread_handle_connection_fn(void *ud) {
                         "<html><p>500 Internal Server Error</p><p>Failed to "
                         "validate req</p></html>";
                   }
+                  PMA_MSQL::increment_fail(msql_conn_opt.value(),
+                                           data->addr_port_info.client_addr,
+                                           data->args->fails_max);
                 }
               } else if (json_keyvals.find("type")->second == "interactive" &&
                          json_keyvals.find("answer") != json_keyvals.end() &&
@@ -1605,6 +1674,8 @@ void thread_handle_connection_fn(void *ud) {
                               data->addr_port_info.remote_port, port);
                   content_type = "Content-type: text/plain";
                   body = "Correct";
+                  PMA_MSQL::remove_fails(msql_conn_opt.value(),
+                                         data->addr_port_info.client_addr);
                   std::unique_lock<std::mutex> cached_allowed_lock(
                       *data->cached_allowed_mutex);
                   data->cached_allowed->insert(std::make_pair(
@@ -1628,6 +1699,9 @@ void thread_handle_connection_fn(void *ud) {
                         "<html><p>500 Internal Server Error</p><p>Failed to "
                         "validate req</p></html>";
                   }
+                  PMA_MSQL::increment_fail(msql_conn_opt.value(),
+                                           data->addr_port_info.client_addr,
+                                           data->args->fails_max);
                 }
               } else {
                 status = "HTTP/1.0 400 Bad Request";
@@ -1653,12 +1727,17 @@ void thread_handle_connection_fn(void *ud) {
                 status = "HTTP/1.0 400 Bad Request";
                 content_type = "Content-type: text/plain";
                 body = "Incorrect";
+                PMA_SQL::increment_fail(sqliteCtx,
+                                        data->addr_port_info.client_addr,
+                                        data->args->fails_max);
               } else {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
                             data->addr_port_info.remote_port, port);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
+                PMA_SQL::remove_fails(sqliteCtx,
+                                      data->addr_port_info.client_addr);
                 std::unique_lock<std::mutex> cached_allowed_lock(
                     *data->cached_allowed_mutex);
                 data->cached_allowed->insert(std::make_pair(
@@ -1684,12 +1763,17 @@ void thread_handle_connection_fn(void *ud) {
                 status = "HTTP/1.0 400 Bad Request";
                 content_type = "Content-type: text/plain";
                 body = "Incorrect";
+                PMA_SQL::increment_fail(sqliteCtx,
+                                        data->addr_port_info.client_addr,
+                                        data->args->fails_max);
               } else {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
                             data->addr_port_info.remote_port, port);
                 content_type = "Content-type: text/plain";
                 body = "Correct";
+                PMA_SQL::remove_fails(sqliteCtx,
+                                      data->addr_port_info.client_addr);
                 std::unique_lock<std::mutex> cached_allowed_lock(
                     *data->cached_allowed_mutex);
                 data->cached_allowed->insert(std::make_pair(
