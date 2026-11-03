@@ -2339,7 +2339,14 @@ async fn handle_rest_interactive_challenge(
 async fn main() {
     signal::register_signal_handlers();
 
-    let mut parsed_args = args::parse_args().unwrap();
+    let parsed_args_ret = args::parse_args();
+    if let Err(e) = parsed_args_ret {
+        if !e.is_args_non_err() {
+            eprintln!("parse_args fn returned error: {}", e);
+        }
+        return;
+    }
+    let mut parsed_args = parsed_args_ret.unwrap();
     if parsed_args.factors.is_none() {
         parsed_args.factors = Some(constants::DEFAULT_FACTORS_QUADS);
         println!(
