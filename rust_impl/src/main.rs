@@ -1529,6 +1529,17 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             res.body("Correct")
                 .add_header("content-type", "text/plain", true)?
                 .status_code(StatusCode::OK);
+            if args.mysql_has_priority {
+                let ret = remove_failures_msql(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: remove_failures_msql failed: {}", e);
+                }
+            } else {
+                let ret = remove_failures_sqlite(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: remove_failures_sqlite failed: {}", e);
+                }
+            }
         } else {
             eprintln!(
                 "Challenge response DENIED from {}:{} -> {}",
@@ -1583,6 +1594,17 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             res.body("Correct")
                 .add_header("content-type", "text/plain", true)?
                 .status_code(StatusCode::OK);
+            if args.mysql_has_priority {
+                let ret = remove_failures_msql(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: remove_failures_msql failed: {}", e);
+                }
+            } else {
+                let ret = remove_failures_sqlite(args, &client_info_ret.addr).await;
+                if let Err(e) = ret {
+                    eprintln!("ERROR: remove_failures_sqlite failed: {}", e);
+                }
+            }
         } else {
             eprintln!(
                 "Challenge response DENIED from {}:{} -> {}",
@@ -1902,6 +1924,19 @@ async fn on_failure_msql(args: &args::Args, ip: &str) -> Result<(), Error> {
     Ok(())
 }
 
+async fn remove_failures_msql(args: &args::Args, ip: &str) -> Result<(), Error> {
+    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
+
+    let mut locked = conn.lock().unwrap();
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(ip)?;
+
+    locked.query_with_params_drop("DELETE FROM RUST_FAILS WHERE IP = ?", &params)?;
+
+    Ok(())
+}
+
 async fn cleanup_timeout_sqlite(args: &args::Args) -> Result<(), Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
@@ -1951,6 +1986,14 @@ async fn on_failure_sqlite(args: &args::Args, ip: &str) -> Result<(), Error> {
         // Add count of 1
         conn.execute("INSERT INTO FAILS (IP, COUNT) VALUES (?, 1)", (ip,))?;
     }
+
+    Ok(())
+}
+
+async fn remove_failures_sqlite(args: &args::Args, ip: &str) -> Result<(), Error> {
+    let conn = Connection::open(&args.sqlite_db_file)?;
+
+    conn.execute("DELETE FROM FAILS WHERE IP = ?", (ip,))?;
 
     Ok(())
 }
@@ -2254,6 +2297,17 @@ async fn handle_rest_interactive_challenge(
             res.status_code(StatusCode::INTERNAL_SERVER_ERROR)
                 .body("500 Internal Server Error")
                 .add_header("content-type", "text/plain", true)?;
+        }
+        if args.mysql_has_priority {
+            let ret = remove_failures_msql(args, &client_info_ret.addr).await;
+            if let Err(e) = ret {
+                eprintln!("ERROR: remove_failures_msql failed: {}", e);
+            }
+        } else {
+            let ret = remove_failures_sqlite(args, &client_info_ret.addr).await;
+            if let Err(e) = ret {
+                eprintln!("ERROR: remove_failures_sqlite failed: {}", e);
+            }
         }
     } else {
         eprintln!(
