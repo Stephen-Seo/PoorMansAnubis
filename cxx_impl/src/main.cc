@@ -2311,6 +2311,8 @@ int main(int argc, char **argv) {
   if (args.flags.test(2)) {
     PMA_EPrintln("ERROR: Failed to parse args!");
     return 3;
+  } else if (args.flags.test(13)) {
+    return 0;
   } else if (args.flags.test(8)) {
     test_raylib();
     return 0;

@@ -25,9 +25,11 @@
 // local includes
 #include "constants.h"
 #include "poor_mans_print.h"
+#include "version.h"
 
 void pma_print_usage() {
   PMA_Println("Args:");
+  PMA_Println("  --version : print the version of PoorMansAnubis");
   PMA_Println(
       "  --enable-unknown-arg-error : Exit with error if an unknown argument "
       "is given");
@@ -162,7 +164,12 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     if (std::strcmp(argv[0], "-h") == 0 ||
         std::strcmp(argv[0], "--help") == 0) {
       pma_print_usage();
-      flags.set(2);
+      flags.set(13);
+      return;
+    } else if (std::strcmp(argv[0], "--version") == 0) {
+      PMA_Println("Version {}",
+                  COM_SEODISPARATE_POOR_MANS_ANUBIS_VERSION_STRING);
+      flags.set(13);
       return;
     } else if (std::strncmp(argv[0], "--factors=", 10) == 0) {
       this->factors = std::strtoull(argv[0] + 10, nullptr, 10);
