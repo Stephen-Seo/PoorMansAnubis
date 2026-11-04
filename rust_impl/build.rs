@@ -32,7 +32,7 @@ fn main() {
 
     let version_path = out_path.join("version.txt");
     let mut version_file =
-        File::create_new(version_path).expect("Should be able to create version.txt at OUT_DIR");
+        File::create(version_path).expect("Should be able to create version.txt at OUT_DIR");
     version_file
         .write(format!("{}", env!("CARGO_PKG_VERSION")).as_bytes())
         .expect("Should be able to write to OUT_DIR/version.txt");
