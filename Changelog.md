@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.2.0
+
 Fix rust\_impl rebuild failing due to build-script.
 
 Use "git describe --tags --long" for additional version info when using the
