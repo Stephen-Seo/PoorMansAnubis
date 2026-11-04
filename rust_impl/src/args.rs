@@ -178,6 +178,18 @@ pub fn parse_args() -> Result<Args, Error> {
                 .read_to_string(&mut version)
                 .expect("Should be able to read OUT_DIR/version.txt");
             println!("Version {}", version);
+
+            let mut git_version_text: PathBuf = PathBuf::from(env!("OUT_DIR"));
+            git_version_text = git_version_text.join("git_version.txt");
+            let git_version_text_file = File::open(git_version_text);
+            if let Ok(mut git_version_text_file) = git_version_text_file {
+                let mut git_version = String::new();
+                let ret = git_version_text_file.read_to_string(&mut git_version);
+                if let Ok(_) = ret {
+                    println!("git version {}", git_version);
+                }
+            }
+
             return Err(Error::as_str("Printed version").as_args_non_err());
         } else if arg.starts_with("--factors=") {
             let end = arg.split_off(10);
