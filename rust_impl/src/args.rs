@@ -186,7 +186,7 @@ pub fn parse_args() -> Result<Args, Error> {
                 let mut git_version = String::new();
                 let ret = git_version_text_file.read_to_string(&mut git_version);
                 if let Ok(_) = ret {
-                    println!("git version {}", git_version);
+                    println!("git-version {}", git_version);
                 }
             }
 
