@@ -1534,9 +1534,12 @@ void thread_handle_connection_fn(void *ud) {
                     "<html><p>500 Internal Server Error</p><p>Failed to "
                     "validate req</p></html>";
               }
-              PMA_MSQL::increment_fail(msql_conn_opt.value(),
-                                       data->addr_port_info.client_addr,
-                                       data->args->fails_max);
+              const auto [err, is_timeout] = PMA_MSQL::increment_fail(
+                  msql_conn_opt.value(), data->addr_port_info.client_addr,
+                  data->args->fails_max);
+              if (is_timeout) {
+                PMA_EPrintln("{} timed out", data->addr_port_info.client_addr);
+              }
             }
           } else {
             const auto [err, msg, port, url] =
@@ -1555,9 +1558,12 @@ void thread_handle_connection_fn(void *ud) {
               status = "HTTP/1.0 400 Bad Request";
               content_type = "Content-type: text/plain";
               body = "Incorrect";
-              PMA_SQL::increment_fail(sqliteCtx,
-                                      data->addr_port_info.client_addr,
-                                      data->args->fails_max);
+              const auto [err, is_timeout] = PMA_SQL::increment_fail(
+                  sqliteCtx, data->addr_port_info.client_addr,
+                  data->args->fails_max);
+              if (is_timeout) {
+                PMA_EPrintln("{} timed out", data->addr_port_info.client_addr);
+              }
             } else {
               PMA_Println("Challenge success from {}:{} port {}",
                           data->addr_port_info.client_addr,
@@ -1653,9 +1659,13 @@ void thread_handle_connection_fn(void *ud) {
                         "<html><p>500 Internal Server Error</p><p>Failed to "
                         "validate req</p></html>";
                   }
-                  PMA_MSQL::increment_fail(msql_conn_opt.value(),
-                                           data->addr_port_info.client_addr,
-                                           data->args->fails_max);
+                  const auto [err, is_timeout] = PMA_MSQL::increment_fail(
+                      msql_conn_opt.value(), data->addr_port_info.client_addr,
+                      data->args->fails_max);
+                  if (is_timeout) {
+                    PMA_EPrintln("{} timed out",
+                                 data->addr_port_info.client_addr);
+                  }
                 }
               } else if (json_keyvals.find("type")->second == "interactive" &&
                          json_keyvals.find("answer") != json_keyvals.end() &&
@@ -1699,9 +1709,13 @@ void thread_handle_connection_fn(void *ud) {
                         "<html><p>500 Internal Server Error</p><p>Failed to "
                         "validate req</p></html>";
                   }
-                  PMA_MSQL::increment_fail(msql_conn_opt.value(),
-                                           data->addr_port_info.client_addr,
-                                           data->args->fails_max);
+                  const auto [err, is_timeout] = PMA_MSQL::increment_fail(
+                      msql_conn_opt.value(), data->addr_port_info.client_addr,
+                      data->args->fails_max);
+                  if (is_timeout) {
+                    PMA_EPrintln("{} timed out",
+                                 data->addr_port_info.client_addr);
+                  }
                 }
               } else {
                 status = "HTTP/1.0 400 Bad Request";
@@ -1727,9 +1741,13 @@ void thread_handle_connection_fn(void *ud) {
                 status = "HTTP/1.0 400 Bad Request";
                 content_type = "Content-type: text/plain";
                 body = "Incorrect";
-                PMA_SQL::increment_fail(sqliteCtx,
-                                        data->addr_port_info.client_addr,
-                                        data->args->fails_max);
+                const auto [err, is_timeout] = PMA_SQL::increment_fail(
+                    sqliteCtx, data->addr_port_info.client_addr,
+                    data->args->fails_max);
+                if (is_timeout) {
+                  PMA_EPrintln("{} timed out",
+                               data->addr_port_info.client_addr);
+                }
               } else {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
@@ -1763,9 +1781,13 @@ void thread_handle_connection_fn(void *ud) {
                 status = "HTTP/1.0 400 Bad Request";
                 content_type = "Content-type: text/plain";
                 body = "Incorrect";
-                PMA_SQL::increment_fail(sqliteCtx,
-                                        data->addr_port_info.client_addr,
-                                        data->args->fails_max);
+                const auto [err, is_timeout] = PMA_SQL::increment_fail(
+                    sqliteCtx, data->addr_port_info.client_addr,
+                    data->args->fails_max);
+                if (is_timeout) {
+                  PMA_EPrintln("{} timed out",
+                               data->addr_port_info.client_addr);
+                }
               } else {
                 PMA_Println("Challenge success from {}:{} port {}",
                             data->addr_port_info.client_addr,
