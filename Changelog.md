@@ -7,6 +7,9 @@ Fix rust\_impl rebuild failing due to build-script.
 Use "git describe --tags --long" for additional version info when using the
 `--version` flag.
 
+For both rust\_impl and cxx\_impl:  
+Rebuild sources that display "git-version" when using `--version` flag.
+
 ## Version 0.1.0
 
 First versioned PoorMansAnubs with features:
