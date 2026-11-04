@@ -10,6 +10,10 @@ Use "git describe --tags --long" for additional version info when using the
 For both rust\_impl and cxx\_impl:  
 Rebuild sources that display "git-version" when using `--version` flag.
 
+Update bundled dependency:
+
+ - nghttp2 1.70.0 -> 1.71.0
+
 ## Version 0.1.0
 
 First versioned PoorMansAnubs with features:
