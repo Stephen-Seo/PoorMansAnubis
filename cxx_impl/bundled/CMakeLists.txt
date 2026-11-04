@@ -561,16 +561,18 @@ find_program(SED_BINARY NAMES sed)
 
 if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY)
     message("git_version.h enabled")
-    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
-        COMMAND sh ARGS -c "echo -n \"#define COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING \\\"\" > ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
-        COMMAND sh ARGS -c "env GIT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../../.git\" git describe --tags --long >> ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
-        COMMAND sed ARGS -i -e "1s/$/\\\"/" "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+    add_custom_target(GitVersion
+        COMMAND sh -c "echo -n \"#define COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING \\\"\" > ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        COMMAND sh -c "env GIT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../../.git\" git describe --tags --long >> ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        COMMAND sed -i -e "1s/$/\\\"/" "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
         VERBATIM
     )
-    add_custom_target(GitVersion DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h")
-    add_dependencies(poor_mans_anubis_bundled GitVersion)
     set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/../src/args.cc"
-      PROPERTIES COMPILE_FLAGS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h")
+        PROPERTIES
+            COMPILE_FLAGS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+            OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+    )
 else()
     message("git_version.h disabled")
 endif()

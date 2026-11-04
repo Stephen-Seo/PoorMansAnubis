@@ -165,7 +165,6 @@ if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY)
         BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
         VERBATIM
     )
-    add_dependencies(poor_mans_anubis GitVersion)
     set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/src/args.cc"
         PROPERTIES
             COMPILE_FLAGS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
