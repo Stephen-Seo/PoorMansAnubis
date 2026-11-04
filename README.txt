@@ -85,6 +85,7 @@ ip address. (The "--enable-x-real-ip-header" flag enables this.)
 Args for the Rust-frontend are as follows:
 
 Args:
+  --version : print the version of PoorMansAnubis
   --enable-unknown-arg-error : Exit with error if unknown argument is given
   --factors=<quads> : Generate factors challenge with <quads> 24-bit-segments
   --dest-url=<url> : Destination URL for verified clients;
@@ -103,10 +104,17 @@ Args:
     example: "--api-url=/pma_api"
   --js-factors-url=<url> : Set endpoint for client to request factors.js from this software;
     example: "--js-factors-url=/pma_factors.js"
+  --rest-api-url=<url> : Set endpoint for client to POST for interactive challenge;
+    example: "--rest-api-rul=/pma_rest_api"
   --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
   --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
+  --timeout-time=<minutes> : Set how long a client must wait if put on a timeout
+  --fails-max=<count> : Set how many times a client must fail to be put on timeout
   --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)
   --interactive-challenge-timeout=<minutes> : Sets how long an interactive challenge persists in minutes (default 2 minutes)
+  --only-factors-challenge : Only allow factors challenge to be used
+  --only-interactive-challenge : Only allow interactive challenge to be used
+  --enable-rest-api : Enable using the REST api for interactive challenges; default false
   --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
     example header: "override-dest-url: http://127.0.0.1:8888"
   WARNING: If --enable-override-dest-url is used, you must ensure that
@@ -119,6 +127,7 @@ Args:
 Args for the C++ implementation are as follows:
 
     Args:
+      --version : print the version of PoorMansAnubis
       --enable-unknown-arg-error : Exit with error if an unknown argument is given
       --factors=<quads> : Generate factors challenge with <quads> 24-bit segments
       --dest-url=<url> : Destination URL for verified clients;
@@ -134,17 +143,24 @@ Args for the C++ implementation are as follows:
       --sqlite-path=<path> : Set filename for sqlite db
       --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
       --api-url=<url> : Set endpoint for client to POST to this software;
-        example: "--api-url=/pma_api"
+        example: "--api-url=/pma_api/"
       --js-factors-url=<url> : Set endpoint for client to request factors.js from this software;
         example: "--js-factors-url=/pma_factors.js"
+      --rest-api-url=<url> : Set REST API endpoint for interactive challenge verification;
+        example: "--rest-api-url=/pma_rest_api/"
       --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
       --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
+      --timeout-time=<minutes> : Set how long a client must wait if put on a timeout
+      --fails-max=<count> : Set how many times a client must fail to be put on timeout
       --threads=<integer> : Defaults to 4. Setting it to 3x of your maximum thread count is a sane value
       --enable-thread-limit : Use alternative thread usage implementation; no thread pool, just up to a maximum of spawned threads
       --enable-libcurl : Enables fetching dest urls by using libcurl
       --req-timeout-millis=<milliseconds> : Sets the number of milliseconds until timeout during forwarding requests (default 5000)
       --max-interactive-challenges=<int> : Sets the maximum number of interactive challenges before denying access
       --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for interactive challenges (default 2 minutes)
+      --only-factors-challenge : Only allow factors challenge to be used
+      --only-interactive-challenge : Only allow interactive challenge to be used
+      --enable-rest-api : Enable using the REST api for interactive challenges; default false
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
         example header: "override-dest-url: http://127.0.0.1:8888"
       WARNING: If --enable-override-dest-url is used, you must ensure that
