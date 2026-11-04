@@ -1,4 +1,6 @@
 use std::env;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
@@ -27,4 +29,11 @@ fn main() {
     bindings
         .write_to_file(out_path.join("work_bindings.rs"))
         .expect("Couldn't write bindings for \"work\"!");
+
+    let version_path = out_path.join("version.txt");
+    let mut version_file =
+        File::create_new(version_path).expect("Should be able to create version.txt at OUT_DIR");
+    version_file
+        .write(format!("{}", env!("CARGO_PKG_VERSION")).as_bytes())
+        .expect("Should be able to write to OUT_DIR/version.txt");
 }

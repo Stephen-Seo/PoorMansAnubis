@@ -20,6 +20,8 @@ use crate::error::Error;
 use std::{
     collections::{HashMap, LinkedList},
     env::args as args_fn,
+    fs::File,
+    io::Read,
     path::PathBuf,
 };
 
@@ -68,6 +70,7 @@ pub struct Args {
 
 pub fn print_args() {
     println!("Args:");
+    println!("  --version : print the version of PoorMansAnubis");
     println!("  --enable-unknown-arg-error : Exit with error if unknown argument is given");
     println!("  --factors=<quads> : Generate factors challenge with <quads> 24-bit-segments");
     println!(
@@ -164,7 +167,18 @@ pub fn parse_args() -> Result<Args, Error> {
     for mut arg in p_args.skip(1) {
         if arg == "-h" || arg == "--help" {
             print_args();
-            return Err(Error::as_str("Printed help text"));
+            return Err(Error::as_str("Printed help text").as_args_non_err());
+        } else if arg == "--version" {
+            let mut version_text: PathBuf = PathBuf::from(env!("OUT_DIR"));
+            version_text = version_text.join("version.txt");
+            let mut version_text_file =
+                File::open(version_text).expect("Should be able to open OUT_DIR/version.txt");
+            let mut version = String::new();
+            version_text_file
+                .read_to_string(&mut version)
+                .expect("Should be able to read OUT_DIR/version.txt");
+            println!("Version {}", version);
+            return Err(Error::as_str("Printed version").as_args_non_err());
         } else if arg.starts_with("--factors=") {
             let end = arg.split_off(10);
             args.factors = end.parse().ok();

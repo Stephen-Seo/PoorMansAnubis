@@ -32,6 +32,7 @@ pub enum Error {
     ReqParse(salvo::http::ParseError),
     IntParse(std::num::ParseIntError),
     GetRand(getrandom::Error),
+    ArgsNonError(Box<Error>),
 }
 
 impl error::Error for Error {
@@ -51,6 +52,7 @@ impl error::Error for Error {
             Error::ReqParse(error) => error.source(),
             Error::IntParse(error) => error.source(),
             Error::GetRand(error) => error.source(),
+            Error::ArgsNonError(error) => error.source(),
         }
     }
 }
@@ -72,6 +74,7 @@ impl Display for Error {
             Error::ReqParse(error) => error.fmt(f),
             Error::IntParse(error) => error.fmt(f),
             Error::GetRand(error) => error.fmt(f),
+            Error::ArgsNonError(error) => error.fmt(f),
         }
     }
 }
@@ -79,6 +82,17 @@ impl Display for Error {
 impl Error {
     pub fn as_str(s: &'static str) -> Self {
         Self::GenericStaticStr(s)
+    }
+
+    pub fn as_args_non_err(self) -> Self {
+        Self::ArgsNonError(Box::new(self))
+    }
+
+    pub fn is_args_non_err(&self) -> bool {
+        match self {
+            Error::ArgsNonError(_) => true,
+            _ => false,
+        }
     }
 }
 

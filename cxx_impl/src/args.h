@@ -69,6 +69,7 @@ struct Args {
   // 10 - only factors challenge
   // 11 - only interactive challenge
   // 12 - enable rest api for interactive challenge
+  // 13 - stop immediately after parse args (for help and version texts)
   std::bitset<32> flags;
   uint32_t allowed_timeout;
   uint32_t req_timeout_milliseconds;

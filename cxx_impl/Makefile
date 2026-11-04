@@ -74,7 +74,8 @@ HEADERS := \
 	src/db_msql.h \
 	src/db_msql_capi.h \
 	src/thread_pool.h \
-	src/thread_limit.h
+	src/thread_limit.h \
+	src/version.h
 
 CHALL_IMPL_SOURCES := \
 	../challenge_impl/src/work.c \
