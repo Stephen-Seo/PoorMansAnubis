@@ -2,6 +2,11 @@
 
 ## Upcoming Changes
 
+Fix rust\_impl rebuild failing due to build-script.
+
+Use "git describe --tags --long" for additional version info when using the
+`--version` flag.
+
 ## Version 0.1.0
 
 First versioned PoorMansAnubs with features:
