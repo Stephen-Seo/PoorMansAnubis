@@ -149,3 +149,27 @@ if(INCLUDE_BUNDLED_DB_MSQL_CAPI)
 else()
     message(STATUS "To enable building libdb_msql_capi.a from this CMakeLists.txt, set \"INCLUDE_BUNDLED_DB_MSQL_CAPI\"")
 endif()
+
+find_program(GIT_BINARY NAMES git)
+find_program(SH_BINARY NAMES sh)
+find_program(ECHO_BINARY NAMES echo)
+find_program(ENV_BINARY NAMES env)
+find_program(SED_BINARY NAMES sed)
+
+if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY)
+    message("git_version.h enabled")
+    add_custom_target(GitVersion
+        COMMAND sh -c "echo -n \"#define COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING \\\"\" > ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        COMMAND sh -c "env GIT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../.git\" git describe --tags --long >> ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        COMMAND sed -i -e "1s/$/\\\"/" "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        VERBATIM
+    )
+    set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/src/args.cc"
+        PROPERTIES
+            COMPILE_FLAGS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+            OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+    )
+else()
+    message("git_version.h disabled")
+endif()
