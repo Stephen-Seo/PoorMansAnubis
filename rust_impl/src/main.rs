@@ -1552,13 +1552,25 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
                 .status_code(StatusCode::BAD_REQUEST);
             if args.mysql_has_priority {
                 let ret = on_failure_msql(args, &client_info_ret.addr).await;
-                if let Err(e) = ret {
-                    eprintln!("ERROR: on_failure_msql failed: {}", e);
+                match ret {
+                    Ok(true) => {
+                        eprintln!("{} timed out", client_info_ret.addr);
+                    }
+                    Ok(false) => (),
+                    Err(e) => {
+                        eprintln!("ERROR: on_failure_msql failed: {}", e);
+                    }
                 }
             } else {
                 let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
-                if let Err(e) = ret {
-                    eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                match ret {
+                    Ok(true) => {
+                        eprintln!("{} timed out", client_info_ret.addr);
+                    }
+                    Ok(false) => (),
+                    Err(e) => {
+                        eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                    }
                 }
             }
         }
@@ -1617,13 +1629,25 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
                 .status_code(StatusCode::BAD_REQUEST);
             if args.mysql_has_priority {
                 let ret = on_failure_msql(args, &client_info_ret.addr).await;
-                if let Err(e) = ret {
-                    eprintln!("ERROR: on_failure_msql failed: {}", e);
+                match ret {
+                    Ok(true) => {
+                        eprintln!("{} timed out", client_info_ret.addr);
+                    }
+                    Ok(false) => (),
+                    Err(e) => {
+                        eprintln!("ERROR: on_failure_msql failed: {}", e);
+                    }
                 }
             } else {
                 let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
-                if let Err(e) = ret {
-                    eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                match ret {
+                    Ok(true) => {
+                        eprintln!("{} timed out", client_info_ret.addr);
+                    }
+                    Ok(false) => (),
+                    Err(e) => {
+                        eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                    }
                 }
             }
         }
@@ -1634,13 +1658,25 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
             .status_code(StatusCode::BAD_REQUEST);
         if args.mysql_has_priority {
             let ret = on_failure_msql(args, &client_info_ret.addr).await;
-            if let Err(e) = ret {
-                eprintln!("ERROR: on_failure_msql failed: {}", e);
+            match ret {
+                Ok(true) => {
+                    eprintln!("{} timed out", client_info_ret.addr);
+                }
+                Ok(false) => (),
+                Err(e) => {
+                    eprintln!("ERROR: on_failure_msql failed: {}", e);
+                }
             }
         } else {
             let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
-            if let Err(e) = ret {
-                eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+            match ret {
+                Ok(true) => {
+                    eprintln!("{} timed out", client_info_ret.addr);
+                }
+                Ok(false) => (),
+                Err(e) => {
+                    eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                }
             }
         }
     }
@@ -1875,7 +1911,9 @@ async fn is_timeout_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
     }
 }
 
-async fn on_failure_msql(args: &args::Args, ip: &str) -> Result<(), Error> {
+async fn on_failure_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
+    let mut timed_out = false;
+
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     let mut locked = conn.lock().unwrap();
@@ -1905,6 +1943,7 @@ async fn on_failure_msql(args: &args::Args, ip: &str) -> Result<(), Error> {
             params = MSQLParamsWrapper::new();
             params.append_str(ip)?;
             locked.query_with_params_drop("INSERT INTO RUST_TIMEOUT (IP) VALUES (?)", &params)?;
+            timed_out = true;
         } else {
             // Increment count
             params = MSQLParamsWrapper::new();
@@ -1921,7 +1960,7 @@ async fn on_failure_msql(args: &args::Args, ip: &str) -> Result<(), Error> {
             .query_with_params_drop("INSERT INTO RUST_FAILS (IP, COUNT) VALUES (?, 1)", &params)?;
     }
 
-    Ok(())
+    Ok(timed_out)
 }
 
 async fn remove_failures_msql(args: &args::Args, ip: &str) -> Result<(), Error> {
@@ -1961,7 +2000,9 @@ async fn is_timeout_sqlite(args: &args::Args, ip: &str) -> Result<bool, Error> {
     Ok(ret.is_ok())
 }
 
-async fn on_failure_sqlite(args: &args::Args, ip: &str) -> Result<(), Error> {
+async fn on_failure_sqlite(args: &args::Args, ip: &str) -> Result<bool, Error> {
+    let mut timed_out = false;
+
     let conn = Connection::open(&args.sqlite_db_file)?;
 
     let ret = conn.query_one("SELECT COUNT FROM FAILS WHERE IP = ?", (ip,), |r| {
@@ -1978,6 +2019,7 @@ async fn on_failure_sqlite(args: &args::Args, ip: &str) -> Result<(), Error> {
 
             // Put on timeout
             conn.execute("INSERT INTO TIMEOUT (IP) VALUES (?)", (ip,))?;
+            timed_out = true;
         } else {
             // Increment count
             conn.execute("UPDATE FAILS SET COUNT = ? WHERE IP = ?", (count + 1, ip))?;
@@ -1987,7 +2029,7 @@ async fn on_failure_sqlite(args: &args::Args, ip: &str) -> Result<(), Error> {
         conn.execute("INSERT INTO FAILS (IP, COUNT) VALUES (?, 1)", (ip,))?;
     }
 
-    Ok(())
+    Ok(timed_out)
 }
 
 async fn remove_failures_sqlite(args: &args::Args, ip: &str) -> Result<(), Error> {
@@ -2321,13 +2363,25 @@ async fn handle_rest_interactive_challenge(
             .status_code(StatusCode::BAD_REQUEST);
         if args.mysql_has_priority {
             let ret = on_failure_msql(args, &client_info_ret.addr).await;
-            if let Err(e) = ret {
-                eprintln!("ERROR: on_failure_msql failed: {}", e);
+            match ret {
+                Ok(true) => {
+                    eprintln!("{} timed out", client_info_ret.addr);
+                }
+                Ok(false) => (),
+                Err(e) => {
+                    eprintln!("ERROR: on_failure_msql failed: {}", e);
+                }
             }
         } else {
             let ret = on_failure_sqlite(args, &client_info_ret.addr).await;
-            if let Err(e) = ret {
-                eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+            match ret {
+                Ok(true) => {
+                    eprintln!("{} timed out", client_info_ret.addr);
+                }
+                Ok(false) => (),
+                Err(e) => {
+                    eprintln!("ERROR: on_failure_sqlite failed: {}", e);
+                }
             }
         }
     }
