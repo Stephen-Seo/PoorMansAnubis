@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.1.0
+
 First versioned PoorMansAnubs with features:
 
  - Protects a destination url with 2 possible challenge-verification types
