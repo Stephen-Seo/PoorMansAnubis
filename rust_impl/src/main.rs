@@ -2198,8 +2198,8 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
                 )
                 .await;
 
-                if let Ok((challenge_html, client_html, answer, hash_id)) = ret {
-                    eprintln!("Set up challenge with answer: {}", answer);
+                if let Ok((challenge_html, client_html, _answer, hash_id)) = ret {
+                    //eprintln!("Set up challenge with answer: {}", answer);
                     html = String::from(HTML_BEGIN_GENERIC);
                     html.push_str(&challenge_html);
                     html.push_str(
