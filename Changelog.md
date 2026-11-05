@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+cxx\_impl: Minor refactorings of CMakeLists.txt .
+
 ## Version 0.2.0
 
 Fix rust\_impl rebuild failing due to build-script.

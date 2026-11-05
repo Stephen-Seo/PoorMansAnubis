@@ -167,7 +167,7 @@ if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY)
     )
     set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/src/args.cc"
         PROPERTIES
-            COMPILE_FLAGS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+            COMPILE_OPTIONS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
             OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
     )
 else()
