@@ -559,7 +559,7 @@ find_program(ECHO_BINARY NAMES echo)
 find_program(ENV_BINARY NAMES env)
 find_program(SED_BINARY NAMES sed)
 
-if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY)
+if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY AND SED_BINARY)
     message("git_version.h enabled")
     add_custom_target(GitVersion
         COMMAND sh -c "echo -n \"#define COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING \\\"\" > ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
