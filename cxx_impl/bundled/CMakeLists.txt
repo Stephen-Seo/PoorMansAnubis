@@ -5,6 +5,44 @@ if(NOT DISABLE_BUNDLED_NOTICE)
     message(WARNING "Note that this CMakeLists.txt builds cxx_impl BUNDLED!")
 endif()
 
+set(SQLITE_VERSION "3.54.1")
+set(SQLITE_VERSION_NUMBER "3540100")
+set(SQLITE_DOWNLOAD_URL "https://sqlite.org/2026/sqlite-autoconf-${SQLITE_VERSION_NUMBER}.tar.gz")
+
+set(BLAKE3_VERSION "1.8.7")
+set(BLAKE3_DOWNLOAD_URL "https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/${BLAKE3_VERSION}.tar.gz")
+
+set(NGHTTP2_VERSION "1.71.0")
+set(NGHTTP2_DOWNLOAD_URL "https://github.com/nghttp2/nghttp2/releases/download/v${NGHTTP2_VERSION}/nghttp2-${NGHTTP2_VERSION}.tar.xz")
+
+set(LIBUNISTRING_VERSION "1.5")
+set(LIBUNISTRING_DOWNLOAD_URL "https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-${LIBUNISTRING_VERSION}.tar.xz")
+
+set(LIBIDN2_VERSION "2.3.8")
+set(LIBIDN2_DOWNLOAD_URL "https://mirrors.ocf.berkeley.edu/gnu/libidn/libidn2-${LIBIDN2_VERSION}.tar.gz")
+
+set(ZLIB_VERSION "1.4")
+set(ZLIB_DOWNLOAD_URL "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.xz")
+
+set(XZ_VERSION "5.8.4")
+set(XZ_DOWNLOAD_URL "https://github.com/tukaani-project/xz/archive/refs/tags/v${XZ_VERSION}.tar.gz")
+
+set(LZ4_VERSION "1.11.0")
+set(LZ4_DOWNLOAD_URL "https://github.com/lz4/lz4/archive/refs/tags/v${LZ4_VERSION}.tar.gz")
+
+set(ZSTD_VERSION "1.5.7")
+set(ZSTD_DOWNLOAD_URL "https://github.com/facebook/zstd/releases/download/v${ZSTD_VERSION}/zstd-${ZSTD_VERSION}.tar.zst")
+
+set(BROTLI_VERSION "1.2.1")
+set(BROTLI_DOWNLOAD_URL "https://github.com/google/brotli/archive/refs/tags/v${BROTLI_VERSION}.tar.gz")
+
+set(OPENSSL_VERSION "4.1.0")
+set(OPENSSL_DOWNLOAD_URL "https://github.com/openssl/openssl/archive/refs/tags/openssl-${OPENSSL_VERSION}.tar.gz")
+
+set(CURL_VERSION "8.23.0")
+set(CURL_TAG "curl-8_23_0")
+set(CURL_DOWNLOAD_URL "https://github.com/curl/curl/releases/download/${CURL_TAG}/curl-${CURL_VERSION}.tar.xz")
+
 if(NOT DEFINED BUILD_CC)
     if("$ENV{CC}" STREQUAL "")
         set(BUILD_CC "/usr/bin/gcc")
@@ -194,26 +232,26 @@ link_directories("${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib")
 
 set_property(DIRECTORY PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/bundled_build;${CMAKE_CURRENT_BINARY_DIR}/bundled_out")
 
-add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/"
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-${SQLITE_VERSION_NUMBER}/"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540100.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540100.tar.gz" -L "https://sqlite.org/2026/sqlite-autoconf-3540100.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_sqlite-3.54.1.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-${SQLITE_VERSION_NUMBER}.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-${SQLITE_VERSION_NUMBER}.tar.gz" -L "${SQLITE_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_sqlite-${SQLITE_VERSION}.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-3540100.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/sqlite-autoconf-${SQLITE_VERSION_NUMBER}.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite"
     VERBATIM
 )
-add_custom_target(SQLITE3_BINARY_DIR DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/")
+add_custom_target(SQLITE3_BINARY_DIR DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-${SQLITE_VERSION_NUMBER}/")
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/sqlite3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-${SQLITE_VERSION_NUMBER}/sqlite3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h"
     VERBATIM
 )
 add_custom_target(SQLITE3_HEADER DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/sqlite3.h")
 add_dependencies(SQLITE3_HEADER SQLITE3_BINARY_DIR)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --disable-shared && make libsqlite3.a
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-3540100/libsqlite3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-${SQLITE_VERSION_NUMBER}" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --disable-shared && make libsqlite3.a
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/sqlite/sqlite-autoconf-${SQLITE_VERSION_NUMBER}/libsqlite3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a"
     VERBATIM
 )
 add_custom_target(SQLITE3_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libsqlite3.a")
@@ -221,42 +259,42 @@ add_dependencies(SQLITE3_LIB SQLITE3_BINARY_DIR)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libblake3.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.7.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.7.tar.gz" -L "https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/1.8.7.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_blake3_1.8.7.tar.gz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_${BLAKE3_VERSION}.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_${BLAKE3_VERSION}.tar.gz" -L "${BLAKE3_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_blake3_${BLAKE3_VERSION}.tar.gz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_1.8.7.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-1.8.7/c" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_PROCESSOR=${TARGET_ARCH} -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} "$<$<STREQUAL:aarch64,${TARGET_ARCH}>:-DBLAKE3_SIMD_TYPE=neon-intrinsics>"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/blake3_${BLAKE3_VERSION}.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-${BLAKE3_VERSION}/c" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_PROCESSOR=${TARGET_ARCH} -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} "$<$<STREQUAL:aarch64,${TARGET_ARCH}>:-DBLAKE3_SIMD_TYPE=neon-intrinsics>"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build"
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/build/libblake3.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libblake3.a"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-1.8.7/c/blake3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/blake3.h"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/blake3/BLAKE3-${BLAKE3_VERSION}/c/blake3.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/blake3.h"
     VERBATIM
 )
 add_custom_target(BLAKE3_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libblake3.a")
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.71.0.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.71.0.tar.xz" -L "https://github.com/nghttp2/nghttp2/releases/download/v1.71.0/nghttp2-1.71.0.tar.xz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_nghttp2-1.71.0.tar.xz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-${NGHTTP2_VERSION}.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-${NGHTTP2_VERSION}.tar.xz" -L "${NGHTTP2_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_nghttp2-${NGHTTP2_VERSION}.tar.xz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-1.71.0.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.71.0" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.71.0"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.71.0/lib/.libs/libnghttp2.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/nghttp2-${NGHTTP2_VERSION}.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-${NGHTTP2_VERSION}" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-examples --disable-python-bindings --enable-lib-only
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-${NGHTTP2_VERSION}"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-${NGHTTP2_VERSION}/lib/.libs/libnghttp2.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/nghttp2"
-    COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-1.71.0/lib/includes/nghttp2" -regex .*\.h$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/nghttp2/{}" ";"
+    COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/nghttp2/nghttp2-${NGHTTP2_VERSION}/lib/includes/nghttp2" -regex .*\.h$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/nghttp2/{}" ";"
     VERBATIM
 )
 add_custom_target(NGHTTP2_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a")
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libunistring.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" -L "https://mirrors.ocf.berkeley.edu/gnu/libunistring/libunistring-1.5.tar.xz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_libunistring-1.5.tar.xz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-${LIBUNISTRING_VERSION}.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-${LIBUNISTRING_VERSION}.tar.xz" -L "${LIBUNISTRING_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_libunistring-${LIBUNISTRING_VERSION}.tar.xz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-1.5.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5"
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-1.5" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT install
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libunistring-${LIBUNISTRING_VERSION}.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-${LIBUNISTRING_VERSION}" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --prefix=/usr
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-${LIBUNISTRING_VERSION}"
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/libunistring-${LIBUNISTRING_VERSION}" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT install
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT/usr/lib/libunistring.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libunistring.a"
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libunistring/INSTALL_OUT/usr/include" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
     VERBATIM
@@ -265,14 +303,14 @@ add_custom_target(LIBUNISTRING_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libidn2.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libidn2-2.3.8.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libidn2-2.3.8.tar.gz" -L "https://mirrors.ocf.berkeley.edu/gnu/libidn/libidn2-2.3.8.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_idn2-2.3.8.tar.gz.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libidn2-${LIBIDN2_VERSION}.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libidn2-${LIBIDN2_VERSION}.tar.gz" -L "${LIBIDN2_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_idn2-${LIBIDN2_VERSION}.tar.gz.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libidn2-2.3.8.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-2.3.8" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --with-unistring-prefix="${CMAKE_CURRENT_BINARY_DIR}/bundled_out"
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-2.3.8"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-2.3.8/lib/.libs/libidn2.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libidn2.a"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-2.3.8/lib/idn2.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/idn2.h"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/libidn2-${LIBIDN2_VERSION}.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-${LIBIDN2_VERSION}" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --enable-static --disable-shared --with-unistring-prefix="${CMAKE_CURRENT_BINARY_DIR}/bundled_out"
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-${LIBIDN2_VERSION}"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-${LIBIDN2_VERSION}/lib/.libs/libidn2.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libidn2.a"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/libidn2/libidn2-${LIBIDN2_VERSION}/lib/idn2.h" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/idn2.h"
     VERBATIM
 )
 add_custom_target(LIBIDN2_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libidn2.a")
@@ -280,13 +318,13 @@ add_dependencies(LIBIDN2_LIB LIBUNISTRING_LIB)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libz.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zlib-1.3.2.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zlib-1.3.2.tar.xz" -L "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_zlib-1.3.2.tar.xz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zlib-${ZLIB_VERSION}.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zlib-${ZLIB_VERSION}.tar.xz" -L "${ZLIB_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_zlib-${ZLIB_VERSION}.tar.xz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zlib-1.3.2.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/zlib-1.3.2" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --prefix=/usr --static
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/zlib-1.3.2"
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/zlib-1.3.2" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/INSTALL_OUT install
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zlib-${ZLIB_VERSION}.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/zlib-${ZLIB_VERSION}" && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --prefix=/usr --static
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/zlib-${ZLIB_VERSION}"
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/zlib-${ZLIB_VERSION}" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/INSTALL_OUT install
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/INSTALL_OUT/usr/lib/libz.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libz.a"
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zlib/INSTALL_OUT/usr/include" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
     VERBATIM
@@ -295,25 +333,25 @@ add_custom_target(LIBZ_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.4.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.4.tar.gz" -L "https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.4.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_xz_v5.8.4.tar.gz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v${XZ_VERSION}.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v${XZ_VERSION}.tar.gz" -L "${XZ_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_xz_v${XZ_VERSION}.tar.gz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v5.8.4.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4" && ./autogen.sh --no-po4a && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-shared --enable-static
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4"
-    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4/src/liblzma/.libs/liblzma.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-5.8.4/src/liblzma/api" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/xz_v${XZ_VERSION}.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-${XZ_VERSION}" && ./autogen.sh --no-po4a && CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./configure --prefix=/usr --disable-rpath --disable-doxygen --build=${BUILD_TRIPLE} --host=${TARGET_TRIPLE} --disable-shared --enable-static
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-${XZ_VERSION}"
+    COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-${XZ_VERSION}/src/liblzma/.libs/liblzma.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/xz_lzma/xz-${XZ_VERSION}/src/liblzma/api" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
     VERBATIM
 )
 add_custom_target(LIBLZMA_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a")
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblz4.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/lz4_v1.10.0.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/lz4_v1.10.0.tar.gz" -L "https://github.com/lz4/lz4/archive/refs/tags/v1.10.0.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_lz4_v1.10.0.tar.gz.txt"
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/lz4_v${LZ4_VERSION}.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/lz4_v${LZ4_VERSION}.tar.gz" -L "${LZ4_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c "SHA256SUM_lz4_v${LZ4_VERSION}.tar.gz.txt"
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/lz4_v1.10.0.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/lz4-1.10.0/build/cmake" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/BUILD" -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBUILD_STATIC_LIBS=On -DLZ4_BUILD_CLI=Off -DCMAKE_BUILD_TYPE=Release
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/lz4_v${LZ4_VERSION}.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/lz4-${LZ4_VERSION}/build/cmake" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/BUILD" -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBUILD_STATIC_LIBS=On -DLZ4_BUILD_CLI=Off -DCMAKE_BUILD_TYPE=Release
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/BUILD"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/BUILD" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/INSTALL_OUT install
     COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/lz4/INSTALL_OUT" -name liblz4.a -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblz4.a" ";"
@@ -324,11 +362,12 @@ add_custom_target(LIBLZ4_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/li
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libzstd.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zstd-1.5.7.tar.zst" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zstd-1.5.7.tar.zst" -L "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.zst"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_zstd-1.5.7.tar.zst.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zstd-${ZSTD_VERSION}.tar.zst" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zstd-${ZSTD_VERSION}.tar.zst" -L "${ZSTD_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_zstd-${ZSTD_VERSION}.tar.zst.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zstd-1.5.7.tar.zst" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/zstd-1.5.7/build/cmake" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DZLIB_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libz.a -DLIBLZMA_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBLZMA_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a -DLIBLZ4_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBLZ4_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblz4.a -DZSTD_BUILD_CONTRIB=Off
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zstd-${ZSTD_VERSION}.tar.zst" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd"
+    COMMAND patch -d "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/zstd-${ZSTD_VERSION}" -p1 < "${CMAKE_CURRENT_SOURCE_DIR}/zstd_patch_lz4_changes_2026-11-06.patch"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/zstd-${ZSTD_VERSION}/build/cmake" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DZLIB_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libz.a -DLIBLZMA_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBLZMA_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a -DLIBLZ4_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBLZ4_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblz4.a -DZSTD_BUILD_CONTRIB=Off
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/BUILD"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/BUILD" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/INSTALL_OUT install
     COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/INSTALL_OUT/usr/lib" -name libzstd.a -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libzstd.a" ";"
@@ -344,11 +383,11 @@ add_dependencies(LIBZSTD_LIB
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libbrotlicommon.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" -L "https://github.com/google/brotli/archive/refs/tags/v1.2.1.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_brotli-1.2.1.tar.gz.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-${BROTLI_VERSION}.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-${BROTLI_VERSION}.tar.gz" -L "${BROTLI_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_brotli-${BROTLI_VERSION}.tar.gz.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-1.2.1.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/brotli-1.2.1" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/brotli-${BROTLI_VERSION}.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/brotli-${BROTLI_VERSION}" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=Off -DBROTLI_DISABLE_TESTS=On
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/BUILD" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/INSTALL_OUT install
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/brotli/INSTALL_OUT/usr/lib" && find . -regex .*\.a$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/{}" ";"
@@ -359,13 +398,13 @@ add_custom_target(LIBBROTLI_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libssl.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-4.1.0.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-4.1.0.tar.gz" -L "https://github.com/openssl/openssl/archive/refs/tags/openssl-4.1.0.tar.gz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_openssl-4.1.0.tar.gz.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-${OPENSSL_VERSION}.tar.gz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-${OPENSSL_VERSION}.tar.gz" -L "${OPENSSL_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_openssl-${OPENSSL_VERSION}.tar.gz.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-4.1.0.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-openssl-4.1.0" && sed -i -e s|./demoCA|/etc/ssl| apps/CA.pl.in apps/openssl.cnf && env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 disable-tests linux-${TARGET_ARCH}
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-openssl-4.1.0"
-    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-openssl-4.1.0" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT install
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/openssl-${OPENSSL_VERSION}.tar.gz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-openssl-${OPENSSL_VERSION}" && sed -i -e s|./demoCA|/etc/ssl| apps/CA.pl.in apps/openssl.cnf && env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-docs no-shared enable-ktls enable-ec_nistp_64_gcc_128 disable-tests linux-${TARGET_ARCH}
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-openssl-${OPENSSL_VERSION}"
+    COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/openssl-openssl-${OPENSSL_VERSION}" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT install
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT/usr/lib/libssl.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libssl.a"
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT/usr/lib/libcrypto.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcrypto.a"
     COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/openssl/INSTALL_OUT/usr/include" && find . -regex .*\.h$ -exec install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/{}" ";"
@@ -375,14 +414,14 @@ add_custom_target(LIBOPENSSL_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_ou
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcurl.a"
     COMMAND mkdir -p "${CMAKE_CURRENT_SOURCE_DIR}/download_cache"
-    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/curl-8.23.0.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/curl-8.23.0.tar.xz" -L "https://github.com/curl/curl/releases/download/curl-8_23_0/curl-8.23.0.tar.xz"
-    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_curl-8.23.0.txt
+    COMMAND test -e "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/curl-${CURL_VERSION}.tar.xz" || curl -o "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/curl-${CURL_VERSION}.tar.xz" -L "${CURL_DOWNLOAD_URL}"
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_curl-${CURL_VERSION}.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl"
-    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/curl-8.23.0.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl"
-    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/curl-8.23.0" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/BUILD" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=Off -DBUILD_LIBCURL_DOCS=Off -DBUILD_MISC_DOCS=Off -DBUILD_STATIC_LIBS=On -DBUILD_TESTING=Off -DENABLE_CURL_MANUAL=Off -DCURL_DEFAULT_SSL_BACKEND=openssl -DCURL_USE_OPENSSL=On -DOPENSSL_ROOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out -DOPENSSL_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DOPENSSL_SSL_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libssl.a -DOPENSSL_CRYPTO_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcrypto.a -DOPENSSL_USE_STATIC_LIBS=On -DZLIB_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DZLIB_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libz.a -DZLIB_USE_STATIC_LIBS=On -DBROTLI_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DBROTLICOMMON_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libbrotlicommon.a -DBROTLIDEC_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libbrotlidec.a -DZSTD_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DZSTD_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libzstd.a -DNGHTTP2_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DNGHTTP2_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a -DCURL_DISABLE_LDAP=On -DLIBIDN2_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBIDN2_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libidn2.a -DCURL_USE_LIBPSL=Off -DCURL_USE_LIBSSH2=Off
+    COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/curl-${CURL_VERSION}.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl"
+    COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/curl-${CURL_VERSION}" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/BUILD" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=Off -DBUILD_LIBCURL_DOCS=Off -DBUILD_MISC_DOCS=Off -DBUILD_STATIC_LIBS=On -DBUILD_TESTING=Off -DENABLE_CURL_MANUAL=Off -DCURL_DEFAULT_SSL_BACKEND=openssl -DCURL_USE_OPENSSL=On -DOPENSSL_ROOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out -DOPENSSL_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DOPENSSL_SSL_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libssl.a -DOPENSSL_CRYPTO_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcrypto.a -DOPENSSL_USE_STATIC_LIBS=On -DZLIB_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DZLIB_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libz.a -DZLIB_USE_STATIC_LIBS=On -DBROTLI_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DBROTLICOMMON_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libbrotlicommon.a -DBROTLIDEC_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libbrotlidec.a -DZSTD_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DZSTD_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libzstd.a -DNGHTTP2_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DNGHTTP2_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libnghttp2.a -DCURL_DISABLE_LDAP=On -DLIBIDN2_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBIDN2_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libidn2.a -DCURL_USE_LIBPSL=Off -DCURL_USE_LIBSSH2=Off
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/BUILD" libcurl_static
     COMMAND install -D -m444 "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/BUILD/lib/libcurl.a" "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcurl.a"
-    COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/curl-8.23.0/include/curl" -regex .*\.h$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/curl/{}" ";"
+    COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/curl/curl-${CURL_VERSION}/include/curl" -regex .*\.h$ -execdir install -D -m444 {} "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include/curl/{}" ";"
     VERBATIM
 )
 add_custom_target(LIBCURL_LIB DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libcurl.a")
@@ -559,7 +598,7 @@ find_program(ECHO_BINARY NAMES echo)
 find_program(ENV_BINARY NAMES env)
 find_program(SED_BINARY NAMES sed)
 
-if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY)
+if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY AND SED_BINARY)
     message("git_version.h enabled")
     add_custom_target(GitVersion
         COMMAND sh -c "echo -n \"#define COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING \\\"\" > ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
@@ -570,7 +609,7 @@ if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY)
     )
     set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/../src/args.cc"
         PROPERTIES
-            COMPILE_FLAGS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+            COMPILE_OPTIONS "--include=${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
             OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
     )
 else()
