@@ -27,7 +27,7 @@ set(ZLIB_DOWNLOAD_URL "https://github.com/madler/zlib/releases/download/v${ZLIB_
 set(XZ_VERSION "5.8.4")
 set(XZ_DOWNLOAD_URL "https://github.com/tukaani-project/xz/archive/refs/tags/v${XZ_VERSION}.tar.gz")
 
-set(LZ4_VERSION "1.10.0")
+set(LZ4_VERSION "1.11.0")
 set(LZ4_DOWNLOAD_URL "https://github.com/lz4/lz4/archive/refs/tags/v${LZ4_VERSION}.tar.gz")
 
 set(ZSTD_VERSION "1.5.7")
@@ -366,6 +366,7 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libzstd.a
     COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}" && sha256sum -c SHA256SUM_zstd-${ZSTD_VERSION}.tar.zst.txt
     COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd"
     COMMAND tar -xf "${CMAKE_CURRENT_SOURCE_DIR}/download_cache/zstd-${ZSTD_VERSION}.tar.zst" -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd"
+    COMMAND patch -d "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/zstd-${ZSTD_VERSION}" -p1 < "${CMAKE_CURRENT_SOURCE_DIR}/zstd_patch_lz4_changes_2026-11-06.patch"
     COMMAND env CC=${BUILD_CC} CXX=${BUILD_CXX} AR=${BUILD_AR} RANLIB=${BUILD_RANLIB} LD=${BUILD_LD} cmake -S "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/zstd-${ZSTD_VERSION}/build/cmake" -B "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DZLIB_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/libz.a -DLIBLZMA_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBLZMA_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblzma.a -DLIBLZ4_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/include -DLIBLZ4_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/bundled_out/lib/liblz4.a -DZSTD_BUILD_CONTRIB=Off
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/BUILD"
     COMMAND make -C "${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/BUILD" DESTDIR=${CMAKE_CURRENT_BINARY_DIR}/bundled_build/zstd/INSTALL_OUT install

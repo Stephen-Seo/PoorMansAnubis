@@ -32,7 +32,7 @@ ZLIB_DOWNLOAD_URL := https://github.com/madler/zlib/releases/download/v${ZLIB_VE
 XZ_VERSION := 5.8.4
 XZ_DOWNLOAD_URL := https://github.com/tukaani-project/xz/archive/refs/tags/v${XZ_VERSION}.tar.gz
 
-LZ4_VERSION := 1.10.0
+LZ4_VERSION := 1.11.0
 LZ4_DOWNLOAD_URL := https://github.com/lz4/lz4/archive/refs/tags/v${LZ4_VERSION}.tar.gz
 
 ZSTD_VERSION := 1.5.7
@@ -152,6 +152,7 @@ download_cache/libunistring-${LIBUNISTRING_VERSION}.tar.xz:
 out/lib/libzstd.a: download_cache/zstd-${ZSTD_VERSION}.tar.zst out/lib/libz.a out/lib/liblzma.a out/lib/liblz4.a
 	@mkdir -p zstd_build
 	tar -xf download_cache/zstd-${ZSTD_VERSION}.tar.zst -C zstd_build
+	patch -d zstd_build/zstd-${ZSTD_VERSION} -p1 < ${CURDIR}/zstd_patch_lz4_changes_2026-11-06.patch
 	CC=${CC} CXX=${CXX} AR=${AR} RANLIB=${RANLIB} LD=${LD} cmake -S zstd_build/zstd-${ZSTD_VERSION}/build/cmake -B zstd_build/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DZSTD_ZLIB_SUPPORT=On -DZSTD_LZMA_SUPPORT=On -DZSTD_LZ4_SUPPORT=On -DZSTD_BUILD_CONTRIB=On -DZSTD_BUILD_STATIC=On -DZSTD_BUILD_SHARED=Off -DZSTD_BUILD_TESTS=Off -DZSTD_PROGRAMS_LINK_SHARED=Off -DZLIB_INCLUDE_DIR="${PWD}/out/include" -DZLIB_LIBRARY="${PWD}/out/lib/libz.a" -DLIBLZMA_INCLUDE_DIR="${PWD}/out/include" -DLIBLZMA_LIBRARY="${PWD}/out/lib/liblzma.a" -DLIBLZ4_INCLUDE_DIR="${PWD}/out/include" -DLIBLZ4_LIBRARY="${PWD}/out/lib/liblz4.a" -DZSTD_BUILD_CONTRIB=Off && ${MAKE} -C zstd_build/build && ${MAKE} DESTDIR="${PWD}/zstd_build/zstd_out" -C zstd_build/build install
 	cd zstd_build/zstd_out/usr/lib && find . -name libzstd.a -execdir install -D -m444 '{}' "${PWD}/out/lib/libzstd.a" ';'
 	cd zstd_build/zstd_out/usr/include && find . -regex '.*\.h$$' -exec install -D -m444 '{}' "${PWD}/out/include/{}" ';'
