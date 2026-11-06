@@ -130,9 +130,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
-version = "1.11.0"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "375989decec1a0fa424442bed520fa12ede43a48475ce8c7417d2c69b32b5f6b"
+checksum = "4ff2a8126fff0f8c839080d619675a585e61720bb12d2baceae45769fd66f155"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1017,9 +1017,9 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "mime"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+checksum = "d5848f5a9e8117cf94f2f90faac24a87ff81600ff8628c1e3deaab572e76bfa1"
 
 [[package]]
 name = "mime-infer"
@@ -1636,9 +1636,9 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "salvo"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65235fc57c27a7dd2204d9e34e001f10b534a9f2fb3a257bd63b5519183ee718"
+checksum = "e24b532797b87d72cf189b94fcaaba76a24b4de828881affe8edf5705ff1d0c5"
 dependencies = [
  "salvo_core",
  "salvo_extra",
@@ -1646,9 +1646,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-serde-util"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99004231a9c34651e40eb5feecaebd824a51ed90d74bedb82c40fd2bc6c60c8a"
+checksum = "a846ee4444f88bccd9797140393e7f54397f2bd6f1c0ae18db530bbad6fcec64"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1657,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "salvo_core"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d759cd120a23e654c806a2d4fc73a66ba04d63316bf3c689239cedce6d5d770"
+checksum = "3f51e7e42327520b73101dbd9115c8700ffc2e69b21baacbac602491f07b23be"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -1699,18 +1699,18 @@ dependencies = [
 
 [[package]]
 name = "salvo_extra"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3df57d99b43b9775d7ccfd64533f1629baca47230ba03a110596b5502b846862"
+checksum = "cba39d427ab78311f3affa87425cd49620341ef9cd5ab218d11a78991fba135e"
 dependencies = [
  "salvo_core",
 ]
 
 [[package]]
 name = "salvo_macros"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a106e0e9f7d50f5342a0d3442e9e1c634a042591fa801929ff9fc65c26af547b"
+checksum = "4094d875cdd254483714df664dfd0e8e84fb58880c8456e3421444188f8e9d43"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2520,9 +2520,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
+checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 dependencies = [
  "memchr",
 ]
