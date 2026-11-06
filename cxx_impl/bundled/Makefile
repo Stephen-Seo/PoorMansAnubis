@@ -26,7 +26,7 @@ LIBUNISTRING_DOWNLOAD_URL := https://mirrors.ocf.berkeley.edu/gnu/libunistring/l
 LIBIDN2_VERSION := 2.3.8
 LIBIDN2_DOWNLOAD_URL := https://mirrors.ocf.berkeley.edu/gnu/libidn/libidn2-${LIBIDN2_VERSION}.tar.gz
 
-ZLIB_VERSION := 1.3.2
+ZLIB_VERSION := 1.4
 ZLIB_DOWNLOAD_URL := https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.xz
 
 XZ_VERSION := 5.8.4

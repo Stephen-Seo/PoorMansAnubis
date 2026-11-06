@@ -21,7 +21,7 @@ set(LIBUNISTRING_DOWNLOAD_URL "https://mirrors.ocf.berkeley.edu/gnu/libunistring
 set(LIBIDN2_VERSION "2.3.8")
 set(LIBIDN2_DOWNLOAD_URL "https://mirrors.ocf.berkeley.edu/gnu/libidn/libidn2-${LIBIDN2_VERSION}.tar.gz")
 
-set(ZLIB_VERSION "1.3.2")
+set(ZLIB_VERSION "1.4")
 set(ZLIB_DOWNLOAD_URL "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.xz")
 
 set(XZ_VERSION "5.8.4")
