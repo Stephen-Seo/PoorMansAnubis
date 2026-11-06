@@ -358,10 +358,11 @@ directory to exist in multiple lines. If a dependency extracts to a directory
 name that is not like "foo-2.0/", then the Makefile and CMakeLists.txt will
 need to be updated to handle such.
 
-One may argue that it would be better to store the version number in a
-variable, but this will cause developers to assume that only the version number
-should be changed to update. Though it may be pedantic, the Makefile and
-CMakeLists.txt is thus designed in this manner.
+The version number (and possibly more variables like git tag names) are listed
+in the top of both bundled/CMakeLists.txt and bundled/Makefile. Most of the
+time, it should be adequate to update these variables when a dependency is
+updated, but once in a while there may be a rare case where lines in the files
+may need to be changed.
 
 Note that if a new version of a dependency breaks the build, it will require
 some changing of commands in the Makefile and CMakeLists.txt e.g. changing a
