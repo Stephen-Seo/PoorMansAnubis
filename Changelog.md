@@ -4,6 +4,11 @@
 
 cxx\_impl: Minor refactorings of CMakeLists.txt .
 
+Fix `cxx_impl/Makefile` to build `libdb_msql_capi.a` properly.
+
+Refactor `cxx_impl/bundled/CMakeLists.txt` and `cxx_impl/bundled/Makefile` to
+use variables for bundled dependencies' versions.
+
 ## Version 0.2.0
 
 Fix rust\_impl rebuild failing due to build-script.
