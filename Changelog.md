@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.2.1
+
 cxx\_impl: Minor refactorings of CMakeLists.txt .
 
 Fix `cxx_impl/Makefile` to build `libdb_msql_capi.a` properly.
