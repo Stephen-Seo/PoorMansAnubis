@@ -9,6 +9,10 @@ Fix `cxx_impl/Makefile` to build `libdb_msql_capi.a` properly.
 Refactor `cxx_impl/bundled/CMakeLists.txt` and `cxx_impl/bundled/Makefile` to
 use variables for bundled dependencies' versions.
 
+Update cxx bundled dependencies:
+
+ - lz4 1.10.0 -> 1.11.0
+
 ## Version 0.2.0
 
 Fix rust\_impl rebuild failing due to build-script.
