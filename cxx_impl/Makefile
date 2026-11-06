@@ -121,9 +121,13 @@ ${OBJDIR_ABS}/src/db_msql.cc.o: bundled/out/include/sqlite3.h
 
 ${OBJDIR_ABS}/src/helpers.cc.o: bundled/out/ssl/usr/lib/libssl.a
 
-libdb_msql_capi.a: ${OBJDIR_ABS}/src/db_msql.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${CHALL_IMPL_OBJECTS}
+libdb_msql_capi.a: ${OBJDIR_ABS}/challenge_disabled/src/db_msql.cc.o ${OBJDIR_ABS}/src/http.cc.o ${OBJDIR_ABS}/src/helpers.cc.o ${OBJDIR_ABS}/src/poor_mans_print.cc.o ${CHALL_IMPL_OBJECTS}
 	cd bundled/out/ssl/usr/lib && mkdir -p crypto_out && ${AR} --output crypto_out x libcrypto.a
 	${AR} rcs libdb_msql_capi.a $^ bundled/out/ssl/usr/lib/crypto_out/*
+
+${OBJDIR_ABS}/challenge_disabled/src/db_msql.cc.o: src/db_msql.cc
+	@mkdir -p $(dir $@)
+	${CXX} -o $@ -c ${FINAL_COMMON_FLAGS} -DCOM_SEODISPARATE_MSQL_CHALLENGE_DISABLE $<
 
 debug_test_capi: ${OBJDIR}/src/db_msql_capi_test.c.o libdb_msql_capi.a
 	${CXX} -o debug_test_capi ${FINAL_COMMON_FLAGS} $< -L. -ldb_msql_capi ${LINKER_FLAGS}
