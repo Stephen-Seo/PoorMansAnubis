@@ -979,7 +979,7 @@ int main() {
     CHECK_TRUE(args.flags.test(0));
     CHECK_TRUE(!args.flags.test(1));
     CHECK_TRUE(!args.flags.test(3));
-    CHECK_TRUE(args.api_url == "/pma_api_url/");
+    CHECK_TRUE(args.api_url == "/pma_api_url");
     CHECK_TRUE(args.js_factors_url == "/pma_factors_url.js");
     CHECK_TRUE(args.challenge_factors_timeout == 2);
     CHECK_TRUE(args.allowed_timeout == 30);
@@ -1258,6 +1258,17 @@ int main() {
     std::string decoded(PMA_HTTP::percent_decode(text));
     // PMA_EPrintln("{}", decoded);
     CHECK_TRUE(decoded == "One/AaTwo");
+  }
+
+  // TEST PMA_HELPER::trim_trailing_slash
+  {
+    std::string text("/slash/path/ends/slash/");
+    PMA_HELPER::trim_trailing_slash(text);
+    CHECK_TRUE(text == "/slash/path/ends/slash");
+
+    text = "////";
+    PMA_HELPER::trim_trailing_slash(text);
+    CHECK_TRUE(text == "/");
   }
 
   PMA_Println("{} out of {} tests succeeded", test_succeeded.load(),
