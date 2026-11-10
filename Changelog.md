@@ -2,6 +2,9 @@
 
 ## Upcoming Changes
 
+cxx\_impl: Fix endpoint urls not resolving correctly due to inconsistent
+handling of urls.
+
 ## Version 0.2.1
 
 cxx\_impl: Minor refactorings of CMakeLists.txt .
