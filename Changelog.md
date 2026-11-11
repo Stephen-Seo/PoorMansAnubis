@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.2.2
+
 cxx\_impl: Fix endpoint urls not resolving correctly due to inconsistent
 handling of urls.
 
