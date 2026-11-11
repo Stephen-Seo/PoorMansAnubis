@@ -2,7 +2,9 @@
 
 ## Upcoming Changes
 
-Update bundled dependencies:
+## Version 0.2.3
+
+cxx bundled: Update bundled dependencies:
 
  - lz4 1.11.0 -> 1.11.1
 
