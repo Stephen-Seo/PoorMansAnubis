@@ -27,7 +27,7 @@ set(ZLIB_DOWNLOAD_URL "https://github.com/madler/zlib/releases/download/v${ZLIB_
 set(XZ_VERSION "5.8.4")
 set(XZ_DOWNLOAD_URL "https://github.com/tukaani-project/xz/archive/refs/tags/v${XZ_VERSION}.tar.gz")
 
-set(LZ4_VERSION "1.11.0")
+set(LZ4_VERSION "1.11.1")
 set(LZ4_DOWNLOAD_URL "https://github.com/lz4/lz4/archive/refs/tags/v${LZ4_VERSION}.tar.gz")
 
 set(ZSTD_VERSION "1.5.7")
