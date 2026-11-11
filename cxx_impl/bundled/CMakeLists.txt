@@ -575,7 +575,6 @@ target_include_directories(db_msql_api_pre PUBLIC
 )
 target_compile_definitions(db_msql_api_pre PRIVATE COM_SEODISPARATE_MSQL_CHALLENGE_DISABLE)
 add_dependencies(db_msql_api_pre
-    SQLITE3_HEADER
     LIBOPENSSL_LIB
 )
 
