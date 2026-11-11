@@ -2,6 +2,10 @@
 
 ## Upcoming Changes
 
+Update bundled dependencies:
+
+ - lz4 1.11.0 -> 1.11.1
+
 ## Version 0.2.2
 
 cxx\_impl: Fix endpoint urls not resolving correctly due to inconsistent
