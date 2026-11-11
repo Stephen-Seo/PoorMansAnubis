@@ -24,6 +24,16 @@ else()
     message(STATUS "CMAKE_BUILD_TYPE is set to \"${CMAKE_BUILD_TYPE}\".")
 endif()
 
+# Debian-Trixie-gcc does not support "-fzero-init-padding-bits=all"
+# This makes it opt-in to use it.
+if(PMA_ENABLE_ADDITIONAL_COMPILE_FLAGS)
+    message(STATUS "PMA_ADDITIONAL_COMPILE_FLAGS set")
+    set(PMA_ADDITIONAL_COMPILE_FLAGS "-fzero-init-padding-bits=all")
+else()
+    message(STATUS "PMA_ADDITIONAL_COMPILE_FLAGS unset")
+    set(PMA_ADDITIONAL_COMPILE_FLAGS "")
+endif()
+
 add_compile_options(
 $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-Og,-O2>
 $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-g,-DNDEBUG>
@@ -36,7 +46,8 @@ $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-g,-DNDEBUG>
 -Wl,-z,nodlopen -Wl,-z,noexecstack
 -Wl,-z,relro -Wl,-z,now
 -Wl,--as-needed -Wl,--no-copy-dt-needed-entries
--Wtrampolines -fzero-init-padding-bits=all
+-Wtrampolines
+$<IF:$<STREQUAL:"","${PMA_ADDITIONAL_COMPILE_FLAGS}">,,${PMA_ADDITIONAL_COMPILE_FLAGS}>
 -fPIE -pie
 )
 add_link_options(
@@ -51,7 +62,8 @@ $<IF:$<STREQUAL:${CMAKE_BUILD_TYPE},Debug>,-g,-DNDEBUG>
 -Wl,-z,nodlopen -Wl,-z,noexecstack
 -Wl,-z,relro -Wl,-z,now
 -Wl,--as-needed -Wl,--no-copy-dt-needed-entries
--Wtrampolines -fzero-init-padding-bits=all
+-Wtrampolines
+$<IF:$<STREQUAL:"","${PMA_ADDITIONAL_COMPILE_FLAGS}">,,${PMA_ADDITIONAL_COMPILE_FLAGS}>
 -fPIE -pie
 )
 
@@ -157,7 +169,7 @@ find_program(ENV_BINARY NAMES env)
 find_program(SED_BINARY NAMES sed)
 
 if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY AND SED_BINARY)
-    message("git_version.h enabled")
+    message(STATUS "git_version.h enabled")
     add_custom_target(GitVersion
         COMMAND sh -c "echo -n \"#define COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING \\\"\" > ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
         COMMAND sh -c "env GIT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../.git\" git describe --tags --long >> ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
@@ -171,5 +183,5 @@ if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY AND SED_BINARY)
             OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
     )
 else()
-    message("git_version.h disabled")
+    message(STATUS "git_version.h disabled")
 endif()
