@@ -4,6 +4,11 @@
 
 Refactor `libdb_msql_capi.a` compilation.
 
+cxx\_impl CMakeLists.txt:
+
+ - opt-in to flags that Debian Trixie's gcc doesn't support.
+ - Minor fix to git-version related messages in CMakeLists.txt .
+
 ## Version 0.2.3
 
 cxx bundled: Update bundled dependencies:
