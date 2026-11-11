@@ -32,7 +32,7 @@ ZLIB_DOWNLOAD_URL := https://github.com/madler/zlib/releases/download/v${ZLIB_VE
 XZ_VERSION := 5.8.4
 XZ_DOWNLOAD_URL := https://github.com/tukaani-project/xz/archive/refs/tags/v${XZ_VERSION}.tar.gz
 
-LZ4_VERSION := 1.11.0
+LZ4_VERSION := 1.11.1
 LZ4_DOWNLOAD_URL := https://github.com/lz4/lz4/archive/refs/tags/v${LZ4_VERSION}.tar.gz
 
 ZSTD_VERSION := 1.5.7
