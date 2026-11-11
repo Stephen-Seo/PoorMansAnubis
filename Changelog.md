@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.2.4
+
 Refactor `libdb_msql_capi.a` compilation.
 
 cxx\_impl CMakeLists.txt:
