@@ -24,6 +24,7 @@
 
 // local includes
 #include "constants.h"
+#include "helpers.h"
 #include "poor_mans_print.h"
 #include "version.h"
 
@@ -62,7 +63,7 @@ void pma_print_usage() {
       "client ip addr");
   PMA_Println(
       "  --api-url=<url> : Set endpoint for client to POST to this software;");
-  PMA_Println("    example: \"--api-url=/pma_api/\"");
+  PMA_Println("    example: \"--api-url=/pma_api\"");
   PMA_Println(
       "  --js-factors-url=<url> : Set endpoint for client to request "
       "factors.js from this software;");
@@ -70,7 +71,7 @@ void pma_print_usage() {
   PMA_Println(
       "  --rest-api-url=<url> : Set REST API endpoint for interactive "
       "challenge verification;");
-  PMA_Println("    example: \"--rest-api-url=/pma_rest_api/\"");
+  PMA_Println("    example: \"--rest-api-url=/pma_rest_api\"");
   PMA_Println(
       "  --challenge-timeout=<minutes> : Set minutes for how long challenge "
       "answers are stored in db");
@@ -134,9 +135,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     : default_dest_url("https://seodisparate.com"),
       addr_ports(),
       port_to_dest_urls(),
-      api_url("/pma_api/"),
+      api_url("/pma_api"),
       js_factors_url("/pma_factors.js"),
-      rest_api_url("/pma_rest_api/"),
+      rest_api_url("/pma_rest_api"),
       sqlite_path("sqlite_db"),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
@@ -338,8 +339,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         flags.set(2);
         return;
       }
-      if (!this->api_url.ends_with('/')) {
-        this->api_url.push_back('/');
+      if (PMA_HELPER::trim_trailing_slash(this->api_url)) {
+        PMA_EPrintln("WARNING: Removed trailing slash from --api-url=...");
       }
     } else if (std::strncmp(argv[0], "--js-factors-url=", 17) == 0) {
       this->js_factors_url = std::string(argv[0] + 17);
@@ -356,6 +357,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
             "ERROR: Failed to parse --rest-api-url=<url> (url is empty)!");
         flags.set(2);
         return;
+      }
+      if (PMA_HELPER::trim_trailing_slash(this->rest_api_url)) {
+        PMA_EPrintln("WARNING: Removed trailing slash from --rest-api-url=...");
       }
     } else if (std::strncmp(argv[0], "--challenge-timeout=", 20) == 0) {
       try {

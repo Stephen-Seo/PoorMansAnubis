@@ -167,7 +167,7 @@ pub fn parse_args() -> Result<Args, Error> {
     for mut arg in p_args.skip(1) {
         if arg == "-h" || arg == "--help" {
             print_args();
-            return Err(Error::as_str("Printed help text").as_args_non_err());
+            return Err(Error::as_str("Printed help text").into_args_non_err());
         } else if arg == "--version" {
             let mut version_text: PathBuf = PathBuf::from(env!("OUT_DIR"));
             version_text = version_text.join("version.txt");
@@ -185,12 +185,12 @@ pub fn parse_args() -> Result<Args, Error> {
             if let Ok(mut git_version_text_file) = git_version_text_file {
                 let mut git_version = String::new();
                 let ret = git_version_text_file.read_to_string(&mut git_version);
-                if let Ok(_) = ret {
+                if ret.is_ok() {
                     println!("git-version {}", git_version);
                 }
             }
 
-            return Err(Error::as_str("Printed version").as_args_non_err());
+            return Err(Error::as_str("Printed version").into_args_non_err());
         } else if arg.starts_with("--factors=") {
             let end = arg.split_off(10);
             args.factors = end.parse().ok();

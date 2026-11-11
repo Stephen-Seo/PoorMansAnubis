@@ -129,6 +129,8 @@ std::array<char, 40> sha1_digest_hex(uint8_t *data, size_t size);
 
 std::string trim_whitespace(const std::string &s);
 
+bool trim_trailing_slash(std::string &s);
+
 // Returns empty if no extension exists.
 std::string get_file_ext(const std::string &s);
 

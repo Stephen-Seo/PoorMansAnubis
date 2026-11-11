@@ -143,11 +143,11 @@ Args for the C++ implementation are as follows:
       --sqlite-path=<path> : Set filename for sqlite db
       --enable-x-real-ip-header : Enable trusting "x-real-ip" header as client ip addr
       --api-url=<url> : Set endpoint for client to POST to this software;
-        example: "--api-url=/pma_api/"
+        example: "--api-url=/pma_api"
       --js-factors-url=<url> : Set endpoint for client to request factors.js from this software;
         example: "--js-factors-url=/pma_factors.js"
       --rest-api-url=<url> : Set REST API endpoint for interactive challenge verification;
-        example: "--rest-api-url=/pma_rest_api/"
+        example: "--rest-api-url=/pma_rest_api"
       --challenge-timeout=<minutes> : Set minutes for how long challenge answers are stored in db
       --allowed-timeout=<minutes> : Set how long a client is allowed to access before requiring challenge again
       --timeout-time=<minutes> : Set how long a client must wait if put on a timeout

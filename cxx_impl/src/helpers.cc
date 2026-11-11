@@ -312,6 +312,16 @@ std::string PMA_HELPER::trim_whitespace(const std::string &s) {
   }
 }
 
+bool PMA_HELPER::trim_trailing_slash(std::string &s) {
+  bool has_slash = false;
+  while (s.size() > 1 && s.back() == '/') {
+    has_slash = true;
+    s.pop_back();
+  }
+
+  return has_slash;
+}
+
 std::string PMA_HELPER::get_file_ext(const std::string &s) {
   std::string ret;
   for (size_t idx = s.size(); idx-- > 0;) {
