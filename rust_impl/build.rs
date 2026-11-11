@@ -35,7 +35,7 @@ fn main() {
     let mut version_file =
         File::create(version_path).expect("Should be able to create version.txt at OUT_DIR");
     version_file
-        .write(format!("{}", env!("CARGO_PKG_VERSION")).as_bytes())
+        .write_all(env!("CARGO_PKG_VERSION").as_bytes())
         .expect("Should be able to write to OUT_DIR/version.txt");
 
     let git_version_path = out_path.join("git_version.txt");

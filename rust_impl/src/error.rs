@@ -32,6 +32,7 @@ pub enum Error {
     ReqParse(salvo::http::ParseError),
     IntParse(std::num::ParseIntError),
     GetRand(getrandom::Error),
+    #[allow(clippy::enum_variant_names)]
     ArgsNonError(Box<Error>),
 }
 
@@ -84,15 +85,12 @@ impl Error {
         Self::GenericStaticStr(s)
     }
 
-    pub fn as_args_non_err(self) -> Self {
+    pub fn into_args_non_err(self) -> Self {
         Self::ArgsNonError(Box::new(self))
     }
 
     pub fn is_args_non_err(&self) -> bool {
-        match self {
-            Error::ArgsNonError(_) => true,
-            _ => false,
-        }
+        matches!(self, Error::ArgsNonError(_))
     }
 }
 
