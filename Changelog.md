@@ -5,7 +5,7 @@
 cxx\_impl: Fix endpoint urls not resolving correctly due to inconsistent
 handling of urls.
 
-rust\_impl: `cargo update`
+rust\_impl: `cargo update`, clippy fixes
 
 ## Version 0.2.1
 
