@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+Refactor `libdb_msql_capi.a` compilation.
+
 ## Version 0.2.3
 
 cxx bundled: Update bundled dependencies:
