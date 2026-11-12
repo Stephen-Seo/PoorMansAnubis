@@ -9,6 +9,8 @@ cxx\_impl: Minor tweak to CMakeLists.txt:
 
 rust\_impl: Internal refactorings related to access cache.
 
+cxx\_impl: Internal refactorings related to access cache.
+
 ## Version 0.2.4
 
 Refactor `libdb_msql_capi.a` compilation.
