@@ -24,9 +24,9 @@ mod json_types;
 mod salvo_compat;
 mod signal;
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock as StdRwLock};
 use std::time::{Duration, Instant};
 
 use std::path::Path;
@@ -157,7 +157,7 @@ const SQLITE_FAILS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS FAILS
 
 #[derive(Clone, Debug)]
 struct CachedAllow {
-    allowed: Arc<Mutex<RefCell<HashMap<String, Instant>>>>,
+    allowed: Arc<StdRwLock<HashMap<String, Instant>>>,
     inst: Arc<Mutex<Cell<Instant>>>,
 }
 
@@ -170,26 +170,31 @@ impl CachedAllow {
     }
 
     pub fn get_allowed(&self, addr_port: &str, timeout: Duration) -> Result<bool, Error> {
-        let l = self.allowed.lock();
+        let l = self.allowed.read();
         let l = l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
-        let mut b = l.borrow_mut();
         {
-            let entry = b.get(addr_port);
+            let entry = l.get(addr_port);
             if let Some(v) = entry
                 && v.elapsed() < timeout
             {
                 return Ok(true);
             }
         }
-        b.remove(addr_port);
+
+        drop(l);
+
+        let mut l = self
+            .allowed
+            .write()
+            .map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
+        l.remove(addr_port);
 
         Ok(false)
     }
 
     pub fn add_allowed(&self, addr_port: &str) -> Result<(), Error> {
-        let l = self.allowed.lock();
+        let l = self.allowed.write();
         l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?
-            .borrow_mut()
             .insert(addr_port.to_owned(), Instant::now());
 
         Ok(())
@@ -200,9 +205,11 @@ impl CachedAllow {
         let il = il.map_err(|_| Error::as_str("Failed to lock CachedAllow.inst"))?;
         if il.get().elapsed() > CACHED_CLEANUP_TIMEOUT {
             il.set(Instant::now());
-            let l = self.allowed.lock();
-            let l = l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
-            l.borrow_mut().clear();
+            let mut l = self
+                .allowed
+                .write()
+                .map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
+            l.clear();
         }
 
         Ok(())
@@ -215,9 +222,11 @@ impl CachedAllow {
             il.set(Instant::now());
         }
         {
-            let l = self.allowed.lock();
-            let l = l.map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
-            l.borrow_mut().clear();
+            let mut l = self
+                .allowed
+                .write()
+                .map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
+            l.clear();
         }
 
         Ok(())
