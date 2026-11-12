@@ -7,6 +7,8 @@ cxx\_impl: Minor tweak to CMakeLists.txt:
  - Display message of flag to enable if additional-compile-flags are
    unset/disabled.
 
+rust\_impl: Internal refactorings related to access cache.
+
 ## Version 0.2.4
 
 Refactor `libdb_msql_capi.a` compilation.
