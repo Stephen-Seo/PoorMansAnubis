@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.2.5
+
 cxx\_impl: Minor tweak to CMakeLists.txt:
 
  - Display message of flag to enable if additional-compile-flags are
