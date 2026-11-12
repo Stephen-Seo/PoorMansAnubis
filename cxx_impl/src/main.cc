@@ -20,6 +20,7 @@
 #include <cstring>
 #include <iostream>
 #include <optional>
+#include <shared_mutex>
 #include <thread>
 #include <tuple>
 #include <unordered_map>
@@ -80,13 +81,51 @@ struct ThreadData {
   AddrPortInfo addr_port_info;
   const PMA_ARGS::Args *args;
   const std::optional<PMA_MSQL::Conf> *msql_conf_opt;
-  std::mutex *cached_allowed_mutex;
+  std::shared_mutex *cached_allowed_mutex;
   std::unordered_map<std::string,
                      std::chrono::time_point<std::chrono::steady_clock> >
       *cached_allowed;
   int conn_fd;
   int dest_conn_fd;
+
+  // These three functions assume that cached_allowed and cached_allowed_mutex
+  // are not NULL.
+  void add_cached_allowed(std::string ip_port);
+  bool is_cached_allowed(std::string ip_port);
+  void clear_cached_allowed();
 };
+
+void ThreadData::add_cached_allowed(std::string ip_port) {
+  std::unique_lock lock(*this->cached_allowed_mutex);
+  this->cached_allowed->insert(
+      std::make_pair(ip_port, std::chrono::steady_clock::now()));
+}
+
+bool ThreadData::is_cached_allowed(std::string ip_port) {
+  const auto time_now = std::chrono::steady_clock::now();
+  bool is_allowed = false;
+  bool is_expired = false;
+  {
+    std::shared_lock lock(*this->cached_allowed_mutex);
+    if (auto iter = this->cached_allowed->find(ip_port);
+        iter != this->cached_allowed->end()) {
+      is_expired = time_now - iter->second > CACHED_TIMEOUT_T;
+      is_allowed = !is_expired;
+    }
+  }
+
+  if (is_expired) {
+    std::unique_lock lock(*this->cached_allowed_mutex);
+    this->cached_allowed->erase(ip_port);
+  }
+
+  return is_allowed;
+}
+
+void ThreadData::clear_cached_allowed() {
+  std::unique_lock lock(*this->cached_allowed_mutex);
+  this->cached_allowed->clear();
+}
 
 AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
   AddrPortInfo info = {std::nullopt,           std::get<0>(addr_port),
@@ -1310,8 +1349,6 @@ void thread_handle_connection_fn(void *ud) {
     std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
     data->addr_port_info.ticks += 1;
 
-    auto time_now = std::chrono::steady_clock::now();
-
     if (data->addr_port_info.remaining_buffer.has_value()) {
       ssize_t write_ret = write(
           data->conn_fd, data->addr_port_info.remaining_buffer.value().data(),
@@ -1512,12 +1549,9 @@ void thread_handle_connection_fn(void *ud) {
                                      data->addr_port_info.client_addr);
               body = url;
               forward_flags.set(3);
-              std::unique_lock<std::mutex> cached_allowed_lock(
-                  *data->cached_allowed_mutex);
-              data->cached_allowed->insert(std::make_pair(
+              data->add_cached_allowed(
                   std::format("{}:{}", data->addr_port_info.client_addr,
-                              data->addr_port_info.local_port),
-                  time_now));
+                              data->addr_port_info.local_port));
             } else {
               PMA_EPrintln(
                   "Warning: Client {}:{} -> {} failed challenge due to {}",
@@ -1573,12 +1607,9 @@ void thread_handle_connection_fn(void *ud) {
               forward_flags.set(3);
               PMA_SQL::remove_fails(sqliteCtx,
                                     data->addr_port_info.client_addr);
-              std::unique_lock<std::mutex> cached_allowed_lock(
-                  *data->cached_allowed_mutex);
-              data->cached_allowed->insert(std::make_pair(
+              data->add_cached_allowed(
                   std::format("{}:{}", data->addr_port_info.client_addr,
-                              data->addr_port_info.local_port),
-                  time_now));
+                              data->addr_port_info.local_port));
             }
           }
         } else if (req.url_or_err_msg == data->args->api_url) {
@@ -1636,12 +1667,9 @@ void thread_handle_connection_fn(void *ud) {
                   body = "Correct";
                   PMA_MSQL::remove_fails(msql_conn_opt.value(),
                                          data->addr_port_info.client_addr);
-                  std::unique_lock<std::mutex> cached_allowed_lock(
-                      *data->cached_allowed_mutex);
-                  data->cached_allowed->insert(std::make_pair(
+                  data->add_cached_allowed(
                       std::format("{}:{}", data->addr_port_info.client_addr,
-                                  data->addr_port_info.local_port),
-                      time_now));
+                                  data->addr_port_info.local_port));
                 } else {
                   PMA_EPrintln(
                       "Warning: Client {}:{} -> {} failed challenge due to {}",
@@ -1686,12 +1714,9 @@ void thread_handle_connection_fn(void *ud) {
                   body = "Correct";
                   PMA_MSQL::remove_fails(msql_conn_opt.value(),
                                          data->addr_port_info.client_addr);
-                  std::unique_lock<std::mutex> cached_allowed_lock(
-                      *data->cached_allowed_mutex);
-                  data->cached_allowed->insert(std::make_pair(
+                  data->add_cached_allowed(
                       std::format("{}:{}", data->addr_port_info.client_addr,
-                                  data->addr_port_info.local_port),
-                      time_now));
+                                  data->addr_port_info.local_port));
                 } else {
                   PMA_EPrintln(
                       "Warning: Client {}:{} -> {} failed challenge due to {}",
@@ -1756,12 +1781,9 @@ void thread_handle_connection_fn(void *ud) {
                 body = "Correct";
                 PMA_SQL::remove_fails(sqliteCtx,
                                       data->addr_port_info.client_addr);
-                std::unique_lock<std::mutex> cached_allowed_lock(
-                    *data->cached_allowed_mutex);
-                data->cached_allowed->insert(std::make_pair(
+                data->add_cached_allowed(
                     std::format("{}:{}", data->addr_port_info.client_addr,
-                                data->addr_port_info.local_port),
-                    time_now));
+                                data->addr_port_info.local_port));
               }
             } else if (json_keyvals.find("type")->second == "interactive" &&
                        json_keyvals.find("answer") != json_keyvals.end()) {
@@ -1796,12 +1818,9 @@ void thread_handle_connection_fn(void *ud) {
                 body = "Correct";
                 PMA_SQL::remove_fails(sqliteCtx,
                                       data->addr_port_info.client_addr);
-                std::unique_lock<std::mutex> cached_allowed_lock(
-                    *data->cached_allowed_mutex);
-                data->cached_allowed->insert(std::make_pair(
+                data->add_cached_allowed(
                     std::format("{}:{}", data->addr_port_info.client_addr,
-                                data->addr_port_info.local_port),
-                    time_now));
+                                data->addr_port_info.local_port));
               }
             } else {
               status = "HTTP/1.0 400 Bad Request";
@@ -1930,25 +1949,15 @@ void thread_handle_connection_fn(void *ud) {
             body = "<html><p>400 Bad Request</p><p>(No id)</p></html>";
           }
         } else if (data->args->flags.test(4)) {
-          {
-            std::unique_lock<std::mutex> cached_allowed_lock(
-                *data->cached_allowed_mutex);
-            if (auto cached_iter = data->cached_allowed->find(
-                    std::format("{}:{}", data->addr_port_info.client_addr,
-                                data->addr_port_info.local_port));
-                cached_iter != data->cached_allowed->end()) {
-              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
-                data->cached_allowed->erase(cached_iter);
-              } else {
-                cached_allowed_lock.unlock();
-                if (data->args->flags.test(5)) {
-                  do_curl_forwarding(data, req, forward_flags);
-                } else {
-                  do_ipv4_socket_forwarding(data, forward_flags, req);
-                }
-                goto PMA_RESPONSE_AFTER_SENDING;
-              }
+          if (data->is_cached_allowed(
+                  std::format("{}:{}", data->addr_port_info.client_addr,
+                              data->addr_port_info.local_port))) {
+            if (data->args->flags.test(5)) {
+              do_curl_forwarding(data, req, forward_flags);
+            } else {
+              do_ipv4_socket_forwarding(data, forward_flags, req);
             }
+            goto PMA_RESPONSE_AFTER_SENDING;
           }
 
           bool ping_ok = false;
@@ -1975,13 +1984,9 @@ void thread_handle_connection_fn(void *ud) {
                 msql_conn_opt.value(), data->addr_port_info.client_addr,
                 data->addr_port_info.local_port, data->args->allowed_timeout);
             if (is_allowed_e == PMA_MSQL::Error::SUCCESS) {
-              std::unique_lock<std::mutex> cached_allowed_lock(
-                  *data->cached_allowed_mutex);
-              data->cached_allowed->insert(std::make_pair(
+              data->add_cached_allowed(
                   std::format("{}:{}", data->addr_port_info.client_addr,
-                              data->addr_port_info.local_port),
-                  time_now));
-              cached_allowed_lock.unlock();
+                              data->addr_port_info.local_port));
               if (data->args->flags.test(5)) {
                 do_curl_forwarding(data, req, forward_flags);
               } else {
@@ -2104,25 +2109,15 @@ void thread_handle_connection_fn(void *ud) {
             }
           }
         } else {
-          {
-            std::unique_lock<std::mutex> cached_allowed_lock(
-                *data->cached_allowed_mutex);
-            if (auto cached_iter = data->cached_allowed->find(
-                    std::format("{}:{}", data->addr_port_info.client_addr,
-                                data->addr_port_info.local_port));
-                cached_iter != data->cached_allowed->end()) {
-              if (time_now - cached_iter->second > CACHED_TIMEOUT_T) {
-                data->cached_allowed->erase(cached_iter);
-              } else {
-                cached_allowed_lock.unlock();
-                if (data->args->flags.test(5)) {
-                  do_curl_forwarding(data, req, forward_flags);
-                } else {
-                  do_ipv4_socket_forwarding(data, forward_flags, req);
-                }
-                goto PMA_RESPONSE_AFTER_SENDING;
-              }
+          if (data->is_cached_allowed(
+                  std::format("{}:{}", data->addr_port_info.client_addr,
+                              data->addr_port_info.local_port))) {
+            if (data->args->flags.test(5)) {
+              do_curl_forwarding(data, req, forward_flags);
+            } else {
+              do_ipv4_socket_forwarding(data, forward_flags, req);
             }
+            goto PMA_RESPONSE_AFTER_SENDING;
           }
 
           PMA_SQL::cleanup_stale_entries(sqliteCtx,
@@ -2213,13 +2208,10 @@ void thread_handle_connection_fn(void *ud) {
                   "prepare for client challenge type</p></html>";
             }
           } else {
-            std::unique_lock<std::mutex> cached_allowed_lock(
-                *data->cached_allowed_mutex);
-            data->cached_allowed->insert(std::make_pair(
+            data->add_cached_allowed(
                 std::format("{}:{}", data->addr_port_info.client_addr,
-                            data->addr_port_info.local_port),
-                time_now));
-            cached_allowed_lock.unlock();
+                            data->addr_port_info.local_port));
+
             if (data->args->flags.test(5)) {
               do_curl_forwarding(data, req, forward_flags);
             } else {
@@ -2465,7 +2457,7 @@ int main(int argc, char **argv) {
   // std::deque<int> to_remove_connections;
   // std::array<char, REQ_READ_BUF_SIZE> buf;
 
-  std::mutex cached_allowed_mutex;
+  std::shared_mutex cached_allowed_mutex;
   std::unordered_map<std::string,
                      std::chrono::time_point<std::chrono::steady_clock> >
       cached_allowed;
@@ -2479,7 +2471,7 @@ int main(int argc, char **argv) {
     time_now = std::chrono::steady_clock::now();
     if (time_now - time_prev > CACHED_CLEAR_T || usr1_received) {
       time_prev = time_now;
-      std::unique_lock<std::mutex> cached_allowed_lock(cached_allowed_mutex);
+      std::unique_lock cached_allowed_lock(cached_allowed_mutex);
       cached_allowed.clear();
 
       if (usr1_received) {
