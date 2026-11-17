@@ -641,7 +641,7 @@ void global_cleanup_i_challenge(void) {
     CloseWindow();
 }
 
-InteractiveChallenge i_challenge_generate(int use_rest_api) {
+InteractiveChallenge i_challenge_generate(int flags) {
     void *r_state = rand_state_init();
 
     InteractiveChallenge c;
@@ -687,17 +687,24 @@ InteractiveChallenge i_challenge_generate(int use_rest_api) {
 
     uint_fast32_t distort_flags = 0;
 
-    switch (rand_int_range(r_state, 0, 2)) {
-        case 0:
-            distort_flags = (uint_fast32_t)(rand_int_range(r_state, 0, 1) << 1);
-            break;
-        case 1:
-            distort_flags =
-                (uint_fast32_t)(1 | (rand_int_range(r_state, 0, 1) << 1));
-            break;
-        case 2:
-            distort_flags = 4;
-            break;
+    if ((flags & SDIC_ONLY_BEZIER_CURVES) != 0) {
+        distort_flags = 4;
+    } else if ((flags & SDIC_ONLY_SQ_OR_SINE_CURVES) != 0) {
+        distort_flags = (uint_fast32_t)(rand_int_range(r_state, 0, 3));
+    } else {
+        switch (rand_int_range(r_state, 0, 2)) {
+            case 0:
+                distort_flags =
+                    (uint_fast32_t)(rand_int_range(r_state, 0, 1) << 1);
+                break;
+            case 1:
+                distort_flags =
+                    (uint_fast32_t)(1 | (rand_int_range(r_state, 0, 1) << 1));
+                break;
+            case 2:
+                distort_flags = 4;
+                break;
+        }
     }
 
 #ifndef NDEBUG
@@ -800,7 +807,7 @@ InteractiveChallenge i_challenge_generate(int use_rest_api) {
         "}); // answer_button on click fn\n" \
         "</script>\n"
 
-        if (use_rest_api != 0) {
+        if ((flags & SDIC_USE_REST_API) != 0) {
             int cli_html_size = snprintf(NULL, 0, CLI_ANSWER_OUTPUT_HTML_FMT_REST_API);
             c.client_resp_html = malloc((size_t)(cli_html_size + 1));
             snprintf(c.client_resp_html, (size_t)(cli_html_size + 1), CLI_ANSWER_OUTPUT_HTML_FMT_REST_API);

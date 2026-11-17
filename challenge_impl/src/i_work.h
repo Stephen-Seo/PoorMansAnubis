@@ -30,8 +30,13 @@ typedef struct InteractiveChallenge {
     char *answer;
 } InteractiveChallenge;
 
-/// Set use_rest_api to non-zero to use rest-api client html.
-InteractiveChallenge i_challenge_generate(int use_rest_api);
+typedef enum InteractiveChallengeFlags {
+    SDIC_USE_REST_API = 1,
+    SDIC_ONLY_BEZIER_CURVES = 2,
+    SDIC_ONLY_SQ_OR_SINE_CURVES = 4
+} InteractiveChallengeFlags;
+
+InteractiveChallenge i_challenge_generate(int flags);
 
 void i_challenge_cleanup(InteractiveChallenge challenge);
 void i_challenge_cleanup_ptr(InteractiveChallenge *challenge);
