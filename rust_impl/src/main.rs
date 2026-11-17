@@ -921,7 +921,11 @@ async fn set_up_interactive_challenge(
     let mut answer: String = String::new();
 
     {
-        let challenge = crate::ffi::InteractiveChallengeWrapper::new(uses_rest);
+        let challenge = crate::ffi::InteractiveChallengeWrapper::new(
+            uses_rest,
+            args.force_bezier,
+            args.force_sq_sine,
+        );
 
         if let Ok(ch_html_raw) = challenge.get_challenge_html()
             && let Ok(utf8_ch_html) = ch_html_raw.to_str()
@@ -2425,7 +2429,11 @@ async fn main() {
         return;
     } else if parsed_args.i_challenge {
         crate::ffi::InteractiveChallengeWrapper::global_init();
-        let challenge = crate::ffi::InteractiveChallengeWrapper::new(parsed_args.use_rest_api);
+        let challenge = crate::ffi::InteractiveChallengeWrapper::new(
+            parsed_args.use_rest_api,
+            parsed_args.force_bezier,
+            parsed_args.force_sq_sine,
+        );
         let challenge_html = challenge
             .get_challenge_html()
             .expect(r#"Interactive Challenge: Should have "challenge_html""#);

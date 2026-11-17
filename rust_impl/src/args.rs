@@ -64,6 +64,8 @@ pub struct Args {
     pub only_factors_challenge: bool,
     pub only_i_challenge: bool,
     pub use_rest_api: bool,
+    pub force_bezier: bool,
+    pub force_sq_sine: bool,
     pub timeout_time_mins: u64,
     pub fails_max: u64,
 }
@@ -120,6 +122,12 @@ pub fn print_args() {
         "  --enable-rest-api : Enable using the REST api for interactive challenges; default false"
     );
     println!(
+        "  --force-i-bezier : When generating interactive challenge only use bezier curves; default random"
+    );
+    println!(
+        "  --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random"
+    );
+    println!(
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
     println!(
@@ -155,6 +163,8 @@ pub fn parse_args() -> Result<Args, Error> {
         use_rest_api: false,
         timeout_time_mins: crate::constants::DEFAULT_TIMEOUT_TIME_MINUTES,
         fails_max: crate::constants::DEFAULT_FAILS_MAX,
+        force_bezier: false,
+        force_sq_sine: false,
     };
 
     let p_args = args_fn();
@@ -291,6 +301,12 @@ pub fn parse_args() -> Result<Args, Error> {
         } else if arg == "--enable-rest-api" {
             args.use_rest_api = true;
             eprintln!("Enabling REST-api for interactive challenge...");
+        } else if arg == "--force-i-bezier" {
+            args.force_bezier = true;
+            eprintln!("Forcing bezier for interactive challenge...")
+        } else if arg == "--force-i-sq-sine" {
+            args.force_sq_sine = true;
+            eprintln!("Forcing sq/sine for interactive challenge...")
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;
         } else if arg == "--important-warning-has-been-read" {
