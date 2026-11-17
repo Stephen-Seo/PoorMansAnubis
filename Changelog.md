@@ -2,6 +2,13 @@
 
 ## Upcoming Changes
 
+Update challenge\_impl to enable forcing only bezier or sq/sine interpolation
+when generating interactive challenge.
+
+Update cxx\_impl and rust\_impl to add `--force-i-bezier` and
+`--force-i-sq-sine` flags and expected behavior when generating interactive
+challenges.
+
 ## Version 0.2.5
 
 cxx\_impl: Minor tweak to CMakeLists.txt:
