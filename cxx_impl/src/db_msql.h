@@ -244,6 +244,8 @@ std::tuple<Error, std::string, std::string> set_challenge_factor(
 
 // flags:
 // 0 - rest api enabled
+// 1 - force bezier curves
+// 2 - force sq/sine curves
 std::tuple<Error, std::string, std::string> set_interactive_challenge(
     Connection &c, std::string ip, uint16_t port, uint64_t chall_timeout,
     std::string url, const std::bitset<32> flags,

@@ -158,6 +158,8 @@ std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
 // html. Last string is id.
 // flags:
 // 0 - rest api enabled
+// 1 - force bezier curves
+// 2 - force sq/sine curves
 std::tuple<ErrorT, std::string, std::string> generate_interactive_challenge(
     SQLITECtx &ctx, std::string client_ip, uint16_t port, std::string url,
     const std::bitset<32> flags,

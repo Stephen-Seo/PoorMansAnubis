@@ -3161,7 +3161,18 @@ PMA_MSQL::set_interactive_challenge(
     return {Error::INVALID_MSQL_CONNECTION, {}, {}};
   }
 
-  InteractiveChallenge challenge = i_challenge_generate(flags.test(0) ? 1 : 0);
+  int interactive_flags = 0;
+  if (flags.test(0)) {
+    interactive_flags |= SDIC_USE_REST_API;
+  }
+  if (flags.test(1)) {
+    interactive_flags |= SDIC_ONLY_BEZIER_CURVES;
+  }
+  if (flags.test(2)) {
+    interactive_flags |= SDIC_ONLY_SQ_OR_SINE_CURVES;
+  }
+
+  InteractiveChallenge challenge = i_challenge_generate(interactive_flags);
   GenericCleanup<InteractiveChallenge> interactive_challenge_cleanup(
       challenge, [](InteractiveChallenge *c) { i_challenge_cleanup_ptr(c); });
 
