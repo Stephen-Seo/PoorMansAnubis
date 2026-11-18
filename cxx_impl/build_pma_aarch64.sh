@@ -10,6 +10,9 @@ export RANLIB=/usr/bin/${TARGET_TRIPLE}-ranlib
 export LD=/usr/bin/${TARGET_TRIPLE}-ld
 export STRIP=/usr/bin/${TARGET_TRIPLE}-strip
 
+# This should be at least 3 seconds.
+BUILD_START_TIMEOUT=3
+
 set -e
 
 if (( $# == 0 )); then
@@ -24,7 +27,6 @@ if (( $# == 0 )); then
     fi
 
     echo "BUILD_DESTINATION set to $BUILD_DESTINATION"
-    echo "Will build in 3 seconds..."
 
     "$0" -d "$BUILD_DESTINATION"
     exit $?
@@ -40,9 +42,16 @@ else
         exit 1
     fi
 
-    echo "Build to dest \"$BUILD_DESTINATION\" in 3 seconds..."
+    echo "Build to dest \"$BUILD_DESTINATION\" in $BUILD_START_TIMEOUT seconds..."
 
-    sleep 3
+    for ((idx = 0; idx < BUILD_START_TIMEOUT; ++idx)); do
+        sleep 1
+        if (( idx == BUILD_START_TIMEOUT - 2 )); then
+            echo "1 second..."
+        elif (( idx < BUILD_START_TIMEOUT - 2 )); then
+            echo "$(( (BUILD_START_TIMEOUT - 1) - idx )) seconds..."
+        fi
+    done
 
     cd "$(dirname "$0")"
 
