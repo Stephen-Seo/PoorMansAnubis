@@ -44,6 +44,8 @@ else
 
     sleep 3
 
+    cd "$(dirname "$0")"
+
     function do_build() {
         MAX_JOBS="$(nproc)"
 
