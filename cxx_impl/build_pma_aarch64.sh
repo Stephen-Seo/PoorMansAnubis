@@ -46,9 +46,9 @@ else
 
     for ((idx = 0; idx < BUILD_START_TIMEOUT; ++idx)); do
         sleep 1
-        if (( idx == BUILD_START_TIMEOUT - 2 )); then
+        if (( idx + 2 == BUILD_START_TIMEOUT )); then
             echo "1 second..."
-        elif (( idx < BUILD_START_TIMEOUT - 2 )); then
+        elif (( idx + 2 < BUILD_START_TIMEOUT )); then
             echo "$(( (BUILD_START_TIMEOUT - 1) - idx )) seconds..."
         fi
     done
