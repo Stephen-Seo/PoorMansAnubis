@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+export TARGET_ARCH=aarch64
+export TARGET_TRIPLE=${TARGET_ARCH}-linux-gnu
+export CC=/usr/bin/${TARGET_TRIPLE}-gcc
+export CXX=/usr/bin/${TARGET_TRIPLE}-g++
+export AS=/usr/bin/${TARGET_TRIPLE}-as
+export AR=/usr/bin/${TARGET_TRIPLE}-ar
+export RANLIB=/usr/bin/${TARGET_TRIPLE}-ranlib
+export LD=/usr/bin/${TARGET_TRIPLE}-ld
+export STRIP=/usr/bin/${TARGET_TRIPLE}-strip
+
 set -e
 
 if (( $# == 0 )); then
@@ -50,10 +60,10 @@ else
 
         set -v
 
-        CC=/usr/bin/aarch64-linux-gnu-gcc CXX=/usr/bin/aarch64-linux-gnu-g++ AR=/usr/bin/aarch64-linux-gnu-ar RANLIB=/usr/bin/aarch64-linux-gnu-ranlib LD=/usr/bin/aarch64-linux-gnu-ld TARGET_TRIPLE="aarch64-linux-gnu" TARGET_ARCH=aarch64 AS=/usr/bin/aarch64-linux-gnu-as cmake -S bundled/ -B "$BUILD_DESTINATION" -DCMAKE_BUILD_TYPE=Release
+        cmake -S bundled/ -B "$BUILD_DESTINATION" -DCMAKE_BUILD_TYPE=Release
 
         make -C "$BUILD_DESTINATION" -j $MAX_JOBS -l $MAX_LOAD_AVG poor_mans_anubis_bundled
-        /usr/bin/aarch64-linux-gnu-strip --strip-all "$BUILD_DESTINATION/poor_mans_anubis_bundled"
+        ${STRIP} --strip-all "$BUILD_DESTINATION/poor_mans_anubis_bundled"
     }
 
     time do_build
