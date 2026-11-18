@@ -2057,6 +2057,12 @@ void thread_handle_connection_fn(void *ud) {
                 if (data->args->flags.test(12)) {
                   interactive_challenge_flags.set(0);
                 }
+                if (data->args->flags.test(14)) {
+                  interactive_challenge_flags.set(1);
+                }
+                if (data->args->flags.test(15)) {
+                  interactive_challenge_flags.set(2);
+                }
                 auto [err, html, id] = PMA_MSQL::set_interactive_challenge(
                     msql_conn_opt.value(), data->addr_port_info.client_addr,
                     data->addr_port_info.local_port,
@@ -2176,6 +2182,12 @@ void thread_handle_connection_fn(void *ud) {
               std::bitset<32> interactive_challenge_flags;
               if (data->args->flags.test(12)) {
                 interactive_challenge_flags.set(0);
+              }
+              if (data->args->flags.test(14)) {
+                interactive_challenge_flags.set(1);
+              }
+              if (data->args->flags.test(15)) {
+                interactive_challenge_flags.set(2);
               }
               auto [err, html, id] = PMA_SQL::generate_interactive_challenge(
                   sqliteCtx, data->addr_port_info.client_addr,

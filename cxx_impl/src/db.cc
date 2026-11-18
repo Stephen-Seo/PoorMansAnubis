@@ -563,7 +563,17 @@ PMA_SQL::generate_interactive_challenge(
     PMA_SQL::SQLITECtx &ctx, std::string client_ip, uint16_t port,
     std::string url, const std::bitset<32> flags,
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
-  InteractiveChallenge challenge = i_challenge_generate(flags.test(0) ? 1 : 0);
+  int challenge_flags = 0;
+  if (flags.test(0)) {
+    challenge_flags |= SDIC_USE_REST_API;
+  }
+  if (flags.test(1)) {
+    challenge_flags |= SDIC_ONLY_BEZIER_CURVES;
+  }
+  if (flags.test(2)) {
+    challenge_flags |= SDIC_ONLY_SQ_OR_SINE_CURVES;
+  }
+  InteractiveChallenge challenge = i_challenge_generate(challenge_flags);
   GenericCleanup<InteractiveChallenge> interactive_challenge_cleanup(
       challenge, [](InteractiveChallenge *c) { i_challenge_cleanup_ptr(c); });
 

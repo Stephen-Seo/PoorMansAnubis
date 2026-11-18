@@ -19,7 +19,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use std::ffi::{CStr, c_void};
+use std::ffi::{CStr, c_int, c_void};
 
 use crate::error::Error;
 
@@ -99,9 +99,19 @@ impl InteractiveChallengeWrapper {
         }
     }
 
-    pub fn new(uses_rest: bool) -> Self {
+    pub fn new(uses_rest: bool, force_bezier: bool, force_sq_sine: bool) -> Self {
+        let mut flags: c_int = 0;
+        if uses_rest {
+            flags |= InteractiveChallengeFlags_SDIC_USE_REST_API as c_int;
+        }
+        if force_bezier {
+            flags |= InteractiveChallengeFlags_SDIC_ONLY_BEZIER_CURVES as c_int;
+        }
+        if force_sq_sine {
+            flags |= InteractiveChallengeFlags_SDIC_ONLY_SQ_OR_SINE_CURVES as c_int;
+        }
         Self {
-            challenge_value: unsafe { i_challenge_generate(if uses_rest { 1 } else { 0 }) },
+            challenge_value: unsafe { i_challenge_generate(flags) },
         }
     }
 

@@ -110,6 +110,12 @@ void pma_print_usage() {
       "  --enable-rest-api : Enable using the REST api for interactive "
       "challenges; default false");
   PMA_Println(
+      "  --force-i-bezier : When generating interactive challenge only use "
+      "bezier curves; default random");
+  PMA_Println(
+      "  --force-i-sq-sine : When generating interactive challenge only use "
+      "sq/sine curves; default random");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -551,6 +557,12 @@ PMA_ARGS::Args::Args(int argc, char **argv)
     } else if (std::strcmp(argv[0], "--enable-rest-api") == 0) {
       flags.set(12);
       PMA_EPrintln("Enabling REST api for interactive challenge...");
+    } else if (std::strcmp(argv[0], "--force-i-bezier") == 0) {
+      flags.set(14);
+      PMA_EPrintln("Forcing bezier curves for interactive challenge...");
+    } else if (std::strcmp(argv[0], "--force-i-sq-sine") == 0) {
+      flags.set(15);
+      PMA_EPrintln("Forcing sq/sine curves for interactive challenge...");
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(
