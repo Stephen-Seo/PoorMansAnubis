@@ -60,7 +60,7 @@ else
             MAX_LOAD_AVG=1
         fi
 
-        set -v
+        set -x
 
         cmake -S bundled/ -B "$BUILD_DESTINATION" -DCMAKE_BUILD_TYPE=Release
 
