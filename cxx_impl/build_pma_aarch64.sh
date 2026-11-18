@@ -32,7 +32,7 @@ if (( $# == 0 )); then
     exit $?
 else
     while getopts 'd:' op; do
-        case $op in
+        case "$op" in
             'd') BUILD_DESTINATION="$OPTARG";;
         esac
     done
