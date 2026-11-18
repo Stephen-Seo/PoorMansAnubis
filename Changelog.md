@@ -7,7 +7,7 @@ Update `cxx_impl/build_pma_aarch64.sh`.
 ## Version 0.3.0
 
 Update challenge\_impl to enable forcing only bezier or sq/sine interpolation
-when generating interactive challenge.
+when generating interactive challenges.
 
 Update cxx\_impl and rust\_impl to add `--force-i-bezier` and
 `--force-i-sq-sine` flags and expected behavior when generating interactive
