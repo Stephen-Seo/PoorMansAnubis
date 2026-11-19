@@ -1,38 +1,81 @@
 #!/usr/bin/env bash
 
+export TARGET_ARCH=aarch64
+export TARGET_TRIPLE=${TARGET_ARCH}-linux-gnu
+export CC=/usr/bin/${TARGET_TRIPLE}-gcc
+export CXX=/usr/bin/${TARGET_TRIPLE}-g++
+export AS=/usr/bin/${TARGET_TRIPLE}-as
+export AR=/usr/bin/${TARGET_TRIPLE}-ar
+export RANLIB=/usr/bin/${TARGET_TRIPLE}-ranlib
+export LD=/usr/bin/${TARGET_TRIPLE}-ld
+export STRIP=/usr/bin/${TARGET_TRIPLE}-strip
+
+# This should be at least 3 seconds.
+BUILD_START_TIMEOUT=3
+
 set -e
 
-echo -n "Build in /tmp ? (y/n) > "
+if (( $# == 0 )); then
+    echo -n "Build in /tmp ? (y/n) > "
 
-read reply
+    read reply
 
-if [[ "$reply" =~ ^[yY]([eE][sS])?$ ]]; then
-    BUILD_DESTINATION="/tmp/buildPMA_aarch64"
+    if [[ "$reply" =~ ^[yY]([eE][sS])?$ ]]; then
+        BUILD_DESTINATION="/tmp/buildPMA_aarch64"
+    else
+        BUILD_DESTINATION="buildPMA_aarch64"
+    fi
+
+    echo "BUILD_DESTINATION set to $BUILD_DESTINATION"
+
+    "$0" -d "$BUILD_DESTINATION"
+    exit $?
 else
-    BUILD_DESTINATION="buildPMA_aarch64"
+    while getopts 'd:' op; do
+        case "$op" in
+            'd') BUILD_DESTINATION="$OPTARG";;
+        esac
+    done
+
+    if [[ -z "$BUILD_DESTINATION" ]]; then
+        echo 'ERROR: Build destination is unset!'
+        exit 1
+    fi
+
+    echo "Build to dest \"$BUILD_DESTINATION\" in $BUILD_START_TIMEOUT seconds..."
+
+    for ((idx = 0; idx < BUILD_START_TIMEOUT; ++idx)); do
+        sleep 1
+        if (( idx + 2 == BUILD_START_TIMEOUT )); then
+            echo "1 second..."
+        elif (( idx + 2 < BUILD_START_TIMEOUT )); then
+            echo "$(( (BUILD_START_TIMEOUT - 1) - idx )) seconds..."
+        fi
+    done
+
+    cd "$(dirname "$0")"
+
+    function do_build() {
+        MAX_JOBS="$(nproc)"
+
+        if ! [[ $MAX_JOBS =~ ^[0-9]+$ ]]; then
+            MAX_JOBS=1
+            MAX_LOAD_AVG=1
+        elif (( MAX_JOBS > 1 )); then
+            MAX_LOAD_AVG=$MAX_JOBS 
+            MAX_JOBS=$(( MAX_JOBS - 1 ))
+        else
+            MAX_JOBS=1
+            MAX_LOAD_AVG=1
+        fi
+
+        set -x
+
+        cmake -S bundled/ -B "$BUILD_DESTINATION" -DCMAKE_BUILD_TYPE=Release
+
+        make -C "$BUILD_DESTINATION" -j $MAX_JOBS -l $MAX_LOAD_AVG poor_mans_anubis_bundled
+        ${STRIP} --strip-all "$BUILD_DESTINATION/poor_mans_anubis_bundled"
+    }
+
+    time do_build
 fi
-
-echo "BUILD_DESTINATION set to $BUILD_DESTINATION"
-echo "Will build in 3 seconds..."
-
-sleep 3
-
-MAX_JOBS="$(nproc)"
-
-if ! [[ $MAX_JOBS =~ ^[0-9]+$ ]]; then
-    MAX_JOBS=1
-    MAX_LOAD_AVG=1
-elif (( MAX_JOBS > 1 )); then
-    MAX_LOAD_AVG=$MAX_JOBS 
-    MAX_JOBS=$(( MAX_JOBS - 1 ))
-else
-    MAX_JOBS=1
-    MAX_LOAD_AVG=1
-fi
-
-set -v
-
-CC=/usr/bin/aarch64-linux-gnu-gcc CXX=/usr/bin/aarch64-linux-gnu-g++ AR=/usr/bin/aarch64-linux-gnu-ar RANLIB=/usr/bin/aarch64-linux-gnu-ranlib LD=/usr/bin/aarch64-linux-gnu-ld TARGET_TRIPLE="aarch64-linux-gnu" TARGET_ARCH=aarch64 AS=/usr/bin/aarch64-linux-gnu-as cmake -S bundled/ -B "$BUILD_DESTINATION" -DCMAKE_BUILD_TYPE=Release
-
-make -C "$BUILD_DESTINATION" -j $MAX_JOBS -l $MAX_LOAD_AVG poor_mans_anubis_bundled
-/usr/bin/aarch64-linux-gnu-strip --strip-all "$BUILD_DESTINATION/poor_mans_anubis_bundled"
