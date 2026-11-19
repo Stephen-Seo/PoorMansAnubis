@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+Minor tweak to GitHub actions workflow for unit tests.
+
 ## Version 0.3.1
 
 Update `cxx_impl/build_pma_aarch64.sh`.
