@@ -302,9 +302,21 @@ pub fn parse_args() -> Result<Args, Error> {
             args.use_rest_api = true;
             eprintln!("Enabling REST-api for interactive challenge...");
         } else if arg == "--force-i-bezier" {
+            if args.force_sq_sine {
+                eprintln!("ERROR: Cannot use both --force-i-sq-sine and --force-i-bezier!");
+                return Err(Error::as_str(
+                    "--force-i-sq-sine and --force-i-bezier are mutually exclusive",
+                ));
+            }
             args.force_bezier = true;
             eprintln!("Forcing bezier for interactive challenge...")
         } else if arg == "--force-i-sq-sine" {
+            if args.force_bezier {
+                eprintln!("ERROR: Cannot use both --force-i-bezier and --force-i-sq-sine!");
+                return Err(Error::as_str(
+                    "--force-i-bezier and --force-i-sq-sine are mutually exclusive",
+                ));
+            }
             args.force_sq_sine = true;
             eprintln!("Forcing sq/sine for interactive challenge...")
         } else if arg == "--enable-override-dest-url" {
