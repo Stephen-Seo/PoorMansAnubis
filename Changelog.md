@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.3.1
+
 Update `cxx_impl/build_pma_aarch64.sh`.
 
 Make `--force-i-bezier` and `--force-i-sq-sine` mutually exclusive.
