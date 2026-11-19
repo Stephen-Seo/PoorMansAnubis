@@ -558,9 +558,21 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       flags.set(12);
       PMA_EPrintln("Enabling REST api for interactive challenge...");
     } else if (std::strcmp(argv[0], "--force-i-bezier") == 0) {
+      if (flags.test(15)) {
+        PMA_EPrintln(
+            "ERROR: Cannot use both --force-i-sq-sine and --force-i-bezier!");
+        flags.set(2);
+        return;
+      }
       flags.set(14);
       PMA_EPrintln("Forcing bezier curves for interactive challenge...");
     } else if (std::strcmp(argv[0], "--force-i-sq-sine") == 0) {
+      if (flags.test(14)) {
+        PMA_EPrintln(
+            "ERROR: Cannot use both --force-i-bezier and --force-i-sq-sine!");
+        flags.set(2);
+        return;
+      }
       flags.set(15);
       PMA_EPrintln("Forcing sq/sine curves for interactive challenge...");
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
