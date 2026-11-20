@@ -4,6 +4,13 @@
 
 Minor tweak to GitHub actions workflow for unit tests.
 
+rust\_impl: Cargo.toml:
+
+ - `salvo` 1.0 -> 1.2
+ - `rusqlite` 0.41 -> 0.43
+
+Also `cargo update` in rust\_impl.
+
 ## Version 0.3.1
 
 Update `cxx_impl/build_pma_aarch64.sh`.
