@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 libc = "0.2"
-salvo = { version = "1.0", default-features = false, features = ["affix-state", "server", "server-handle", "http1", "http2"] }
+salvo = { version = "1.2", default-features = false, features = ["affix-state", "server", "server-handle", "http1", "http2"] }
 tokio = { version = "1", features = ["fs", "io-util", "sync", "rt-multi-thread"] }
 futures = "0.3"
 reqwest = { version = "0.13", features = ["native-tls-vendored"] }
@@ -13,7 +13,7 @@ time = { version = "0.3", features = ["parsing", "local-offset", "formatting", "
 serde = "1"
 serde_json = "1"
 blake3 = "1.8"
-rusqlite = { version = "0.41", features = ["bundled"]}
+rusqlite = { version = "0.43", features = ["bundled"]}
 getrandom = "0.4"
 msql_ffi = { path = "msql_ffi" }
 rand = "0.10"
