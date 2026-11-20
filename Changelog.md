@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.3.2
+
 Minor tweak to GitHub actions workflow for unit tests.
 
 rust\_impl: Cargo.toml:
