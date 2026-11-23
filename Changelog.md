@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+`rust_impl`: Refactor how databases were used, should result in faster accesses.
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.
