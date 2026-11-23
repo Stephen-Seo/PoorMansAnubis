@@ -2318,6 +2318,9 @@ async fn main() {
 
     let task_handle = tokio::task::spawn(async move {
         while !signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
+            #[cfg(debug_assertions)]
+            eprintln!("Cleanup async task iteration...");
+
             tokio::time::sleep(constants::PERIODIC_CLEANUP_TIME).await;
 
             {
