@@ -29,6 +29,7 @@
 #include "constants.h"
 #include "helpers.h"
 #include "i_work.h"
+#include "poor_mans_print.h"
 #include "work.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -327,84 +328,66 @@ PMA_SQL::init_sqlite(std::string filepath) {
                                                          ErrorT::SUCCESS, {});
 }
 
-std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_id_to_ports(
-    PMA_SQL::SQLITECtx &ctx, uint64_t challenge_timeout) {
+PMA_SQL::ErrorT PMA_SQL::cleanup_db(SQLITECtx &ctx, uint64_t id_to_port_timeout,
+                                    uint64_t factors_timeout,
+                                    uint64_t interactive_timeout,
+                                    uint64_t timeout_timeout,
+                                    uint64_t allowed_timeout) {
   sqlite3 *db = ctx.get_sqlite_ctx();
   if (!db) {
-    return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
+    return ErrorT::DB_ALREADY_FAILED_TO_INIT;
   }
 
   std::string stmt = std::format(
       "DELETE FROM ID_TO_PORT WHERE datetime(ON_TIME, '{} minutes') < "
       "datetime('now')",
-      challenge_timeout);
+      id_to_port_timeout);
 
   {
     auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
     if (opt_tuple.has_value()) {
       const auto [unused, err_enum, err_msg] = std::move(opt_tuple.value());
-      return {err_enum, err_msg};
+      if (err_enum != ErrorT::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup id-to-port failed: {}: {}",
+                     error_t_to_string(err_enum), err_msg);
+      }
     }
   }
 
-  return {ErrorT::SUCCESS, {}};
-}
-
-std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_challenges(
-    PMA_SQL::SQLITECtx &ctx, uint64_t challenge_timeout) {
-  sqlite3 *db = ctx.get_sqlite_ctx();
-  if (!db) {
-    return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
-  }
-
-  std::string stmt = std::format(
+  stmt = std::format(
       "DELETE FROM CHALLENGE_FACTOR WHERE datetime(ON_TIME, '{} minutes') < "
       "datetime('now')",
-      challenge_timeout);
+      factors_timeout);
 
   {
     auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
     if (opt_tuple.has_value()) {
-      const auto [unused, error_enum, msg] = std::move(opt_tuple.value());
-      return {error_enum, msg};
+      const auto [unused, err_enum, err_msg] = std::move(opt_tuple.value());
+      if (err_enum != ErrorT::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup factors failed: {}: {}",
+                     error_t_to_string(err_enum), err_msg);
+      }
     }
   }
 
-  return {ErrorT::SUCCESS, {}};
-}
-
-std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_i_challenges(
-    PMA_SQL::SQLITECtx &ctx, uint64_t challenge_timeout) {
-  sqlite3 *db = ctx.get_sqlite_ctx();
-  if (!db) {
-    return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
-  }
-
-  std::string stmt = std::format(
+  stmt = std::format(
       "DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE datetime(ON_TIME, '{} "
       "minutes') "
       "< datetime('now')",
-      challenge_timeout);
+      interactive_timeout);
 
   {
     auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
     if (opt_tuple.has_value()) {
-      const auto [unused, error_enum, msg] = std::move(opt_tuple.value());
-      return {error_enum, msg};
+      const auto [unused, err_enum, err_msg] = std::move(opt_tuple.value());
+      if (err_enum != ErrorT::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup interactive failed: {}: {}",
+                     error_t_to_string(err_enum), err_msg);
+      }
     }
   }
 
-  return {ErrorT::SUCCESS, {}};
-}
-
-std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
-    PMA_SQL::SQLITECtx &ctx, uint32_t allowed_timeout) {
-  sqlite3 *db = ctx.get_sqlite_ctx();
-  if (!db) {
-    return {ErrorT::DB_ALREADY_FAILED_TO_INIT, {}};
-  }
-
-  std::string stmt = std::format(
+  stmt = std::format(
       "DELETE FROM ALLOWED_IP WHERE datetime(ON_TIME, '{} minutes') < "
       "datetime('now')",
       allowed_timeout);
@@ -412,12 +395,31 @@ std::tuple<PMA_SQL::ErrorT, std::string> PMA_SQL::cleanup_stale_entries(
   {
     auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
     if (opt_tuple.has_value()) {
-      const auto [unused, error_enum, msg] = std::move(opt_tuple.value());
-      return {error_enum, msg};
+      const auto [unused, err_enum, err_msg] = std::move(opt_tuple.value());
+      if (err_enum != ErrorT::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup allowed failed: {}: {}",
+                     error_t_to_string(err_enum), err_msg);
+      }
     }
   }
 
-  return {ErrorT::SUCCESS, {}};
+  stmt = std::format(
+      "DELETE FROM TIMEOUT WHERE datetime(ON_TIME, '{} minutes') < "
+      "datetime('now')",
+      timeout_timeout);
+
+  {
+    auto opt_tuple = internal_exec_sqlite_statement(ctx, stmt);
+    if (opt_tuple.has_value()) {
+      const auto [unused, err_enum, err_msg] = std::move(opt_tuple.value());
+      if (err_enum != ErrorT::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup timeout failed: {}: {}",
+                     error_t_to_string(err_enum), err_msg);
+      }
+    }
+  }
+
+  return ErrorT::SUCCESS;
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::string> PMA_SQL::init_id_to_port(
@@ -470,13 +472,16 @@ std::tuple<PMA_SQL::ErrorT, std::string, std::string, std::string>
 PMA_SQL::generate_challenge(SQLITECtx &ctx, uint64_t quads,
                             std::string client_ip, std::string hashed_id,
                             std::vector<uint8_t> (*hasher_fn)(void *data,
-                                                              size_t size)) {
+                                                              size_t size),
+                            const std::string &chall_timeout_str) {
   uint16_t port = 0;
   {
     const auto [err_enum, err_msg, opt_vec] =
         SqliteStmtRow<uint16_t>::exec_sqlite_stmt_with_rows<0>(
-            ctx, "SELECT PORT FROM ID_TO_PORT WHERE ID = ?", std::nullopt,
-            hashed_id);
+            ctx,
+            "SELECT PORT FROM ID_TO_PORT WHERE ID = ? AND datetime(ON_TIME, ?) "
+            "> datetime('now')",
+            std::nullopt, hashed_id, chall_timeout_str);
     if (err_enum != ErrorT::SUCCESS) {
       return {err_enum, err_msg, {}, {}};
     } else if (!opt_vec.has_value() || opt_vec.value().empty()) {
@@ -649,19 +654,21 @@ std::tuple<PMA_SQL::ErrorT, std::string, uint16_t>
 PMA_SQL::verify_factors_answer(SQLITECtx &ctx, std::string answer,
                                std::string ipaddr, std::string id,
                                std::vector<uint8_t> (*hasher_fn)(void *data,
-                                                                 size_t size)) {
+                                                                 size_t size),
+                               const std::string &factors_timeout_str) {
   std::string hash =
       PMA_HELPER::vec_to_hexadecimal(hasher_fn(answer.data(), answer.size()));
 
   std::string stored_ip;
   uint16_t port = 0;
   {
-    const auto [err_enum, err_msg, opt_vec] = SqliteStmtRow<
-        std::string, int>::exec_sqlite_stmt_with_rows<0, std::string,
-                                                      std::string>(
-        ctx,
-        "SELECT IP, PORT FROM CHALLENGE_FACTOR WHERE ID = ? AND FACTORS = ?",
-        std::nullopt, id, hash);
+    const auto [err_enum, err_msg, opt_vec] =
+        SqliteStmtRow<std::string, int>::exec_sqlite_stmt_with_rows<
+            0, std::string, std::string>(
+            ctx,
+            "SELECT IP, PORT FROM CHALLENGE_FACTOR WHERE ID = ? AND FACTORS = "
+            "? AND datetime(ON_TIME, ?) > datetime('now')",
+            std::nullopt, id, hash, factors_timeout_str);
 
     if (err_enum != ErrorT::SUCCESS) {
       return {err_enum, err_msg, 0};
@@ -704,7 +711,8 @@ PMA_SQL::verify_factors_answer(SQLITECtx &ctx, std::string answer,
 std::tuple<PMA_SQL::ErrorT, std::string, uint16_t, std::string>
 PMA_SQL::verify_interactive_answer(
     SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
-    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size)) {
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size),
+    const std::string &interactive_timeout_str) {
   std::string hash =
       PMA_HELPER::vec_to_hexadecimal(hasher_fn(answer.data(), answer.size()));
 
@@ -713,12 +721,13 @@ PMA_SQL::verify_interactive_answer(
   std::string url;
   {
     const auto [err_enum, err_msg, opt_vec] =
-        SqliteStmtRow<std::string, int, std::string>::
-            exec_sqlite_stmt_with_rows<0, std::string, std::string>(
-                ctx,
-                "SELECT IP, PORT, DEST_URL FROM INTERACTIVE_CHALLENGE_1 WHERE "
-                "ID = ? AND ANSWER = ?",
-                std::nullopt, id, hash);
+        SqliteStmtRow<std::string, int,
+                      std::string>::exec_sqlite_stmt_with_rows<0, std::string,
+                                                               std::string>(
+            ctx,
+            "SELECT IP, PORT, DEST_URL FROM INTERACTIVE_CHALLENGE_1 WHERE "
+            "ID = ? AND ANSWER = ? AND datetime(ON_TIME, ?) > datetime('now')",
+            std::nullopt, id, hash, interactive_timeout_str);
 
     exec_sqlite_statement<0, std::string>(
         ctx, "DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?", std::nullopt,
@@ -760,11 +769,14 @@ PMA_SQL::verify_interactive_answer(
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, std::unordered_set<uint16_t>>
-PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr) {
+PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr,
+                              const std::string &allowed_timeout_str) {
   const auto [err_enum, err_msg, opt_vec] =
       SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string>(
-          ctx, "SELECT PORT FROM ALLOWED_IP WHERE IP = ?", std::nullopt,
-          ipaddr);
+          ctx,
+          "SELECT PORT FROM ALLOWED_IP WHERE IP = ? AND datetime(ON_TIME, ?) < "
+          "datetime('now')",
+          std::nullopt, ipaddr, allowed_timeout_str);
 
   if (err_enum != ErrorT::SUCCESS) {
     return {err_enum, err_msg, {}};
@@ -787,11 +799,14 @@ PMA_SQL::get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr) {
 }
 
 std::tuple<PMA_SQL::ErrorT, std::string, bool> PMA_SQL::is_allowed_ip_port(
-    SQLITECtx &ctx, std::string ipaddr, uint16_t port) {
+    SQLITECtx &ctx, std::string ipaddr, uint16_t port,
+    const std::string &allowed_timeout_str) {
   const auto [err_enum, err_msg, opt_vec] =
       SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string, int>(
-          ctx, "SELECT PORT FROM ALLOWED_IP WHERE IP = ? AND PORT = ?",
-          std::nullopt, ipaddr, port);
+          ctx,
+          "SELECT PORT FROM ALLOWED_IP WHERE IP = ? AND PORT = ? AND "
+          "datetime(ON_TIME, ?) > datetime('now')",
+          std::nullopt, ipaddr, port, allowed_timeout_str);
 
   if (err_enum != ErrorT::SUCCESS) {
     return {err_enum, err_msg, {}};
@@ -812,12 +827,14 @@ std::tuple<PMA_SQL::ErrorT, std::string, bool> PMA_SQL::is_allowed_ip_port(
 }
 
 std::tuple<PMA_SQL::ErrorT, uint64_t> PMA_SQL::has_interactive_challenge(
-    SQLITECtx &ctx, std::string addr, uint16_t port) {
+    SQLITECtx &ctx, std::string addr, uint16_t port,
+    const std::string &interactive_timeout_str) {
   const auto [err_enum, err_msg, opt_vec] =
       SqliteStmtRow<int>::exec_sqlite_stmt_with_rows<0, std::string, uint16_t>(
           ctx,
-          "SELECT PORT FROM INTERACTIVE_CHALLENGE_1 WHERE IP = ? AND PORT = ?",
-          std::nullopt, addr, port);
+          "SELECT PORT FROM INTERACTIVE_CHALLENGE_1 WHERE IP = ? AND PORT = ? "
+          "AND datetime(ON_TIME, ?) > datetime('now')",
+          std::nullopt, addr, port, interactive_timeout_str);
 
   if (err_enum != ErrorT::SUCCESS) {
     return {err_enum, 0};
@@ -834,20 +851,6 @@ std::tuple<PMA_SQL::ErrorT, uint64_t> PMA_SQL::has_interactive_challenge(
   }
 
   return {ErrorT::SUCCESS, count};
-}
-
-PMA_SQL::ErrorT PMA_SQL::cleanup_timeouts(SQLITECtx &ctx,
-                                          uint64_t timeout_time) {
-  std::string stmt = std::format(
-      "DELETE FROM TIMEOUT WHERE datetime(ON_TIME, '{} minutes') < "
-      "datetime('now')",
-      timeout_time);
-
-  const auto [err_enum, err_msg, opt_vec] =
-      SqliteStmtRow<>::exec_sqlite_stmt_with_rows<0, uint64_t>(
-          ctx, stmt, std::nullopt, timeout_time);
-
-  return err_enum;
 }
 
 PMA_SQL::ErrorT PMA_SQL::add_timeout(SQLITECtx &ctx, std::string ip) {

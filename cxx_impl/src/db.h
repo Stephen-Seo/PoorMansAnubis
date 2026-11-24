@@ -126,21 +126,9 @@ struct SqliteStmtRow {
 // string is err message.
 std::tuple<SQLITECtx, ErrorT, std::string> init_sqlite(std::string filepath);
 
-// string is err message.
-std::tuple<ErrorT, std::string> cleanup_stale_id_to_ports(SQLITECtx &ctx,
-                                                          uint64_t timeout);
-
-// string is err message.
-std::tuple<ErrorT, std::string> cleanup_stale_challenges(SQLITECtx &ctx,
-                                                         uint64_t timeout);
-
-// string is err message.
-std::tuple<ErrorT, std::string> cleanup_stale_i_challenges(SQLITECtx &ctx,
-                                                           uint64_t timeout);
-
-// string is err message.
-std::tuple<ErrorT, std::string> cleanup_stale_entries(SQLITECtx &ctx,
-                                                      uint32_t timeout);
+ErrorT cleanup_db(SQLITECtx &ctx, uint64_t id_to_port_timeout,
+                  uint64_t factors_timeout, uint64_t interactive_timeout,
+                  uint64_t timeout_timeout, uint64_t allowed_timeout);
 
 // last string is id.
 std::tuple<ErrorT, std::string, std::string> init_id_to_port(
@@ -152,7 +140,8 @@ std::tuple<ErrorT, std::string, std::string> init_id_to_port(
 // Last string is id.
 std::tuple<ErrorT, std::string, std::string, std::string> generate_challenge(
     SQLITECtx &ctx, uint64_t quads, std::string client_ip, std::string id,
-    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size),
+    const std::string &chall_timeout_str);
 
 // On error, first string is err message. On SUCCESS, first string is challenge
 // html. Last string is id.
@@ -169,7 +158,8 @@ std::tuple<ErrorT, std::string, std::string> generate_interactive_challenge(
 // generation request.
 std::tuple<ErrorT, std::string, uint16_t> verify_factors_answer(
     SQLITECtx &ctx, std::string answer, std::string ipaddr, std::string id,
-    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
+    std::vector<uint8_t> (*hasher_fn)(void *data, size_t size),
+    const std::string &factors_timeout_str);
 
 // string is error msg, uint16_t is destination port of initial challenge
 // generation request, last string is url (empty if NULL).
@@ -177,21 +167,21 @@ std::tuple<ErrorT, std::string, uint16_t, std::string>
 verify_interactive_answer(SQLITECtx &ctx, std::string answer,
                           std::string ipaddr, std::string id,
                           std::vector<uint8_t> (*hasher_fn)(void *data,
-                                                            size_t size));
+                                                            size_t size),
+                          const std::string &interactive_timeout_str);
 
 std::tuple<ErrorT, std::string, std::unordered_set<uint16_t>>
-get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr);
+get_allowed_ip_ports(SQLITECtx &ctx, std::string ipaddr,
+                     const std::string &allowed_timeout_str);
 
 // May return false even if ErrorT is SUCCESS.
-std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(SQLITECtx &ctx,
-                                                         std::string ipaddr,
-                                                         uint16_t port);
+std::tuple<ErrorT, std::string, bool> is_allowed_ip_port(
+    SQLITECtx &ctx, std::string ipaddr, uint16_t port,
+    const std::string &allowed_timeout_str);
 
-std::tuple<ErrorT, uint64_t> has_interactive_challenge(SQLITECtx &ctx,
-                                                       std::string addr,
-                                                       uint16_t port);
-
-ErrorT cleanup_timeouts(SQLITECtx &ctx, uint64_t timeout_time);
+std::tuple<ErrorT, uint64_t> has_interactive_challenge(
+    SQLITECtx &ctx, std::string addr, uint16_t port,
+    const std::string &interactive_timeout_str);
 
 ErrorT add_timeout(SQLITECtx &ctx, std::string ip);
 

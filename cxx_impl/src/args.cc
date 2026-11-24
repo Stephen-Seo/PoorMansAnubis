@@ -145,6 +145,14 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       js_factors_url("/pma_factors.js"),
       rest_api_url("/pma_rest_api"),
       sqlite_path("sqlite_db"),
+      sqlite_id_to_port_timeout_string(
+          std::format("{} minutes", ID_TO_PORT_TIMEOUT_MINS)),
+      sqlite_challenge_timeout_string(
+          std::format("{} minutes", CHALLENGE_FACTORS_TIMEOUT_MINUTES)),
+      sqlite_i_challenge_timeout_string(
+          std::format("{} minutes", INTERACTIVE_CHALLENGE_TIMEOUT_MINS)),
+      sqlite_allowed_timeout_string(
+          std::format("{} minutes", ALLOWED_IP_TIMEOUT_MINUTES)),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
       interactive_challenge_timeout(INTERACTIVE_CHALLENGE_TIMEOUT_MINS),
@@ -378,6 +386,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
           return;
         }
         this->challenge_factors_timeout = static_cast<uint64_t>(parsed);
+        this->sqlite_challenge_timeout_string =
+            std::format("{} minutes", this->challenge_factors_timeout);
       } catch (const std::invalid_argument &e) {
         PMA_EPrintln(
             "ERROR: Failed to parse timeout from "
@@ -402,6 +412,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
           return;
         }
         this->allowed_timeout = static_cast<uint32_t>(parsed);
+        this->sqlite_allowed_timeout_string =
+            std::format("{} minutes", this->allowed_timeout);
       } catch (const std::invalid_argument &e) {
         PMA_EPrintln(
             "ERROR: Failed to parse timeout from "
@@ -547,7 +559,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
             "WARNING: Set --interactive-challenge-timeout-mins to minimum of "
             "1");
       }
-      interactive_challenge_timeout = static_cast<uint64_t>(value);
+      this->interactive_challenge_timeout = static_cast<uint64_t>(value);
+      this->sqlite_i_challenge_timeout_string =
+          std::format("{} minutes", this->interactive_challenge_timeout);
     } else if (std::strcmp(argv[0], "--only-factors-challenge") == 0) {
       flags.set(10);
       PMA_EPrintln("Enabling only Factors challenge...");

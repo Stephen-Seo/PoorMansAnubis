@@ -49,6 +49,10 @@ struct Args {
   std::string rest_api_url;
   std::string sqlite_path;
   std::string mysql_conf_path;
+  std::string sqlite_id_to_port_timeout_string;
+  std::string sqlite_challenge_timeout_string;
+  std::string sqlite_i_challenge_timeout_string;
+  std::string sqlite_allowed_timeout_string;
   uint64_t factors;
   uint64_t max_interactive_challenges;
   uint64_t interactive_challenge_timeout;
