@@ -2,7 +2,8 @@
 
 ## Upcoming Changes
 
-`rust_impl`: Refactor how databases were used, should result in faster accesses.
+`rust_impl` and `cxx_impl`: Refactor how databases were used, should result in
+faster accesses.
 
 ## Version 0.3.2
 
