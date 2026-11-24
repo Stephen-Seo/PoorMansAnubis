@@ -55,9 +55,6 @@
 volatile int interrupt_received = 0;
 volatile int usr1_received = 0;
 
-std::condition_variable cleanup_thread_cv{};
-std::mutex cleanup_thread_mutex{};
-
 void receive_signal(int sig) {
   if (sig == SIGHUP || sig == SIGINT || sig == SIGTERM) {
     PMA_Println("Interupt received...");
@@ -2335,16 +2332,15 @@ void thread_cleanup_fn(void *ud) {
   delete data;
 }
 
-void cleanup_thread_fn(const void *ud) {
-  const PMA_ARGS::Args *args = static_cast<const PMA_ARGS::Args *>(ud);
-
+void cleanup_thread_fn(const PMA_ARGS::Args *args, std::condition_variable *cv,
+                       std::mutex *m) {
   while (!interrupt_received) {
   CLEANUP_THREAD_FN_LOOP_START:
 #ifndef NDEBUG
     PMA_EPrintln("Cleanup thread iteration, sleep...");
 #endif
-    std::unique_lock lock(cleanup_thread_mutex);
-    cleanup_thread_cv.wait_for(lock, std::chrono::minutes(2));
+    std::unique_lock lock(*m);
+    cv->wait_for(lock, std::chrono::minutes(2));
 #ifndef NDEBUG
     PMA_EPrintln("Cleanup thread woke up...");
 #endif
@@ -2389,6 +2385,10 @@ void cleanup_thread_fn(const void *ud) {
       }
     }
   }
+
+#ifndef NDEBUG
+  PMA_EPrintln("End of cleanup thread fn.");
+#endif
 }
 
 int main(int argc, char **argv) {
@@ -2536,7 +2536,11 @@ int main(int argc, char **argv) {
   // std::deque<int> to_remove_connections;
   // std::array<char, REQ_READ_BUF_SIZE> buf;
 
-  std::thread cleanup_thread_handle(cleanup_thread_fn, &args);
+  std::condition_variable cleanup_thread_cv{};
+  std::mutex cleanup_thread_mutex{};
+
+  std::thread cleanup_thread_handle(cleanup_thread_fn, &args,
+                                    &cleanup_thread_cv, &cleanup_thread_mutex);
 
   std::shared_mutex cached_allowed_mutex;
   std::unordered_map<std::string,
