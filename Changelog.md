@@ -13,6 +13,8 @@ existed in the Rust version, but in the C++ version an alternate flag
 
 Update README.txt to have latest "help text" from Rust and C++ versions.
 
+Update README.txt to note the usage of the SIGUSR1 signal.
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.

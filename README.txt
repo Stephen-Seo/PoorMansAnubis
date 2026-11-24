@@ -175,6 +175,13 @@ Args for the C++ implementation are as follows:
         If you are going to use this anyway, you must ensure that a proper firewall is configured!
       --important-warning-has-been-read : Use this option to enable potentially dangerous options
 
+Note that if the SIGUSR1 signal is sent to the PoorMansAnubis process, the
+"allowed clients cache" will immediately be cleared. Note that every client
+that passes the challenge is noted in this cache, which is
+automatically/periodically cleared. Remove a client from the ALLOWED table in
+the db and send the SIGUSR1 signal to PoorMansAnubis to force that client to go
+through a challenge again.
+
 ================================================================================
 
 USING PoorMansAnubis C++ IMPLEMENTATION WITHOUT LIBCURL
