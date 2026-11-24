@@ -2427,7 +2427,12 @@ int main(int argc, char **argv) {
 
     PMA_MSQL::init_db(msql_conn_opt.value());
   } else {
-    PMA_SQL::init_sqlite(args.sqlite_path);
+    auto [ctx, err, errmsg] = PMA_SQL::init_sqlite(args.sqlite_path);
+    if (err != PMA_SQL::ErrorT::SUCCESS) {
+      PMA_EPrintln("ERROR: Failed to init sqlite: {}: {}",
+                   PMA_SQL::error_t_to_string(err), errmsg);
+      return 7;
+    }
   }
 
   curl_global_init(CURL_GLOBAL_SSL);
