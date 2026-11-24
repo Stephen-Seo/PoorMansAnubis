@@ -102,6 +102,9 @@ void pma_print_usage() {
       "  --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for "
       "interactive challenges (default 2 minutes)");
   PMA_Println(
+      "  --interactive-challenge-timeout=<minutes> : Same as "
+      "\"--interactive-challenge-timeout-mins=<minutes>\"");
+  PMA_Println(
       "  --only-factors-challenge : Only allow factors challenge to be used");
   PMA_Println(
       "  --only-interactive-challenge : Only allow interactive challenge to "
@@ -558,6 +561,27 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln(
             "WARNING: Set --interactive-challenge-timeout-mins to minimum of "
             "1");
+      }
+      this->interactive_challenge_timeout = static_cast<uint64_t>(value);
+      this->sqlite_i_challenge_timeout_string =
+          std::format("{} minutes", this->interactive_challenge_timeout);
+    } else if (std::strncmp(argv[0], "--interactive-challenge-timeout=", 32) ==
+               0) {
+      std::string s(argv[0] + 32);
+      unsigned long long value;
+      try {
+        value = std::stoull(s);
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse value passed to "
+            "--interactive-challenge-timeout=... !");
+        flags.set(2);
+        return;
+      }
+      if (value == 0) {
+        value = 1;
+        PMA_EPrintln(
+            "WARNING: Set --interactive-challenge-timeout to minimum of 1");
       }
       this->interactive_challenge_timeout = static_cast<uint64_t>(value);
       this->sqlite_i_challenge_timeout_string =
