@@ -5,6 +5,8 @@
 `rust_impl` and `cxx_impl`: Refactor how databases were used, should result in
 faster accesses.
 
+`cxx_impl`: Error on start if sqlite failed to init.
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.
