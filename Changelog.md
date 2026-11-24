@@ -11,6 +11,8 @@ faster accesses.
 existed in the Rust version, but in the C++ version an alternate flag
 `--interactive-challenge-timeout-mins=<minutes>` existed.
 
+Update README.txt to have latest "help text" from Rust and C++ versions.
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.
