@@ -7,6 +7,10 @@ faster accesses.
 
 `cxx_impl`: Error on start if sqlite failed to init.
 
+`cxx_impl`: Add flag `--interactive-challenge-timeout=<minutes>`. This flag
+existed in the Rust version, but in the C++ version an alternate flag
+`--interactive-challenge-timeout-mins=<minutes>` existed.
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.
