@@ -115,6 +115,8 @@ Args:
   --only-factors-challenge : Only allow factors challenge to be used
   --only-interactive-challenge : Only allow interactive challenge to be used
   --enable-rest-api : Enable using the REST api for interactive challenges; default false
+  --force-i-bezier : When generating interactive challenge only use bezier curves; default random
+  --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random
   --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
     example header: "override-dest-url: http://127.0.0.1:8888"
   WARNING: If --enable-override-dest-url is used, you must ensure that
@@ -158,9 +160,12 @@ Args for the C++ implementation are as follows:
       --req-timeout-millis=<milliseconds> : Sets the number of milliseconds until timeout during forwarding requests (default 5000)
       --max-interactive-challenges=<int> : Sets the maximum number of interactive challenges before denying access
       --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for interactive challenges (default 2 minutes)
+      --interactive-challenge-timeout=<minutes> : Same as "--interactive-challenge-timeout-mins=<minutes>"
       --only-factors-challenge : Only allow factors challenge to be used
       --only-interactive-challenge : Only allow interactive challenge to be used
       --enable-rest-api : Enable using the REST api for interactive challenges; default false
+      --force-i-bezier : When generating interactive challenge only use bezier curves; default random
+      --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
         example header: "override-dest-url: http://127.0.0.1:8888"
       WARNING: If --enable-override-dest-url is used, you must ensure that
