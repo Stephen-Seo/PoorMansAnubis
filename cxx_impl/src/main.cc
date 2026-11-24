@@ -2332,30 +2332,30 @@ void thread_cleanup_fn(void *ud) {
   delete data;
 }
 
-void cleanup_thread_fn(const PMA_ARGS::Args *args, std::condition_variable *cv,
-                       std::mutex *m) {
+void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
+                            std::condition_variable *cv, std::mutex *m) {
   while (!interrupt_received) {
   CLEANUP_THREAD_FN_LOOP_START:
 #ifndef NDEBUG
-    PMA_EPrintln("Cleanup thread iteration, sleep...");
+    PMA_EPrintln("Cleanup db iteration, sleep...");
 #endif
     std::unique_lock lock(*m);
     cv->wait_for(lock, std::chrono::minutes(2));
 #ifndef NDEBUG
-    PMA_EPrintln("Cleanup thread woke up...");
+    PMA_EPrintln("Cleanup db thread woke up...");
 #endif
 
     if (args->flags.test(4)) {
       auto msql_conf_opt = PMA_MSQL::parse_conf_file(args->mysql_conf_path);
       if (!msql_conf_opt.has_value()) {
-        PMA_EPrintln("ERROR: Cleanup thread failed to get MSQL config!");
+        PMA_EPrintln("ERROR: Cleanup db failed to get MSQL config!");
         goto CLEANUP_THREAD_FN_LOOP_START;
       }
       auto msql_conn_opt = PMA_MSQL::Connection::connect_msql(
           msql_conf_opt->addr, msql_conf_opt->port, msql_conf_opt->user,
           msql_conf_opt->pass, msql_conf_opt->db);
       if (!msql_conn_opt.has_value()) {
-        PMA_EPrintln("ERROR: Cleanup thread failed to get MSQL Connection!");
+        PMA_EPrintln("ERROR: Cleanup db failed to get MSQL Connection!");
         goto CLEANUP_THREAD_FN_LOOP_START;
       }
 
@@ -2364,13 +2364,13 @@ void cleanup_thread_fn(const PMA_ARGS::Args *args, std::condition_variable *cv,
           args->interactive_challenge_timeout, args->allowed_timeout,
           ID_TO_PORT_TIMEOUT_MINS, args->timeout_time);
       if (ret != PMA_MSQL::Error::SUCCESS) {
-        PMA_EPrintln("ERROR: Cleanup thread failed: {}",
+        PMA_EPrintln("ERROR: Cleanup db failed: {}",
                      PMA_MSQL::error_to_str(ret));
       }
     } else {
       auto [sqliteCtx, err, msg] = PMA_SQL::init_sqlite(args->sqlite_path);
       if (err != PMA_SQL::ErrorT::SUCCESS) {
-        PMA_EPrintln("ERROR: Cleanup thread failed to get sqlite ctx: {}: {}",
+        PMA_EPrintln("ERROR: Cleanup db failed to get sqlite ctx: {}: {}",
                      PMA_SQL::error_t_to_string(err), msg);
         goto CLEANUP_THREAD_FN_LOOP_START;
       }
@@ -2380,14 +2380,14 @@ void cleanup_thread_fn(const PMA_ARGS::Args *args, std::condition_variable *cv,
                                      args->interactive_challenge_timeout,
                                      args->timeout_time, args->allowed_timeout);
       if (ret != PMA_SQL::ErrorT::SUCCESS) {
-        PMA_EPrintln("ERROR: Cleanup thread cleanup sqlite failed: {}",
+        PMA_EPrintln("ERROR: Cleanup db sqlite failed: {}",
                      PMA_SQL::error_t_to_string(ret));
       }
     }
   }
 
 #ifndef NDEBUG
-  PMA_EPrintln("End of cleanup thread fn.");
+  PMA_EPrintln("End of cleanup db thread fn.");
 #endif
 }
 
@@ -2539,7 +2539,7 @@ int main(int argc, char **argv) {
   std::condition_variable cleanup_thread_cv{};
   std::mutex cleanup_thread_mutex{};
 
-  std::thread cleanup_thread_handle(cleanup_thread_fn, &args,
+  std::thread cleanup_thread_handle(periodic_db_cleanup_fn, &args,
                                     &cleanup_thread_cv, &cleanup_thread_mutex);
 
   std::shared_mutex cached_allowed_mutex;
