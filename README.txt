@@ -115,6 +115,8 @@ Args:
   --only-factors-challenge : Only allow factors challenge to be used
   --only-interactive-challenge : Only allow interactive challenge to be used
   --enable-rest-api : Enable using the REST api for interactive challenges; default false
+  --force-i-bezier : When generating interactive challenge only use bezier curves; default random
+  --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random
   --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
     example header: "override-dest-url: http://127.0.0.1:8888"
   WARNING: If --enable-override-dest-url is used, you must ensure that
@@ -158,9 +160,12 @@ Args for the C++ implementation are as follows:
       --req-timeout-millis=<milliseconds> : Sets the number of milliseconds until timeout during forwarding requests (default 5000)
       --max-interactive-challenges=<int> : Sets the maximum number of interactive challenges before denying access
       --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for interactive challenges (default 2 minutes)
+      --interactive-challenge-timeout=<minutes> : Same as "--interactive-challenge-timeout-mins=<minutes>"
       --only-factors-challenge : Only allow factors challenge to be used
       --only-interactive-challenge : Only allow interactive challenge to be used
       --enable-rest-api : Enable using the REST api for interactive challenges; default false
+      --force-i-bezier : When generating interactive challenge only use bezier curves; default random
+      --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
         example header: "override-dest-url: http://127.0.0.1:8888"
       WARNING: If --enable-override-dest-url is used, you must ensure that
@@ -169,6 +174,13 @@ Args for the C++ implementation are as follows:
         direct PoorMansAnubis to load any website!
         If you are going to use this anyway, you must ensure that a proper firewall is configured!
       --important-warning-has-been-read : Use this option to enable potentially dangerous options
+
+Note that if the SIGUSR1 signal is sent to the PoorMansAnubis process, the
+"allowed clients cache" will immediately be cleared. Note that every client
+that passes the challenge is noted in this cache, which is
+automatically/periodically cleared. Remove a client from the ALLOWED table in
+the db and send the SIGUSR1 signal to PoorMansAnubis to force that client to go
+through a challenge again.
 
 ================================================================================
 

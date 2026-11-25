@@ -50,7 +50,7 @@ use crate::helpers::GenericCleanup;
 
 const GETRANDOM_BUF_SIZE: usize = 64;
 const CACHED_TIMEOUT: Duration = Duration::from_secs(120);
-const CACHED_CLEANUP_TIMEOUT: Duration = Duration::from_secs(3600);
+const CACHED_CLEANUP_TIMEOUT: Duration = Duration::from_mins(60);
 
 #[allow(unused)]
 const MSQL_RUST_SEQ_ID_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID_1 (
@@ -564,16 +564,7 @@ async fn get_next_seq_mysql(depot: &Depot) -> Result<u64, Error> {
     let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-        let mut locked = conn_ref.lock().unwrap();
-        locked
-            .query_drop("UNLOCK TABLES")
-            .expect("Should be able to UNLOCK TABLES in cleanup");
-    });
-
     let mut locked = conn.lock().unwrap();
-
-    locked.query_drop("LOCK TABLE RUST_SEQ_ID_1 WRITE")?;
 
     let seq_rows: Option<Vec<Vec<MSQLValueEnum>>> = locked
         .query_rows("SELECT ID, SEQ_ID FROM RUST_SEQ_ID_1")
@@ -729,16 +720,7 @@ async fn set_challenge_factor_mysql(
     let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-        let mut locked = conn_ref.lock().unwrap();
-        locked
-            .query_drop("UNLOCK TABLES")
-            .expect("Should be able to UNLOCK TABLES in cleanup");
-    });
-
     let mut locked = conn.lock().unwrap();
-
-    locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(hash)?;
@@ -767,16 +749,7 @@ async fn set_interactive_challenge_msql(
     let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-        let mut locked = conn_ref.lock().unwrap();
-        locked
-            .query_drop("UNLOCK TABLES")
-            .expect("Should be able to UNLOCK TABLES in cleanup");
-    });
-
     let mut locked = conn.lock().unwrap();
-
-    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE_1 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(hash)?;
@@ -1043,23 +1016,15 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
     let args: &args::Args = depot.get_typed().unwrap();
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-        let mut locked = conn_ref.lock().unwrap();
-        locked
-            .query_drop("UNLOCK TABLES")
-            .expect("Should be able to UNLOCK TABLES in cleanup");
-    });
-
     let mut locked = conn.lock().unwrap();
-
-    locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(id)?;
+    params.append_uint64(constants::ID_TO_PORT_TIMEOUT);
 
     {
         let rows_opt_ret = locked
-            .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
+            .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?", &params)
             .map_err(|e| e.to_owned())?;
         if let Some(rows) = rows_opt_ret {
             match rows[0][0] {
@@ -1071,6 +1036,9 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
             }
         }
     }
+
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(id)?;
 
     if port.is_some() {
         locked
@@ -1084,9 +1052,11 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
 async fn challenge_port_sqlite(args: &args::Args, id: &str) -> Result<u16, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    match conn.query_one(r"SELECT PORT FROM ID_TO_PORT WHERE ID = ?1", (id,), |r| {
-        r.get::<usize, u16>(0)
-    }) {
+    match conn.query_one(
+        r"SELECT PORT FROM ID_TO_PORT WHERE ID = ?1 AND datetime(ON_TIME, ?2) > datetime('now')",
+        (id, &args.sqlite_id_to_port_timeout_string),
+        |r| r.get::<usize, u16>(0),
+    ) {
         Ok(p) => {
             conn.execute(r"DELETE FROM ID_TO_PORT WHERE ID = ?1", (id,))?;
             Ok(p)
@@ -1152,76 +1122,64 @@ async fn validate_client_factors_mysql(
     let mut port: u16 = 0;
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    {
-        let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-            let mut locked = conn_ref.lock().unwrap();
-            locked
-                .query_drop("UNLOCK TABLES")
-                .expect("Should be able to UNLOCK TABLES in cleanup");
-        });
+    let mut locked = conn.lock().unwrap();
 
-        let mut locked = conn.lock().unwrap();
+    let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
-        locked.query_drop("LOCK TABLE RUST_CHALLENGE_FACTORS_4 WRITE")?;
+    let mut params = MSQLParamsWrapper::new();
+    params.append_str(&factors_response.id)?;
+    params.append_str(&hashed_factors)?;
 
-        {
-            let mut params = MSQLParamsWrapper::new();
-            params.append_uint64(args.challenge_timeout_mins);
-
-            locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
-        }
-
-        let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
-
-        let mut params = MSQLParamsWrapper::new();
-        params.append_str(&factors_response.id)?;
-        params.append_str(&hashed_factors)?;
-
-        let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
+    let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
             .query_with_params_rows(
-                "SELECT IP, PORT FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ? AND FACTORS = ?",
+                "SELECT IP, PORT, TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ? AND FACTORS = ?",
                 &params,
             )
             .map_err(|e| e.to_owned())?;
 
-        if let Some(rows) = addr_port_rows_opt {
-            let client_addr: String = match &rows[0][0] {
-                MSQLValueEnum::String(s) => s.to_owned(),
+    if let Some(rows) = addr_port_rows_opt {
+        match rows[0][2] {
+            MSQLValueEnum::Int64(i) => {
+                if i >= 0i64 && (i as u64) >= args.challenge_timeout_mins {
+                    return Err(Error::as_str("ChallengeFactors expired"));
+                }
+            }
+            MSQLValueEnum::UInt64(u) => {
+                if u >= args.challenge_timeout_mins {
+                    return Err(Error::as_str("ChallengeFactors expired"));
+                }
+            }
+            _ => {
+                return Err(Error::as_str(
+                    "ChallengeFactors timestampdiff not an integer",
+                ));
+            }
+        }
+
+        let client_addr: String = match &rows[0][0] {
+            MSQLValueEnum::String(s) => s.to_owned(),
+            _ => {
+                return Err(Error::as_str("No IP from ChallengeFactors"));
+            }
+        };
+
+        if client_addr == addr {
+            port = match rows[0][1] {
+                MSQLValueEnum::Int64(i) => i as u16,
+                MSQLValueEnum::UInt64(u) => u as u16,
                 _ => {
-                    return Err(Error::as_str("No IP from ChallengeFactors"));
+                    return Err(Error::as_str("No Port from ChallengeFactors"));
                 }
             };
-
-            if client_addr == addr {
-                port = match rows[0][1] {
-                    MSQLValueEnum::Int64(i) => i as u16,
-                    MSQLValueEnum::UInt64(u) => u as u16,
-                    _ => {
-                        return Err(Error::as_str("No Port from ChallengeFactors"));
-                    }
-                };
-                correct = true;
-
-                let mut params = MSQLParamsWrapper::new();
-                params.append_str(&factors_response.id)?;
-
-                locked
-                    .query_with_params_drop(
-                        "DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
-                        &params,
-                    )
-                    .map_err(|e| e.to_owned())?;
-            } else {
-                correct = false;
-            }
+            correct = true;
         } else {
             correct = false;
         }
+    } else {
+        correct = false;
     }
 
     if correct && port != 0 {
-        let mut locked = conn.lock().unwrap();
-
         let mut params = MSQLParamsWrapper::new();
         params.append_str(addr)?;
         params.append_uint64(port as u64);
@@ -1249,23 +1207,7 @@ async fn validate_client_interactive_msql(
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
     {
-        let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-            let mut locked = conn_ref.lock().unwrap();
-            locked
-                .query_drop("UNLOCK TABLES")
-                .expect("Should be able to UNLOCK TABLES in cleanup");
-        });
-
         let mut locked = conn.lock().unwrap();
-
-        locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE_1 WRITE")?;
-
-        {
-            let mut params = MSQLParamsWrapper::new();
-            params.append_uint64(args.interactive_challenge_timeout_mins);
-
-            locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
-        }
 
         let hashed_answer = blake3::hash(interactive_response.answer.as_bytes()).to_string();
 
@@ -1275,12 +1217,26 @@ async fn validate_client_interactive_msql(
 
         let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
             .query_with_params_rows(
-                "SELECT IP, PORT, DEST_URL FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ? AND ANSWER = ?",
+                "SELECT IP, PORT, DEST_URL, TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ? AND ANSWER = ?",
                 &params,
             )
             .map_err(|e| e.to_owned())?;
 
         if let Some(rows) = addr_port_rows_opt {
+            match rows[0][3] {
+                MSQLValueEnum::Int64(i) => {
+                    if i >= 0 && (i as u64) >= args.interactive_challenge_timeout_mins {
+                        return Err(Error::as_str("InteractiveChallenge expired!"));
+                    }
+                }
+                MSQLValueEnum::UInt64(u) => {
+                    if u >= args.interactive_challenge_timeout_mins {
+                        return Err(Error::as_str("InteractiveChallenge expired!"));
+                    }
+                }
+                _ => return Err(Error::as_str("InteractiveChallenge time not an integer!")),
+            }
+
             let client_addr: String = match &rows[0][0] {
                 MSQLValueEnum::String(s) => s.to_owned(),
                 _ => {
@@ -1346,11 +1302,9 @@ async fn validate_client_factors_sqlite(
 
     let hashed_factors = blake3::hash(factors_response.factors.as_bytes()).to_string();
 
-    conn.execute(&format!(r#"DELETE FROM CHALLENGE_FACTOR WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.challenge_timeout_mins), ())?;
-
     let res = conn.query_one(
-        r"SELECT IP, PORT FROM CHALLENGE_FACTOR WHERE ID = ?1 AND FACTORS = ?2",
-        (&factors_response.id, &hashed_factors),
+        r"SELECT IP, PORT FROM CHALLENGE_FACTOR WHERE ID = ?1 AND FACTORS = ?2 AND datetime(ON_TIME, ?3) > datetime('now')",
+        (&factors_response.id, &hashed_factors, &args.sqlite_challenge_timeout_string),
         |r| Ok((r.get::<usize, String>(0), r.get::<usize, u16>(1))),
     );
 
@@ -1384,11 +1338,9 @@ async fn validate_client_interactive_sqlite(
 
     let mut dest_url: Option<String> = None;
 
-    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
-
     let res = conn.query_one(
-        r"SELECT IP, PORT, DEST_URL FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?1 AND ANSWER = ?2",
-        (&interactive_response.id, &hashed_answer),
+        r"SELECT IP, PORT, DEST_URL FROM INTERACTIVE_CHALLENGE_1 WHERE ID = ?1 AND ANSWER = ?2 AND datetime(ON_TIME, ?3) > datetime('now')",
+        (&interactive_response.id, &hashed_answer, &args.sqlite_i_challenge_timeout_string),
         |r| {
             Ok((
                 r.get::<usize, String>(0),
@@ -1436,31 +1388,16 @@ async fn client_has_interactive_challenge_msql(
 ) -> Result<u64, Error> {
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-        let mut locked = conn_ref.lock().unwrap();
-        locked
-            .query_drop("UNLOCK TABLES")
-            .expect("Should be able to UNLOCK TABLES in cleanup");
-    });
-
     let mut locked = conn.lock().unwrap();
-    locked.query_drop("LOCK TABLE RUST_INTERACTIVE_CHALLENGE_1 WRITE")?;
-
-    {
-        // Cleanup stale entries first.
-        let mut params = MSQLParamsWrapper::new();
-        params.append_uint64(args.interactive_challenge_timeout_mins);
-
-        locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned())?;
-    }
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(ip)?;
     params.append_uint64(port as u64);
+    params.append_uint64(args.interactive_challenge_timeout_mins);
 
     let rows = locked
         .query_with_params_rows(
-            r#"SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE IP = ? AND PORT = ?"#,
+            r#"SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE IP = ? AND PORT = ? AND TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) < ?"#,
             &params,
         )
         .map_err(|e| e.to_owned())?;
@@ -1479,11 +1416,11 @@ async fn client_has_interactive_challenge_sqlite(
 ) -> Result<u64, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, args.interactive_challenge_timeout_mins), ())?;
-
     let mut stmt =
-        conn.prepare(r#"SELECT PORT FROM INTERACTIVE_CHALLENGE_1 WHERE IP = ?1 AND PORT = ?2"#)?;
-    let rows = stmt.query_map((ip, port), |row| row.get::<usize, i64>(0))?;
+        conn.prepare(r#"SELECT PORT FROM INTERACTIVE_CHALLENGE_1 WHERE IP = ?1 AND PORT = ?2 AND datetime(ON_TIME, ?3) > datetime('now')"#)?;
+    let rows = stmt.query_map((ip, port, &args.sqlite_i_challenge_timeout_string), |row| {
+        row.get::<usize, i64>(0)
+    })?;
     Ok(rows.count() as u64)
 }
 
@@ -1700,47 +1637,16 @@ async fn api_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::
 async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Result<bool, Error> {
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    {
-        let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-            let mut locked = conn_ref.lock().unwrap();
-            locked
-                .query_drop("UNLOCK TABLES")
-                .expect("Should be able to UNLOCK TABLES in cleanup");
-        });
-
-        let mut locked = conn.lock().unwrap();
-
-        locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS WRITE")?;
-
-        let mut params = MSQLParamsWrapper::new();
-        params.append_uint64(args.allowed_timeout_mins);
-
-        locked
-            .query_with_params_drop(
-                "DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
-                &params,
-            )
-            .map_err(|e| e.to_owned())?;
-    }
-
-    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-        let mut locked = conn_ref.lock().unwrap();
-        locked
-            .query_drop("UNLOCK TABLES")
-            .expect("Should be able to UNLOCK TABLES in cleanup");
-    });
-
     let mut locked = conn.lock().unwrap();
-
-    locked.query_drop("LOCK TABLE RUST_ALLOWED_IPS READ")?;
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(addr)?;
     params.append_uint64(port as u64);
+    params.append_uint64(args.allowed_timeout_mins);
 
     let ip_entry_row_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
         .query_with_params_rows(
-            "SELECT IP FROM RUST_ALLOWED_IPS WHERE IP = ? AND PORT = ?",
+            "SELECT IP FROM RUST_ALLOWED_IPS WHERE IP = ? AND PORT = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?",
             &params,
         )
         .map_err(|e| e.to_owned())?;
@@ -1755,16 +1661,10 @@ async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Res
 async fn check_is_allowed_sqlite(args: &args::Args, addr: &str, port: u16) -> Result<bool, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(
-        &format!(
-            r#"DELETE FROM ALLOWED_IP WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#,
-            args.allowed_timeout_mins
-        ),
-        (),
-    )?;
-
-    let mut stmt = conn.prepare(r"SELECT PORT FROM ALLOWED_IP WHERE IP = ?1 AND PORT = ?2")?;
-    let rows = stmt.query_map((addr, port), |r| r.get::<usize, u16>(0));
+    let mut stmt = conn.prepare(r"SELECT PORT FROM ALLOWED_IP WHERE IP = ?1 AND PORT = ?2 AND datetime(ON_TIME, ?3) > datetime('now')")?;
+    let rows = stmt.query_map((addr, port, &args.sqlite_allowed_timeout_string), |r| {
+        r.get::<usize, u16>(0)
+    });
     let is_allowed: bool = rows?.count() != 0;
 
     Ok(is_allowed)
@@ -1774,26 +1674,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
     let mut hash: String;
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
-    let _unlock_cleanup = GenericCleanup::new(&conn, |conn_ref: &Arc<Mutex<MSQLWrapper>>| {
-        let mut locked = conn_ref.lock().unwrap();
-        locked
-            .query_drop("UNLOCK TABLES")
-            .expect("Should be able to UNLOCK TABLES in cleanup");
-    });
-
     let mut locked = conn.lock().unwrap();
-
-    locked.query_drop("LOCK TABLE RUST_ID_TO_PORT_3 WRITE")?;
-
-    let mut params = MSQLParamsWrapper::new();
-    params.append_uint64(constants::ID_TO_PORT_TIMEOUT);
-
-    locked
-        .query_with_params_drop(
-            "DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
-            &params,
-        )
-        .map_err(|e| e.to_owned())?;
 
     let mut hasher = blake3::Hasher::new();
     let mut buf = [0u8; GETRANDOM_BUF_SIZE];
@@ -1847,14 +1728,6 @@ async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, 
 
     let conn = Connection::open(&args.sqlite_db_file)?;
 
-    conn.execute(
-        &format!(
-            r#"DELETE FROM ID_TO_PORT WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#,
-            constants::ID_TO_PORT_TIMEOUT
-        ),
-        (),
-    )?;
-
     let mut hasher = blake3::Hasher::new();
     let mut buf = [0u8; GETRANDOM_BUF_SIZE];
     getrandom::fill(&mut buf)?;
@@ -1883,24 +1756,6 @@ async fn init_id_to_port_sqlite(args: &args::Args, port: u16) -> Result<String, 
     Ok(hash)
 }
 
-async fn cleanup_timeout_msql(args: &args::Args) -> Result<(), Error> {
-    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
-
-    let mut locked = conn.lock().unwrap();
-
-    let mut params = MSQLParamsWrapper::new();
-    params.append_uint64(args.timeout_time_mins);
-
-    locked
-        .query_with_params_drop(
-            "DELETE FROM RUST_TIMEOUT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?",
-            &params,
-        )
-        .map_err(|e| e.to_owned())?;
-
-    Ok(())
-}
-
 async fn is_timeout_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
     let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(get_mysql_db_conn(args).await?));
 
@@ -1908,8 +1763,12 @@ async fn is_timeout_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
 
     let mut params = MSQLParamsWrapper::new();
     params.append_str(ip)?;
+    params.append_uint64(args.timeout_time_mins);
 
-    let ret = locked.query_with_params_rows("SELECT IP FROM RUST_TIMEOUT WHERE IP = ?", &params)?;
+    let ret = locked.query_with_params_rows(
+        "SELECT IP FROM RUST_TIMEOUT WHERE IP = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?",
+        &params,
+    )?;
 
     if let Some(v) = ret
         && !v.is_empty()
@@ -1989,20 +1848,6 @@ async fn remove_failures_msql(args: &args::Args, ip: &str) -> Result<(), Error> 
     Ok(())
 }
 
-async fn cleanup_timeout_sqlite(args: &args::Args) -> Result<(), Error> {
-    let conn = Connection::open(&args.sqlite_db_file)?;
-
-    conn.execute(
-        &format!(
-            "DELETE FROM TIMEOUT WHERE datetime(ON_TIME, '{} minutes') < datetime('now')",
-            args.timeout_time_mins
-        ),
-        (),
-    )?;
-
-    Ok(())
-}
-
 async fn is_timeout_sqlite(args: &args::Args, ip: &str) -> Result<bool, Error> {
     let conn = Connection::open(&args.sqlite_db_file)?;
 
@@ -2057,7 +1902,6 @@ async fn remove_failures_sqlite(args: &args::Args, ip: &str) -> Result<(), Error
 async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> salvo::Result<()> {
     let args = depot.get_typed::<args::Args>().unwrap();
     let cached_allow: &CachedAllow = depot.get_typed::<CachedAllow>().unwrap();
-    cached_allow.check_cleanup()?;
     let client_wrapper: &ClientWrapper = depot.get_typed().unwrap();
     let client: Client =
         client_wrapper
@@ -2097,13 +1941,6 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
     // Check if timed out.
     if !is_allowed {
-        // Cleanup timeout table first.
-        if args.mysql_has_priority {
-            cleanup_timeout_msql(args).await?;
-        } else {
-            cleanup_timeout_sqlite(args).await?;
-        }
-
         // Check if timed out.
         if args.mysql_has_priority {
             if is_timeout_msql(args, &client_info_ret.addr).await? {
@@ -2476,6 +2313,131 @@ async fn main() {
 
     let cached_allow = CachedAllow::new();
 
+    let cached_allow_clone = cached_allow.clone();
+    let parsed_args_clone = parsed_args.clone();
+    let periodic_cleanup_duration = Duration::from_mins(parsed_args.periodic_cleanup_interval);
+
+    let task_handle = tokio::task::spawn(async move {
+        while !signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
+            #[cfg(debug_assertions)]
+            eprintln!("Cleanup async task sleep...");
+
+            tokio::time::sleep(periodic_cleanup_duration).await;
+
+            #[cfg(debug_assertions)]
+            eprintln!("Cleanup async task woke...");
+
+            {
+                let cached_allow_cleanup_ret = cached_allow_clone.check_cleanup();
+                if let Err(e) = cached_allow_cleanup_ret {
+                    eprintln!("WARNING: cached_allow cleanup failed: {}", e);
+                }
+            }
+
+            #[allow(clippy::never_loop)]
+            'msql_loop: loop {
+                if parsed_args_clone.mysql_has_priority {
+                    let conn = get_mysql_db_conn(&parsed_args_clone).await;
+                    if let Err(e) = conn {
+                        eprintln!("WARNING: Cleanup: Failed to get db_conn: {}", e);
+                        break 'msql_loop;
+                    }
+                    let conn: Arc<Mutex<MSQLWrapper>> = Arc::new(Mutex::new(conn.unwrap()));
+
+                    let locked = conn.lock();
+                    if let Err(e) = locked {
+                        eprintln!("WARNING: Cleanup: Failed to lock db_conn: {}", e);
+                        break 'msql_loop;
+                    }
+                    let mut locked = locked.unwrap();
+
+                    let mut params = MSQLParamsWrapper::new();
+                    params.append_uint64(parsed_args_clone.challenge_timeout_mins);
+
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup factors failed: {}", e);
+                    }
+
+                    let mut params = MSQLParamsWrapper::new();
+                    params.append_uint64(parsed_args_clone.interactive_challenge_timeout_mins);
+
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup interactive challenges failed: {}", e);
+                    }
+
+                    let mut params = MSQLParamsWrapper::new();
+                    params.append_uint64(parsed_args_clone.allowed_timeout_mins);
+
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params).map_err(|e| e.to_owned());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup allowed failed: {}", e);
+                    }
+
+                    let mut params = MSQLParamsWrapper::new();
+                    params.append_uint64(constants::ID_TO_PORT_TIMEOUT);
+
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params,).map_err(|e| e.to_owned());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup id_to_port failed: {}", e);
+                    }
+
+                    let mut params = MSQLParamsWrapper::new();
+                    params.append_uint64(parsed_args_clone.timeout_time_mins);
+
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_TIMEOUT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params).map_err(|e| e.to_owned());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup timeout failed: {}", e);
+                    }
+                }
+
+                break;
+            }
+
+            #[allow(clippy::never_loop)]
+            'sqlite_loop: loop {
+                if !parsed_args_clone.mysql_has_priority {
+                    let conn = Connection::open(&parsed_args_clone.sqlite_db_file);
+                    if let Err(e) = conn {
+                        eprintln!("ERROR: Cleanup: Failed to get sqlite connection: {}", e);
+                        break 'sqlite_loop;
+                    }
+                    let conn = conn.unwrap();
+
+                    let query_ret = conn.execute(&format!(r#"DELETE FROM ID_TO_PORT WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, constants::ID_TO_PORT_TIMEOUT), ());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup id_to_port failed: {}", e);
+                    }
+
+                    let query_ret = conn.execute(&format!(r#"DELETE FROM CHALLENGE_FACTOR WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, parsed_args_clone.challenge_timeout_mins), ());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup factors failed: {}", e);
+                    }
+
+                    let query_ret = conn.execute(&format!(r#"DELETE FROM INTERACTIVE_CHALLENGE_1 WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, parsed_args_clone.interactive_challenge_timeout_mins), ());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup interactive challenges failed: {}", e);
+                    }
+
+                    let query_ret = conn.execute(&format!(r#"DELETE FROM ALLOWED_IP WHERE datetime(ON_TIME, '{} minutes') < datetime('now')"#, parsed_args_clone.allowed_timeout_mins), ());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup allowed failed: {}", e);
+                    }
+
+                    let query_ret = conn.execute(&format!("DELETE FROM TIMEOUT WHERE datetime(ON_TIME, '{} minutes') < datetime('now')", parsed_args_clone.timeout_time_mins), ());
+                    if let Err(e) = query_ret {
+                        eprintln!("WARNING: Cleanup timeout failed: {}", e);
+                    }
+                }
+
+                break;
+            }
+        }
+
+        eprintln!("End of periodic cleanup async fn.");
+    });
+
     let router = if parsed_args.mysql_has_priority {
         //let locked_bool = Arc::new(AtomicBool::new(false));
         Router::new()
@@ -2579,4 +2541,6 @@ async fn main() {
         });
         server.serve(router).await;
     }
+
+    task_handle.abort();
 }

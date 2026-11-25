@@ -234,7 +234,8 @@ void init_db(Connection &c);
 
 std::optional<uint64_t> get_next_seq_id(Connection &c);
 
-std::optional<bool> has_challenge_factor_id(Connection &c, std::string hash);
+std::optional<bool> has_challenge_factor_id(Connection &c, std::string hash,
+                                            uint64_t timeout_mins);
 
 // First str is challenge, second is hashed-id.
 std::tuple<Error, std::string, std::string> set_challenge_factor(
@@ -252,7 +253,8 @@ std::tuple<Error, std::string, std::string> set_interactive_challenge(
     std::vector<uint8_t> (*hasher_fn)(void *data, size_t size));
 
 /// First value is SUCCESS on not error. Second value is port.
-std::tuple<Error, uint16_t> get_id_to_port_port(Connection &c, std::string id);
+std::tuple<Error, uint16_t> get_id_to_port_port(Connection &c, std::string id,
+                                                uint64_t id_to_port_timeout);
 
 std::tuple<Error, uint16_t> validate_factors_client(
     Connection &c, uint64_t chall_factors_timeout, std::string id,
@@ -287,17 +289,20 @@ struct Conf {
 
 std::optional<Conf> parse_conf_file(std::string msql_conf_path);
 
-Error cleanup_timeouts(Connection &c, uint64_t timeout_time);
-
 Error add_timeout(Connection &c, std::string ip);
 
-std::tuple<Error, bool> has_timeout(Connection &c, std::string ip);
+std::tuple<Error, bool> has_timeout(Connection &c, std::string ip,
+                                    uint64_t timeout_timeout);
 
 /// bool is true if fail count is at least max-fails
 std::tuple<Error, bool> increment_fail(Connection &c, std::string ip,
                                        uint64_t max_fails);
 
 Error remove_fails(Connection &c, std::string ip);
+
+Error cleanup_db(Connection &c, uint64_t factors_timeout,
+                 uint64_t interactive_timeout, uint64_t allowed_timeout,
+                 uint64_t id_to_port_timeout, uint64_t timeout_timeout);
 
 #endif
 

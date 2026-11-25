@@ -68,6 +68,11 @@ pub struct Args {
     pub force_sq_sine: bool,
     pub timeout_time_mins: u64,
     pub fails_max: u64,
+    pub sqlite_id_to_port_timeout_string: String,
+    pub sqlite_challenge_timeout_string: String,
+    pub sqlite_i_challenge_timeout_string: String,
+    pub sqlite_allowed_timeout_string: String,
+    pub periodic_cleanup_interval: u64,
 }
 
 pub fn print_args() {
@@ -115,6 +120,9 @@ pub fn print_args() {
     );
     println!(
         "  --interactive-challenge-timeout=<minutes> : Sets how long an interactive challenge persists in minutes (default 2 minutes)"
+    );
+    println!(
+        "  --periodic-cleanup-interval=<minutes> : Sets how often the db is cleaned up (default 2 minutes)"
     );
     println!("  --only-factors-challenge : Only allow factors challenge to be used");
     println!("  --only-interactive-challenge : Only allow interactive challenge to be used");
@@ -165,6 +173,23 @@ pub fn parse_args() -> Result<Args, Error> {
         fails_max: crate::constants::DEFAULT_FAILS_MAX,
         force_bezier: false,
         force_sq_sine: false,
+        sqlite_id_to_port_timeout_string: format!(
+            "{} minutes",
+            crate::constants::ID_TO_PORT_TIMEOUT
+        ),
+        sqlite_challenge_timeout_string: format!(
+            "{} minutes",
+            crate::constants::CHALLENGE_FACTORS_TIMEOUT_MINUTES
+        ),
+        sqlite_i_challenge_timeout_string: format!(
+            "{} minutes",
+            crate::constants::INTERACTIVE_CHALLENGE_TIMEOUT_MINUTES
+        ),
+        sqlite_allowed_timeout_string: format!(
+            "{} minutes",
+            crate::constants::ALLOWED_IP_TIMEOUT_MINUTES
+        ),
+        periodic_cleanup_interval: crate::constants::PERIODIC_CLEANUP_TIME,
     };
 
     let p_args = args_fn();
@@ -251,6 +276,8 @@ pub fn parse_args() -> Result<Args, Error> {
             args.challenge_timeout_mins = end
                 .parse()
                 .expect("challenge timeout should be a valid integer");
+            args.sqlite_challenge_timeout_string =
+                format!("{} minutes", args.challenge_timeout_mins);
         } else if arg.starts_with("--timeout-time=") {
             let end = arg.split_off(15);
             args.timeout_time_mins = end
@@ -274,6 +301,7 @@ pub fn parse_args() -> Result<Args, Error> {
             args.allowed_timeout_mins = end
                 .parse()
                 .expect("allowed timeout should be a valid integer");
+            args.sqlite_allowed_timeout_string = format!("{} minutes", args.allowed_timeout_mins);
         } else if arg.starts_with("--max-interactive-challenges=") {
             let end = arg.split_off(29);
             args.max_interactive_challenges = end
@@ -291,6 +319,17 @@ pub fn parse_args() -> Result<Args, Error> {
             if args.interactive_challenge_timeout_mins == 0 {
                 args.interactive_challenge_timeout_mins = 1;
                 eprintln!("WARNING: Set --interatcive-challenge-timeout to the minimum of 1");
+            }
+            args.sqlite_i_challenge_timeout_string =
+                format!("{} minutes", args.interactive_challenge_timeout_mins);
+        } else if arg.starts_with("--periodic-cleanup-interval=") {
+            let end = arg.split_off(28);
+            args.periodic_cleanup_interval = end
+                .parse()
+                .expect("periodic cleanup interval should be a valid integer");
+            if args.periodic_cleanup_interval == 0 {
+                args.periodic_cleanup_interval = 1;
+                eprintln!("WARNING: Set --periodic-cleanup-interval to the minimum of 1");
             }
         } else if arg == "--only-factors-challenge" {
             args.only_factors_challenge = true;

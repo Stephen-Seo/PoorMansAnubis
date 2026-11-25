@@ -2,6 +2,28 @@
 
 ## Upcoming Changes
 
+`rust_impl` and `cxx_impl`: Refactor how databases were used, should result in
+faster accesses.
+
+`cxx_impl`: Error on start if sqlite failed to init.
+
+`cxx_impl`: Add flag `--interactive-challenge-timeout=<minutes>`. This flag
+existed in the Rust version, but in the C++ version an alternate flag
+`--interactive-challenge-timeout-mins=<minutes>` existed.
+
+Update README.txt to have latest "help text" from Rust and C++ versions.
+
+Update README.txt to note the usage of the SIGUSR1 signal.
+
+`cxx_impl`: Update bundled dependencies:
+
+ - zstd 1.5.7 -> 1.6.0
+
+`rust_impl`: `cargo update`
+
+`rust_impl` and `cxx_impl`: Impl `--periodic-cleanup-interval=<min>` that sets
+the interval that the db is cleanup (default 2 minutes).
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.

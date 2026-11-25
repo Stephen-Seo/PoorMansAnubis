@@ -17,8 +17,10 @@
 // Standard library includes
 #include <bitset>
 #include <chrono>
+#include <condition_variable>
 #include <cstring>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <thread>
@@ -1474,7 +1476,8 @@ void thread_handle_connection_fn(void *ud) {
           }
 
           const auto [err, is_timeout] = PMA_MSQL::has_timeout(
-              msql_conn_opt.value(), data->addr_port_info.client_addr);
+              msql_conn_opt.value(), data->addr_port_info.client_addr,
+              data->args->timeout_time);
           if (err != PMA_MSQL::Error::SUCCESS) {
             PMA_EPrintln("ERROR: Failed to check timeout msql: {}",
                          PMA_MSQL::error_to_str(err));
@@ -1580,7 +1583,8 @@ void thread_handle_connection_fn(void *ud) {
                 PMA_SQL::verify_interactive_answer(
                     sqliteCtx, form_fields.find("answer")->second,
                     data->addr_port_info.client_addr,
-                    form_fields.find("id")->second, internal_blake3_hash_fn);
+                    form_fields.find("id")->second, internal_blake3_hash_fn,
+                    data->args->sqlite_i_challenge_timeout_string);
             if (err != PMA_SQL::ErrorT::SUCCESS) {
               PMA_EPrintln(
                   "Warning: Client {}:{} -> {} failed challenge due to {}, "
@@ -1754,7 +1758,8 @@ void thread_handle_connection_fn(void *ud) {
               const auto [err, msg, port] = PMA_SQL::verify_factors_answer(
                   sqliteCtx, json_keyvals.find("factors")->second,
                   data->addr_port_info.client_addr,
-                  json_keyvals.find("id")->second, internal_blake3_hash_fn);
+                  json_keyvals.find("id")->second, internal_blake3_hash_fn,
+                  data->args->sqlite_challenge_timeout_string);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
                     "Warning: Client {}:{} -> {} failed challenge due to {}, "
@@ -1791,7 +1796,8 @@ void thread_handle_connection_fn(void *ud) {
                   PMA_SQL::verify_interactive_answer(
                       sqliteCtx, json_keyvals.find("answer")->second,
                       data->addr_port_info.client_addr,
-                      json_keyvals.find("id")->second, internal_blake3_hash_fn);
+                      json_keyvals.find("id")->second, internal_blake3_hash_fn,
+                      data->args->sqlite_i_challenge_timeout_string);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
                     "Warning: Client {}:{} -> {} failed challenge due to {}, "
@@ -1854,7 +1860,8 @@ void thread_handle_connection_fn(void *ud) {
               }
               if (ping_ok) {
                 const auto [itp_err, port] = PMA_MSQL::get_id_to_port_port(
-                    msql_conn_opt.value(), id_iter->second);
+                    msql_conn_opt.value(), id_iter->second,
+                    ID_TO_PORT_TIMEOUT_MINS);
                 if (itp_err == PMA_MSQL::Error::SUCCESS) {
                   const auto [cf_err, chall, hashed_id] =
                       PMA_MSQL::set_challenge_factor(
@@ -1913,13 +1920,12 @@ void thread_handle_connection_fn(void *ud) {
                 }
               }
             } else {
-              PMA_SQL::cleanup_stale_challenges(
-                  sqliteCtx, data->args->challenge_factors_timeout);
               const auto [err, msg_or_chal, answ, id] =
-                  PMA_SQL::generate_challenge(sqliteCtx, data->args->factors,
-                                              data->addr_port_info.client_addr,
-                                              id_iter->second,
-                                              internal_blake3_hash_fn);
+                  PMA_SQL::generate_challenge(
+                      sqliteCtx, data->args->factors,
+                      data->addr_port_info.client_addr, id_iter->second,
+                      internal_blake3_hash_fn,
+                      data->args->sqlite_challenge_timeout_string);
               if (err != PMA_SQL::ErrorT::SUCCESS) {
                 PMA_EPrintln(
                     "ERROR: Failed to prepare challenge for client {}: {}, "
@@ -2126,12 +2132,10 @@ void thread_handle_connection_fn(void *ud) {
             goto PMA_RESPONSE_AFTER_SENDING;
           }
 
-          PMA_SQL::cleanup_stale_entries(sqliteCtx,
-                                         data->args->allowed_timeout);
-
           const auto [err, msg, is_allowed] = PMA_SQL::is_allowed_ip_port(
               sqliteCtx, data->addr_port_info.client_addr,
-              data->addr_port_info.local_port);
+              data->addr_port_info.local_port,
+              data->args->sqlite_allowed_timeout_string);
           if (err != PMA_SQL::ErrorT::SUCCESS || !is_allowed) {
             if (req.full_url == "/favicon.ico") {
               status = "HTTP/1.0 404 Not Found";
@@ -2142,11 +2146,10 @@ void thread_handle_connection_fn(void *ud) {
             if (!data->args->flags.test(10) && !data->args->flags.test(11)) {
               challenge_type = PMA_HELPER::rand_uint64_t() % 2;
             }
-            PMA_SQL::cleanup_stale_i_challenges(
-                sqliteCtx, data->args->interactive_challenge_timeout);
             const auto [err, i_count] = PMA_SQL::has_interactive_challenge(
                 sqliteCtx, data->addr_port_info.client_addr,
-                data->addr_port_info.local_port);
+                data->addr_port_info.local_port,
+                data->args->sqlite_i_challenge_timeout_string);
             if (err == PMA_SQL::ErrorT::SUCCESS) {
               if (i_count >= data->args->max_interactive_challenges) {
                 status = "HTTP/1.0 400 Bad Request";
@@ -2169,8 +2172,6 @@ void thread_handle_connection_fn(void *ud) {
             }
 
             if (challenge_type == 0) {
-              PMA_SQL::cleanup_stale_id_to_ports(sqliteCtx,
-                                                 ID_TO_PORT_TIMEOUT_MINS);
               const auto [err, msg, id] = PMA_SQL::init_id_to_port(
                   sqliteCtx, data->addr_port_info.local_port,
                   internal_blake3_hash_fn);
@@ -2331,6 +2332,67 @@ void thread_cleanup_fn(void *ud) {
   delete data;
 }
 
+void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
+                            std::condition_variable *cv, std::mutex *m) {
+  const auto cleanup_interval =
+      std::chrono::minutes(args->periodic_cleanup_interval);
+  while (!interrupt_received) {
+  CLEANUP_THREAD_FN_LOOP_START:
+#ifndef NDEBUG
+    PMA_EPrintln("Cleanup db iteration, sleep...");
+#endif
+    std::unique_lock lock(*m);
+    cv->wait_for(lock, cleanup_interval);
+#ifndef NDEBUG
+    PMA_EPrintln("Cleanup db thread woke up...");
+#endif
+
+    if (args->flags.test(4)) {
+      auto msql_conf_opt = PMA_MSQL::parse_conf_file(args->mysql_conf_path);
+      if (!msql_conf_opt.has_value()) {
+        PMA_EPrintln("ERROR: Cleanup db failed to get MSQL config!");
+        goto CLEANUP_THREAD_FN_LOOP_START;
+      }
+      auto msql_conn_opt = PMA_MSQL::Connection::connect_msql(
+          msql_conf_opt->addr, msql_conf_opt->port, msql_conf_opt->user,
+          msql_conf_opt->pass, msql_conf_opt->db);
+      if (!msql_conn_opt.has_value()) {
+        PMA_EPrintln("ERROR: Cleanup db failed to get MSQL Connection!");
+        goto CLEANUP_THREAD_FN_LOOP_START;
+      }
+
+      auto ret = PMA_MSQL::cleanup_db(
+          msql_conn_opt.value(), args->challenge_factors_timeout,
+          args->interactive_challenge_timeout, args->allowed_timeout,
+          ID_TO_PORT_TIMEOUT_MINS, args->timeout_time);
+      if (ret != PMA_MSQL::Error::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup db failed: {}",
+                     PMA_MSQL::error_to_str(ret));
+      }
+    } else {
+      auto [sqliteCtx, err, msg] = PMA_SQL::init_sqlite(args->sqlite_path);
+      if (err != PMA_SQL::ErrorT::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup db failed to get sqlite ctx: {}: {}",
+                     PMA_SQL::error_t_to_string(err), msg);
+        goto CLEANUP_THREAD_FN_LOOP_START;
+      }
+
+      auto ret = PMA_SQL::cleanup_db(sqliteCtx, ID_TO_PORT_TIMEOUT_MINS,
+                                     args->challenge_factors_timeout,
+                                     args->interactive_challenge_timeout,
+                                     args->timeout_time, args->allowed_timeout);
+      if (ret != PMA_SQL::ErrorT::SUCCESS) {
+        PMA_EPrintln("ERROR: Cleanup db sqlite failed: {}",
+                     PMA_SQL::error_t_to_string(ret));
+      }
+    }
+  }
+
+#ifndef NDEBUG
+  PMA_EPrintln("End of cleanup db thread fn.");
+#endif
+}
+
 int main(int argc, char **argv) {
   const PMA_ARGS::Args args(argc, argv);
 
@@ -2366,6 +2428,13 @@ int main(int argc, char **argv) {
     }
 
     PMA_MSQL::init_db(msql_conn_opt.value());
+  } else {
+    auto [ctx, err, errmsg] = PMA_SQL::init_sqlite(args.sqlite_path);
+    if (err != PMA_SQL::ErrorT::SUCCESS) {
+      PMA_EPrintln("ERROR: Failed to init sqlite: {}: {}",
+                   PMA_SQL::error_t_to_string(err), errmsg);
+      return 7;
+    }
   }
 
   curl_global_init(CURL_GLOBAL_SSL);
@@ -2468,6 +2537,12 @@ int main(int argc, char **argv) {
 
   // std::deque<int> to_remove_connections;
   // std::array<char, REQ_READ_BUF_SIZE> buf;
+
+  std::condition_variable cleanup_thread_cv{};
+  std::mutex cleanup_thread_mutex{};
+
+  std::thread cleanup_thread_handle(periodic_db_cleanup_fn, &args,
+                                    &cleanup_thread_cv, &cleanup_thread_mutex);
 
   std::shared_mutex cached_allowed_mutex;
   std::unordered_map<std::string,
@@ -2617,6 +2692,10 @@ int main(int argc, char **argv) {
 
     std::cout << std::flush;
   }
+
+  cleanup_thread_cv.notify_all();
+
+  cleanup_thread_handle.join();
 
   return 0;
 }
