@@ -105,6 +105,9 @@ void pma_print_usage() {
       "  --interactive-challenge-timeout=<minutes> : Same as "
       "\"--interactive-challenge-timeout-mins=<minutes>\"");
   PMA_Println(
+      "  --periodic-cleanup-interval=<minutes> : Sets how often the db is "
+      "cleaned up (default 2 minutes)");
+  PMA_Println(
       "  --only-factors-challenge : Only allow factors challenge to be used");
   PMA_Println(
       "  --only-interactive-challenge : Only allow interactive challenge to "
@@ -162,6 +165,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       challenge_factors_timeout(CHALLENGE_FACTORS_TIMEOUT_MINUTES),
       timeout_time(DEFAULT_TIMEOUT_TIME_MINS),
       fails_max(DEFAULT_FAILS_MAX),
+      periodic_cleanup_interval(PERIODIC_CLEANUP_TIME),
       thread_count(),
       flags(),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
@@ -586,6 +590,24 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       this->interactive_challenge_timeout = static_cast<uint64_t>(value);
       this->sqlite_i_challenge_timeout_string =
           std::format("{} minutes", this->interactive_challenge_timeout);
+    } else if (std::strncmp(argv[0], "--periodic-cleanup-interval=", 28) == 0) {
+      std::string s(argv[0] + 28);
+      unsigned long long value;
+      try {
+        value = std::stoull(s);
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse value passed to "
+            "--periodic-cleanup-interval=... !");
+        flags.set(2);
+        return;
+      }
+      if (value == 0) {
+        value = 1;
+        PMA_EPrintln(
+            "WARNING: Set --periodic-cleanup-interval to minimum of 1");
+      }
+      this->periodic_cleanup_interval = static_cast<uint64_t>(value);
     } else if (std::strcmp(argv[0], "--only-factors-challenge") == 0) {
       flags.set(10);
       PMA_EPrintln("Enabling only Factors challenge...");

@@ -61,6 +61,7 @@ constexpr uint64_t INTERACTIVE_CHALLENGE_TIMEOUT_MINS = 2;
 constexpr uint64_t ID_TO_PORT_TIMEOUT_MINS = 2;
 constexpr uint64_t DEFAULT_TIMEOUT_TIME_MINS = 15;
 constexpr uint64_t DEFAULT_FAILS_MAX = 4;
+constexpr uint64_t PERIODIC_CLEANUP_TIME = 2;
 
 constexpr int SOCKET_BACKLOG_SIZE = 2048;
 

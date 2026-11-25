@@ -59,6 +59,7 @@ struct Args {
   uint64_t challenge_factors_timeout;
   uint64_t timeout_time;
   uint64_t fails_max;
+  uint64_t periodic_cleanup_interval;
   std::optional<uint32_t> thread_count;
   // 0 - enable trusting "x-real-ip" header
   // 1 - enable "override-dest-url" header

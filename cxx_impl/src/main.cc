@@ -2334,13 +2334,15 @@ void thread_cleanup_fn(void *ud) {
 
 void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
                             std::condition_variable *cv, std::mutex *m) {
+  const auto cleanup_interval =
+      std::chrono::minutes(args->periodic_cleanup_interval);
   while (!interrupt_received) {
   CLEANUP_THREAD_FN_LOOP_START:
 #ifndef NDEBUG
     PMA_EPrintln("Cleanup db iteration, sleep...");
 #endif
     std::unique_lock lock(*m);
-    cv->wait_for(lock, std::chrono::minutes(2));
+    cv->wait_for(lock, cleanup_interval);
 #ifndef NDEBUG
     PMA_EPrintln("Cleanup db thread woke up...");
 #endif
