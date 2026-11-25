@@ -112,6 +112,7 @@ Args:
   --fails-max=<count> : Set how many times a client must fail to be put on timeout
   --max-interactive-challenges=<count> : Set the maximum number of interactive challenges before denying access (minimum of 2)
   --interactive-challenge-timeout=<minutes> : Sets how long an interactive challenge persists in minutes (default 2 minutes)
+  --periodic-cleanup-interval=<minutes> : Sets how often the db is cleaned up (default 2 minutes)
   --only-factors-challenge : Only allow factors challenge to be used
   --only-interactive-challenge : Only allow interactive challenge to be used
   --enable-rest-api : Enable using the REST api for interactive challenges; default false
@@ -161,6 +162,7 @@ Args for the C++ implementation are as follows:
       --max-interactive-challenges=<int> : Sets the maximum number of interactive challenges before denying access
       --interactive-challenge-timeout-mins=<minutes> : Sets the timeout for interactive challenges (default 2 minutes)
       --interactive-challenge-timeout=<minutes> : Same as "--interactive-challenge-timeout-mins=<minutes>"
+      --periodic-cleanup-interval=<minutes> : Sets how often the db is cleaned up (default 2 minutes)
       --only-factors-challenge : Only allow factors challenge to be used
       --only-interactive-challenge : Only allow interactive challenge to be used
       --enable-rest-api : Enable using the REST api for interactive challenges; default false
