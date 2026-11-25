@@ -19,6 +19,8 @@ Update README.txt to note the usage of the SIGUSR1 signal.
 
  - zstd 1.5.7 -> 1.6.0
 
+`rust_impl`: `cargo update`
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.
