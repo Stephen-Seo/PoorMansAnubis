@@ -72,6 +72,7 @@ pub struct Args {
     pub sqlite_challenge_timeout_string: String,
     pub sqlite_i_challenge_timeout_string: String,
     pub sqlite_allowed_timeout_string: String,
+    pub periodic_cleanup_interval: u64,
 }
 
 pub fn print_args() {
@@ -119,6 +120,9 @@ pub fn print_args() {
     );
     println!(
         "  --interactive-challenge-timeout=<minutes> : Sets how long an interactive challenge persists in minutes (default 2 minutes)"
+    );
+    println!(
+        "  --periodic-cleanup-interval=<minutes> : Sets how often the db is cleaned up (default 2 minutes)"
     );
     println!("  --only-factors-challenge : Only allow factors challenge to be used");
     println!("  --only-interactive-challenge : Only allow interactive challenge to be used");
@@ -185,6 +189,7 @@ pub fn parse_args() -> Result<Args, Error> {
             "{} minutes",
             crate::constants::ALLOWED_IP_TIMEOUT_MINUTES
         ),
+        periodic_cleanup_interval: crate::constants::PERIODIC_CLEANUP_TIME,
     };
 
     let p_args = args_fn();
@@ -317,6 +322,15 @@ pub fn parse_args() -> Result<Args, Error> {
             }
             args.sqlite_i_challenge_timeout_string =
                 format!("{} minutes", args.interactive_challenge_timeout_mins);
+        } else if arg.starts_with("--periodic-cleanup-interval=") {
+            let end = arg.split_off(28);
+            args.periodic_cleanup_interval = end
+                .parse()
+                .expect("periodic cleanup interval should be a valid integer");
+            if args.periodic_cleanup_interval == 0 {
+                args.periodic_cleanup_interval = 1;
+                eprintln!("WARNING: Set --periodic-cleanup-interval to the minimum of 1");
+            }
         } else if arg == "--only-factors-challenge" {
             args.only_factors_challenge = true;
             eprintln!("Enabling only Factors challenge...");

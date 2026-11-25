@@ -23,7 +23,7 @@ pub const MAX_INTERACTIVE_CHALLENGES: u64 = 7;
 pub const ID_TO_PORT_TIMEOUT: u64 = 2;
 pub const DEFAULT_TIMEOUT_TIME_MINUTES: u64 = 15;
 pub const DEFAULT_FAILS_MAX: u64 = 4;
-pub const PERIODIC_CLEANUP_TIME: std::time::Duration = std::time::Duration::from_mins(2);
+pub const PERIODIC_CLEANUP_TIME: u64 = 2;
 
 pub const HTML_BEGIN_GENERIC: &str = r#"<!DOCTYPE html>
         <html lang="en">

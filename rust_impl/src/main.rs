@@ -2315,13 +2315,17 @@ async fn main() {
 
     let cached_allow_clone = cached_allow.clone();
     let parsed_args_clone = parsed_args.clone();
+    let periodic_cleanup_duration = Duration::from_mins(parsed_args.periodic_cleanup_interval);
 
     let task_handle = tokio::task::spawn(async move {
         while !signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
             #[cfg(debug_assertions)]
-            eprintln!("Cleanup async task iteration...");
+            eprintln!("Cleanup async task sleep...");
 
-            tokio::time::sleep(constants::PERIODIC_CLEANUP_TIME).await;
+            tokio::time::sleep(periodic_cleanup_duration).await;
+
+            #[cfg(debug_assertions)]
+            eprintln!("Cleanup async task woke...");
 
             {
                 let cached_allow_cleanup_ret = cached_allow_clone.check_cleanup();
