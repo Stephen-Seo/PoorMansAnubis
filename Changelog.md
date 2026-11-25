@@ -21,6 +21,9 @@ Update README.txt to note the usage of the SIGUSR1 signal.
 
 `rust_impl`: `cargo update`
 
+`rust_impl` and `cxx_impl`: Impl `--periodic-cleanup-interval=<min>` that sets
+the interval that the db is cleanup (default 2 minutes).
+
 ## Version 0.3.2
 
 Minor tweak to GitHub actions workflow for unit tests.
