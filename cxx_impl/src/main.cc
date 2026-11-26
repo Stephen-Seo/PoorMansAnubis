@@ -2341,6 +2341,10 @@ void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
     PMA_EPrintln("Cleanup db thread woke up...");
 #endif
 
+    // Don't need the mutex for anything other than using the
+    // condition_variable.
+    lock.unlock();
+
     if (args->flags.test(4)) {
       auto msql_conf_opt = PMA_MSQL::parse_conf_file(args->mysql_conf_path);
       if (!msql_conf_opt.has_value()) {
@@ -2403,6 +2407,11 @@ void periodic_cache_allow_cleanup_fn(
     PMA_EPrintln("Cleanup cache-allow thread woke up...");
 #endif
 
+    // Don't need the mutex for anything other than using the
+    // condition_variable.
+    lock.unlock();
+
+    // Get a unique_lock for the "cached_allow" map to clear it safely.
     std::unique_lock cache_allow_lock(*sm);
     cached_allow->clear();
   }
