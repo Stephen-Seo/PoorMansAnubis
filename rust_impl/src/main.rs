@@ -1892,7 +1892,7 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
 
     let mut is_allowed: bool = cached_allow.get_allowed(
         &req.remote_addr().to_string(),
-        Duration::from_mins(args.allow_cache_entry_expire_time),
+        args.allow_cache_entry_expire_time,
     )?;
     if !is_allowed {
         if args.mysql_has_priority {
@@ -2400,7 +2400,7 @@ async fn main() {
     });
 
     let cached_allow_clone = cached_allow.clone();
-    let cached_allow_cleanup_interval = Duration::from_mins(parsed_args.allow_cache_clean_interval);
+    let cached_allow_cleanup_interval = parsed_args.allow_cache_clean_interval;
 
     let cached_allow_cleanup_handle = tokio::task::spawn(async move {
         while !signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
