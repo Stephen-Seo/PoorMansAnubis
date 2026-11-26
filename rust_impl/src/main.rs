@@ -24,7 +24,6 @@ mod json_types;
 mod salvo_compat;
 mod signal;
 
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock as StdRwLock};
 use std::time::{Duration, Instant};
@@ -49,8 +48,6 @@ use crate::constants::{HTML_BEGIN_GENERIC, HTML_END_GENERIC};
 use crate::helpers::GenericCleanup;
 
 const GETRANDOM_BUF_SIZE: usize = 64;
-const CACHED_TIMEOUT: Duration = Duration::from_secs(120);
-const CACHED_CLEANUP_TIMEOUT: Duration = Duration::from_mins(60);
 
 #[allow(unused)]
 const MSQL_RUST_SEQ_ID_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID_1 (
@@ -158,14 +155,12 @@ const SQLITE_FAILS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS FAILS
 #[derive(Clone, Debug)]
 struct CachedAllow {
     allowed: Arc<StdRwLock<HashMap<String, Instant>>>,
-    inst: Arc<Mutex<Cell<Instant>>>,
 }
 
 impl CachedAllow {
     pub fn new() -> Self {
         Self {
             allowed: Default::default(),
-            inst: Arc::new(Mutex::new(Cell::new(Instant::now()))),
         }
     }
 
@@ -181,14 +176,6 @@ impl CachedAllow {
             }
         }
 
-        drop(l);
-
-        let mut l = self
-            .allowed
-            .write()
-            .map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
-        l.remove(addr_port);
-
         Ok(false)
     }
 
@@ -200,27 +187,7 @@ impl CachedAllow {
         Ok(())
     }
 
-    pub fn check_cleanup(&self) -> Result<(), Error> {
-        let il = self.inst.lock();
-        let il = il.map_err(|_| Error::as_str("Failed to lock CachedAllow.inst"))?;
-        if il.get().elapsed() > CACHED_CLEANUP_TIMEOUT {
-            il.set(Instant::now());
-            let mut l = self
-                .allowed
-                .write()
-                .map_err(|_| Error::as_str("Failed to lock CachedAllow"))?;
-            l.clear();
-        }
-
-        Ok(())
-    }
-
     pub fn force_cleanup(&self) -> Result<(), Error> {
-        {
-            let il = self.inst.lock();
-            let il = il.map_err(|_| Error::as_str("Failed to lock CachedAllow.inst"))?;
-            il.set(Instant::now());
-        }
         {
             let mut l = self
                 .allowed
@@ -1923,8 +1890,10 @@ async fn handler_fn(depot: &Depot, req: &mut Request, res: &mut Response) -> sal
         .local_port
         .ok_or(Error::as_str("Should have port from request!"))?;
 
-    let mut is_allowed: bool =
-        cached_allow.get_allowed(&req.remote_addr().to_string(), CACHED_TIMEOUT)?;
+    let mut is_allowed: bool = cached_allow.get_allowed(
+        &req.remote_addr().to_string(),
+        Duration::from_mins(args.allow_cache_entry_expire_time),
+    )?;
     if !is_allowed {
         if args.mysql_has_priority {
             is_allowed = check_is_allowed_mysql(args, &client_info_ret.addr, port).await?;
@@ -2313,26 +2282,18 @@ async fn main() {
 
     let cached_allow = CachedAllow::new();
 
-    let cached_allow_clone = cached_allow.clone();
     let parsed_args_clone = parsed_args.clone();
-    let periodic_cleanup_duration = Duration::from_mins(parsed_args.periodic_cleanup_interval);
+    let cleanup_db_interval = Duration::from_mins(parsed_args.periodic_cleanup_interval);
 
-    let task_handle = tokio::task::spawn(async move {
+    let cleanup_db_handle = tokio::task::spawn(async move {
         while !signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
             #[cfg(debug_assertions)]
             eprintln!("Cleanup async task sleep...");
 
-            tokio::time::sleep(periodic_cleanup_duration).await;
+            tokio::time::sleep(cleanup_db_interval).await;
 
             #[cfg(debug_assertions)]
             eprintln!("Cleanup async task woke...");
-
-            {
-                let cached_allow_cleanup_ret = cached_allow_clone.check_cleanup();
-                if let Err(e) = cached_allow_cleanup_ret {
-                    eprintln!("WARNING: cached_allow cleanup failed: {}", e);
-                }
-            }
 
             #[allow(clippy::never_loop)]
             'msql_loop: loop {
@@ -2436,6 +2397,28 @@ async fn main() {
         }
 
         eprintln!("End of periodic cleanup async fn.");
+    });
+
+    let cached_allow_clone = cached_allow.clone();
+    let cached_allow_cleanup_interval = Duration::from_mins(parsed_args.allow_cache_clean_interval);
+
+    let cached_allow_cleanup_handle = tokio::task::spawn(async move {
+        while !signal::SIGNAL_HANDLED.load(std::sync::atomic::Ordering::Relaxed) {
+            #[cfg(debug_assertions)]
+            eprintln!("Cleanup allowed async task sleep...");
+
+            tokio::time::sleep(cached_allow_cleanup_interval).await;
+
+            #[cfg(debug_assertions)]
+            eprintln!("Cleanup allowed async task woke...");
+
+            let cached_allow_cleanup_ret = cached_allow_clone.force_cleanup();
+            if let Err(e) = cached_allow_cleanup_ret {
+                eprintln!("WARNING: cached_allow cleanup failed: {}", e);
+            }
+        }
+
+        eprintln!("End of periodic cleanup allowed cache async fn.");
     });
 
     let router = if parsed_args.mysql_has_priority {
@@ -2542,5 +2525,6 @@ async fn main() {
         server.serve(router).await;
     }
 
-    task_handle.abort();
+    cleanup_db_handle.abort();
+    cached_allow_cleanup_handle.abort();
 }
