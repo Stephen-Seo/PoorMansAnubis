@@ -165,7 +165,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
           std::format("{} minutes", INTERACTIVE_CHALLENGE_TIMEOUT_MINS)),
       sqlite_allowed_timeout_string(
           std::format("{} minutes", ALLOWED_IP_TIMEOUT_MINUTES)),
-      cached_allow_entry_expire_mins(CACHED_ALLOW_ENTRY_EXPIRE_TIME),
+      cached_allow_entry_expire_time(CACHED_ALLOW_ENTRY_EXPIRE_TIME),
+      cached_allow_cleanup_interval(CACHED_ALLOW_CLEAN_INTERVAL),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
       interactive_challenge_timeout(INTERACTIVE_CHALLENGE_TIMEOUT_MINS),
@@ -173,8 +174,6 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       timeout_time(DEFAULT_TIMEOUT_TIME_MINS),
       fails_max(DEFAULT_FAILS_MAX),
       periodic_cleanup_interval(PERIODIC_CLEANUP_TIME),
-      cached_allow_entry_expire_time(CACHED_ALLOW_ENTRY_EXPIRE_TIME),
-      cached_allow_cleanup_interval(CACHED_ALLOW_CLEAN_INTERVAL),
       thread_count(),
       flags(),
       allowed_timeout(ALLOWED_IP_TIMEOUT_MINUTES),
@@ -662,9 +661,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln(
             "WARNING: Set --allow-cache-entry-expire-time to minimum of 1");
       }
-      this->cached_allow_entry_expire_time = static_cast<uint64_t>(value);
-      this->cached_allow_entry_expire_mins =
-          std::chrono::minutes(this->cached_allow_entry_expire_time);
+      uint64_t cached_allow_entry_expire_time = static_cast<uint64_t>(value);
+      this->cached_allow_entry_expire_time =
+          std::chrono::minutes(cached_allow_entry_expire_time);
     } else if (std::strncmp(argv[0], "--allow-cache-clean-interval=", 29) ==
                0) {
       std::string s(argv[0] + 29);
@@ -683,7 +682,9 @@ PMA_ARGS::Args::Args(int argc, char **argv)
         PMA_EPrintln(
             "WARNING: Set --allow-cache-clean-interval to minimum of 1");
       }
-      this->cached_allow_cleanup_interval = static_cast<uint64_t>(value);
+      uint64_t cached_allow_cleanup_interval = static_cast<uint64_t>(value);
+      this->cached_allow_cleanup_interval =
+          std::chrono::minutes(cached_allow_cleanup_interval);
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

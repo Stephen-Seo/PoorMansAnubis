@@ -54,7 +54,8 @@ struct Args {
   std::string sqlite_challenge_timeout_string;
   std::string sqlite_i_challenge_timeout_string;
   std::string sqlite_allowed_timeout_string;
-  std::chrono::minutes cached_allow_entry_expire_mins;
+  std::chrono::minutes cached_allow_entry_expire_time;
+  std::chrono::minutes cached_allow_cleanup_interval;
   uint64_t factors;
   uint64_t max_interactive_challenges;
   uint64_t interactive_challenge_timeout;
@@ -62,8 +63,6 @@ struct Args {
   uint64_t timeout_time;
   uint64_t fails_max;
   uint64_t periodic_cleanup_interval;
-  uint64_t cached_allow_entry_expire_time;
-  uint64_t cached_allow_cleanup_interval;
   std::optional<uint32_t> thread_count;
   // 0 - enable trusting "x-real-ip" header
   // 1 - enable "override-dest-url" header

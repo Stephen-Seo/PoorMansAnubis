@@ -114,7 +114,7 @@ bool ThreadData::is_cached_allowed(std::string ip_port) {
     std::shared_lock lock(*this->cached_allowed_mutex);
     if (auto iter = this->cached_allowed->find(ip_port);
         iter != this->cached_allowed->end()) {
-      if (time_now - iter->second < args->cached_allow_entry_expire_mins) {
+      if (time_now - iter->second < args->cached_allow_entry_expire_time) {
         return true;
       }
     }
@@ -2393,14 +2393,12 @@ void periodic_cache_allow_cleanup_fn(
     std::unordered_map<std::string,
                        std::chrono::time_point<std::chrono::steady_clock> >
         *cached_allow) {
-  const auto cleanup_interval =
-      std::chrono::minutes(args->cached_allow_cleanup_interval);
   while (!interrupt_received) {
 #ifndef NDEBUG
     PMA_EPrintln("Cleanup cache-allow iteration, sleep...");
 #endif
     std::unique_lock lock(*m);
-    cv->wait_for(lock, cleanup_interval);
+    cv->wait_for(lock, args->cached_allow_cleanup_interval);
 #ifndef NDEBUG
     PMA_EPrintln("Cleanup cache-allow thread woke up...");
 #endif
@@ -2571,11 +2569,11 @@ int main(int argc, char **argv) {
       cached_allowed;
 
   std::condition_variable cache_allow_cv{};
-  std::mutex cache_allow_mutex{};
+  std::mutex cache_allow_cv_mutex{};
 
   std::thread cache_allow_cleanup_thread_handle(
       periodic_cache_allow_cleanup_fn, &args, &cache_allow_cv,
-      &cache_allow_mutex, &cached_allowed_mutex, &cached_allowed);
+      &cache_allow_cv_mutex, &cached_allowed_mutex, &cached_allowed);
 
   int ret;
   while (!interrupt_received) {
