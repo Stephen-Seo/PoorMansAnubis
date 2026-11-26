@@ -118,6 +118,8 @@ Args:
   --enable-rest-api : Enable using the REST api for interactive challenges; default false
   --force-i-bezier : When generating interactive challenge only use bezier curves; default random
   --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random
+  --allow-cache-entry-expire-time=<minutes> : Expire time of allowed-cache entries; default 2 minutes
+  --allow-cache-clean-interval=<minutes> : Cleanup interval of allowed cache; default 15 minutes
   --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
     example header: "override-dest-url: http://127.0.0.1:8888"
   WARNING: If --enable-override-dest-url is used, you must ensure that
@@ -168,6 +170,8 @@ Args for the C++ implementation are as follows:
       --enable-rest-api : Enable using the REST api for interactive challenges; default false
       --force-i-bezier : When generating interactive challenge only use bezier curves; default random
       --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random
+      --allow-cache-entry-expire-time=<minutes> : Expire time of allowed-cache entries; default 2 minutes
+      --allow-cache-clean-interval=<minutes> : Cleanup interval of allowed cache; default 15 minutes
       --enable-override-dest-url : Enable "override-dest-url" request header to determine where to forward;
         example header: "override-dest-url: http://127.0.0.1:8888"
       WARNING: If --enable-override-dest-url is used, you must ensure that
