@@ -165,8 +165,7 @@ PMA_ARGS::Args::Args(int argc, char **argv)
           std::format("{} minutes", INTERACTIVE_CHALLENGE_TIMEOUT_MINS)),
       sqlite_allowed_timeout_string(
           std::format("{} minutes", ALLOWED_IP_TIMEOUT_MINUTES)),
-      cached_allow_entry_expire_mins(
-          std::chrono::minutes(CACHED_ALLOW_ENTRY_EXPIRE_TIME)),
+      cached_allow_entry_expire_mins(CACHED_ALLOW_ENTRY_EXPIRE_TIME),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
       interactive_challenge_timeout(INTERACTIVE_CHALLENGE_TIMEOUT_MINS),
