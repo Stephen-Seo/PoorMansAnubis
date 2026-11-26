@@ -99,34 +99,28 @@ struct ThreadData {
 
 void ThreadData::add_cached_allowed(std::string ip_port) {
   std::unique_lock lock(*this->cached_allowed_mutex);
-  this->cached_allowed->insert(
-      std::make_pair(ip_port, std::chrono::steady_clock::now()));
+  if (auto iter = cached_allowed->find(ip_port);
+      iter != cached_allowed->end()) {
+    iter->second = std::chrono::steady_clock::now();
+  } else {
+    this->cached_allowed->insert(
+        std::make_pair(ip_port, std::chrono::steady_clock::now()));
+  }
 }
 
 bool ThreadData::is_cached_allowed(std::string ip_port) {
   const auto time_now = std::chrono::steady_clock::now();
-  bool is_allowed = false;
-  bool is_expired = false;
   {
     std::shared_lock lock(*this->cached_allowed_mutex);
     if (auto iter = this->cached_allowed->find(ip_port);
         iter != this->cached_allowed->end()) {
-      is_expired = time_now - iter->second > CACHED_TIMEOUT_T;
-      is_allowed = !is_expired;
+      if (time_now - iter->second < args->cached_allow_entry_expire_mins) {
+        return true;
+      }
     }
   }
 
-  if (is_expired) {
-    std::unique_lock lock(*this->cached_allowed_mutex);
-    this->cached_allowed->erase(ip_port);
-  }
-
-  return is_allowed;
-}
-
-void ThreadData::clear_cached_allowed() {
-  std::unique_lock lock(*this->cached_allowed_mutex);
-  this->cached_allowed->clear();
+  return false;
 }
 
 AddrPortInfo conv_addr_port(const PMA_ARGS::AddrPort &addr_port, bool is_ipv4) {
@@ -2393,6 +2387,33 @@ void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
 #endif
 }
 
+void periodic_cache_allow_cleanup_fn(
+    const PMA_ARGS::Args *args, std::condition_variable *cv, std::mutex *m,
+    std::shared_mutex *sm,
+    std::unordered_map<std::string,
+                       std::chrono::time_point<std::chrono::steady_clock> >
+        *cached_allow) {
+  const auto cleanup_interval =
+      std::chrono::minutes(args->cached_allow_cleanup_interval);
+  while (!interrupt_received) {
+#ifndef NDEBUG
+    PMA_EPrintln("Cleanup cache-allow iteration, sleep...");
+#endif
+    std::unique_lock lock(*m);
+    cv->wait_for(lock, cleanup_interval);
+#ifndef NDEBUG
+    PMA_EPrintln("Cleanup cache-allow thread woke up...");
+#endif
+
+    std::unique_lock cache_allow_lock(*sm);
+    cached_allow->clear();
+  }
+
+#ifndef NDEBUG
+  PMA_EPrintln("End of cleanup cache-allow thread fn.");
+#endif
+}
+
 int main(int argc, char **argv) {
   const PMA_ARGS::Args args(argc, argv);
 
@@ -2548,22 +2569,21 @@ int main(int argc, char **argv) {
   std::unordered_map<std::string,
                      std::chrono::time_point<std::chrono::steady_clock> >
       cached_allowed;
-  std::chrono::time_point<std::chrono::steady_clock> time_now =
-      std::chrono::steady_clock::now();
-  std::chrono::time_point<std::chrono::steady_clock> time_prev = time_now;
+
+  std::condition_variable cache_allow_cv{};
+  std::mutex cache_allow_mutex{};
+
+  std::thread cache_allow_cleanup_thread_handle(
+      periodic_cache_allow_cleanup_fn, &args, &cache_allow_cv,
+      &cache_allow_mutex, &cached_allowed_mutex, &cached_allowed);
 
   int ret;
   while (!interrupt_received) {
     std::this_thread::sleep_for(SLEEP_MILLISECONDS_CHRONO);
-    time_now = std::chrono::steady_clock::now();
-    if (time_now - time_prev > CACHED_CLEAR_T || usr1_received) {
-      time_prev = time_now;
+    if (usr1_received) {
       std::unique_lock cached_allowed_lock(cached_allowed_mutex);
       cached_allowed.clear();
-
-      if (usr1_received) {
-        usr1_received = 0;
-      }
+      usr1_received = 0;
     }
 
     // Fetch new connections
@@ -2694,8 +2714,10 @@ int main(int argc, char **argv) {
   }
 
   cleanup_thread_cv.notify_all();
-
   cleanup_thread_handle.join();
+
+  cache_allow_cv.notify_all();
+  cache_allow_cleanup_thread_handle.join();
 
   return 0;
 }

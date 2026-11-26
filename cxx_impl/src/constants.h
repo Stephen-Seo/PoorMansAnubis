@@ -45,10 +45,6 @@ constexpr size_t CACHED_TIMEOUT_SECONDS = 120;
 constexpr std::chrono::seconds CACHED_TIMEOUT_T =
     std::chrono::seconds(CACHED_TIMEOUT_SECONDS);
 
-constexpr size_t CACHED_CLEAR_SECONDS = 3600;
-constexpr std::chrono::seconds CACHED_CLEAR_T =
-    std::chrono::seconds(CACHED_CLEAR_SECONDS);
-
 constexpr std::chrono::milliseconds CONN_TRY_LOCK_DURATION =
     std::chrono::milliseconds(500);
 
@@ -62,6 +58,8 @@ constexpr uint64_t ID_TO_PORT_TIMEOUT_MINS = 2;
 constexpr uint64_t DEFAULT_TIMEOUT_TIME_MINS = 15;
 constexpr uint64_t DEFAULT_FAILS_MAX = 4;
 constexpr uint64_t PERIODIC_CLEANUP_TIME = 2;
+constexpr uint64_t CACHED_ALLOW_ENTRY_EXPIRE_TIME = 2;
+constexpr uint64_t CACHED_ALLOW_CLEAN_INTERVAL = 15;
 
 constexpr int SOCKET_BACKLOG_SIZE = 2048;
 
