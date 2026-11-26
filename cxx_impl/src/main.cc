@@ -2568,12 +2568,9 @@ int main(int argc, char **argv) {
                      std::chrono::time_point<std::chrono::steady_clock> >
       cached_allowed;
 
-  std::condition_variable cache_allow_cv{};
-  std::mutex cache_allow_cv_mutex{};
-
   std::thread cache_allow_cleanup_thread_handle(
-      periodic_cache_allow_cleanup_fn, &args, &cache_allow_cv,
-      &cache_allow_cv_mutex, &cached_allowed_mutex, &cached_allowed);
+      periodic_cache_allow_cleanup_fn, &args, &cleanup_thread_cv,
+      &cleanup_thread_mutex, &cached_allowed_mutex, &cached_allowed);
 
   int ret;
   while (!interrupt_received) {
@@ -2713,8 +2710,6 @@ int main(int argc, char **argv) {
 
   cleanup_thread_cv.notify_all();
   cleanup_thread_handle.join();
-
-  cache_allow_cv.notify_all();
   cache_allow_cleanup_thread_handle.join();
 
   return 0;
