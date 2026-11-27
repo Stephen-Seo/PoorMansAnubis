@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+`rust_impl`: Fix `--version` on case where `git describe ...` fails.
+
 ## Version 0.5.1
 
 Remove indexes from databases on timestamp-related columns as it was determined
