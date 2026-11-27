@@ -222,8 +222,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
   }
 
   sql_ret = internal_exec_sqlite_statement(
-      ctx,
-      "CREATE INDEX IF NOT EXISTS ID_TO_PORT_TIME ON ID_TO_PORT (ON_TIME)");
+      ctx, "DROP INDEX IF EXISTS ID_TO_PORT_TIME");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
@@ -238,9 +237,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
   }
 
   sql_ret = internal_exec_sqlite_statement(
-      ctx,
-      "CREATE INDEX IF NOT EXISTS CHALLENGE_FACTOR_TIME ON CHALLENGE_FACTOR "
-      "(ON_TIME)");
+      ctx, "DROP INDEX IF EXISTS CHALLENGE_FACTOR_TIME");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
@@ -265,9 +262,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
   }
 
   sql_ret = internal_exec_sqlite_statement(
-      ctx,
-      "CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_1_TIME ON "
-      "INTERACTIVE_CHALLENGE_1 (ON_TIME)");
+      ctx, "DROP INDEX IF EXISTS INTERACTIVE_CHALLENGE_1_TIME");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
@@ -296,8 +291,7 @@ PMA_SQL::init_sqlite(std::string filepath) {
   }
 
   sql_ret = internal_exec_sqlite_statement(
-      ctx,
-      "CREATE INDEX IF NOT EXISTS ALLOWED_IP_TIME ON ALLOWED_IP (ON_TIME)");
+      ctx, "DROP INDEX IF EXISTS ALLOWED_IP_TIME");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }
@@ -310,8 +304,8 @@ PMA_SQL::init_sqlite(std::string filepath) {
     return std::move(sql_ret.value());
   }
 
-  sql_ret = internal_exec_sqlite_statement(
-      ctx, "CREATE INDEX IF NOT EXISTS TIMEOUT_TIME ON TIMEOUT (ON_TIME)");
+  sql_ret =
+      internal_exec_sqlite_statement(ctx, "DROP INDEX IF EXISTS TIMEOUT_TIME");
   if (sql_ret.has_value()) {
     return std::move(sql_ret.value());
   }

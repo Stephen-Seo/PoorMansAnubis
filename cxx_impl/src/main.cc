@@ -2331,7 +2331,6 @@ void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
   const auto cleanup_interval =
       std::chrono::minutes(args->periodic_cleanup_interval);
   while (!interrupt_received) {
-  CLEANUP_THREAD_FN_LOOP_START:
 #ifndef NDEBUG
     PMA_EPrintln("Cleanup db iteration, sleep...");
 #endif
@@ -2349,14 +2348,14 @@ void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
       auto msql_conf_opt = PMA_MSQL::parse_conf_file(args->mysql_conf_path);
       if (!msql_conf_opt.has_value()) {
         PMA_EPrintln("ERROR: Cleanup db failed to get MSQL config!");
-        goto CLEANUP_THREAD_FN_LOOP_START;
+        continue;
       }
       auto msql_conn_opt = PMA_MSQL::Connection::connect_msql(
           msql_conf_opt->addr, msql_conf_opt->port, msql_conf_opt->user,
           msql_conf_opt->pass, msql_conf_opt->db);
       if (!msql_conn_opt.has_value()) {
         PMA_EPrintln("ERROR: Cleanup db failed to get MSQL Connection!");
-        goto CLEANUP_THREAD_FN_LOOP_START;
+        continue;
       }
 
       auto ret = PMA_MSQL::cleanup_db(
@@ -2372,7 +2371,7 @@ void periodic_db_cleanup_fn(const PMA_ARGS::Args *args,
       if (err != PMA_SQL::ErrorT::SUCCESS) {
         PMA_EPrintln("ERROR: Cleanup db failed to get sqlite ctx: {}: {}",
                      PMA_SQL::error_t_to_string(err), msg);
-        goto CLEANUP_THREAD_FN_LOOP_START;
+        continue;
       }
 
       auto ret = PMA_SQL::cleanup_db(sqliteCtx, ID_TO_PORT_TIMEOUT_MINS,

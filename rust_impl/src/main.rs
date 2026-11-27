@@ -56,50 +56,45 @@ const MSQL_RUST_SEQ_ID_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_SEQ_ID
     )";
 
 #[allow(unused)]
-const MSQL_RUST_CHALLENGE_FACTORS_4_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_4 (
+const MSQL_RUST_CHALLENGE_FACTORS_5_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_CHALLENGE_FACTORS_5 (
         ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
         FACTORS CHAR(64) CHARACTER SET ascii NOT NULL,
         PORT INT UNSIGNED NOT NULL,
-        GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME)
+        GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )";
 
 #[allow(unused)]
-const MSQL_RUST_INTERACTIVE_CHALLENGE_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_INTERACTIVE_CHALLENGE_1 (
+const MSQL_RUST_INTERACTIVE_CHALLENGE_2_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_INTERACTIVE_CHALLENGE_2 (
         ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
         ANSWER CHAR(64) CHARACTER SET ascii NOT NULL,
         PORT INT UNSIGNED NOT NULL,
         GEN_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         DEST_URL TEXT,
-        INDEX ON_TIME_INDEX USING BTREE (GEN_TIME),
         INDEX IP_PORT_INDEX USING HASH (IP, PORT)
     )";
 
 #[allow(unused)]
-const MSQL_RUST_ALLOWED_IPS_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ALLOWED_IPS (
+const MSQL_RUST_ALLOWED_IPS_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ALLOWED_IPS_1 (
         ID INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         IP VARCHAR(45) NOT NULL,
         PORT INT UNSIGNED NOT NULL,
         ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX IP_PORT_INDEX USING HASH (IP, PORT),
-        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
+        INDEX IP_PORT_INDEX USING HASH (IP, PORT)
     )";
 
 #[allow(unused)]
-const MSQL_RUST_ID_TO_PORT_3_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT_3 (
+const MSQL_RUST_ID_TO_PORT_4_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_ID_TO_PORT_4 (
         ID CHAR(64) CHARACTER SET ascii NOT NULL PRIMARY KEY,
         PORT INT UNSIGNED NOT NULL,
-        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )";
 
 #[allow(unused)]
-const MSQL_RUST_TIMEOUT_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_TIMEOUT (
+const MSQL_RUST_TIMEOUT_1_CREATE: &str = r"CREATE TABLE IF NOT EXISTS RUST_TIMEOUT_1 (
         IP VARCHAR(45) NOT NULL PRIMARY KEY,
-        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX ON_TIME_INDEX USING BTREE (ON_TIME)
+        ON_TIME DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )";
 
 #[allow(unused)]
@@ -301,21 +296,31 @@ async fn init_mysql_db(args: &args::Args) -> Result<(), Error> {
 
     conn.query_drop(r"DROP TABLE IF EXISTS RUST_CHALLENGE_FACTORS_3")?;
 
-    conn.query_drop(MSQL_RUST_CHALLENGE_FACTORS_4_CREATE)?;
+    conn.query_drop(r"DROP TABLE IF EXISTS RUST_CHALLENGE_FACTORS_4")?;
 
-    conn.query_drop(MSQL_RUST_ALLOWED_IPS_CREATE)?;
+    conn.query_drop(MSQL_RUST_CHALLENGE_FACTORS_5_CREATE)?;
+
+    conn.query_drop(r"DROP TABLE IF EXISTS RUST_ALLOWED_IPS")?;
+
+    conn.query_drop(MSQL_RUST_ALLOWED_IPS_1_CREATE)?;
 
     conn.query_drop(r"DROP TABLE IF EXISTS RUST_ID_TO_PORT")?;
 
     conn.query_drop(r"DROP TABLE IF EXISTS RUST_ID_TO_PORT_2")?;
 
-    conn.query_drop(MSQL_RUST_ID_TO_PORT_3_CREATE)?;
+    conn.query_drop(r"DROP TABLE IF EXISTS RUST_ID_TO_PORT_3")?;
+
+    conn.query_drop(MSQL_RUST_ID_TO_PORT_4_CREATE)?;
 
     conn.query_drop(r"DROP TABLE IF EXISTS RUST_INTERACTIVE_CHALLENGE")?;
 
-    conn.query_drop(MSQL_RUST_INTERACTIVE_CHALLENGE_1_CREATE)?;
+    conn.query_drop(r"DROP TABLE IF EXISTS RUST_INTERACTIVE_CHALLENGE_1")?;
 
-    conn.query_drop(MSQL_RUST_TIMEOUT_CREATE)?;
+    conn.query_drop(MSQL_RUST_INTERACTIVE_CHALLENGE_2_CREATE)?;
+
+    conn.query_drop(r"DROP TABLE IF EXISTS RUST_TIMEOUT")?;
+
+    conn.query_drop(MSQL_RUST_TIMEOUT_1_CREATE)?;
 
     conn.query_drop(MSQL_RUST_FAILS_CREATE)?;
 
@@ -329,18 +334,11 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
 
     conn.execute(SQLITE_ID_TO_PORT_CREATE, ())?;
 
-    conn.execute(
-        r#"CREATE INDEX IF NOT EXISTS ID_TO_PORT_TIME ON ID_TO_PORT (ON_TIME)"#,
-        (),
-    )?;
+    conn.execute(r#"DROP INDEX IF EXISTS ID_TO_PORT_TIME"#, ())?;
 
     conn.execute(SQLITE_CHALLENGE_FACTOR_CREATE, ())?;
 
-    conn.execute(
-        r#"CREATE INDEX IF NOT EXISTS CHALLENGE_FACTOR_TIME
-        ON CHALLENGE_FACTOR (ON_TIME)"#,
-        (),
-    )?;
+    conn.execute(r#"DROP INDEX IF EXISTS CHALLENGE_FACTOR_TIME"#, ())?;
 
     conn.execute(SQLITE_ALLOWED_IP_CREATE, ())?;
 
@@ -349,18 +347,11 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
         (),
     )?;
 
-    conn.execute(
-        r#"CREATE INDEX IF NOT EXISTS ALLOWED_IP_TIME ON ALLOWED_IP (ON_TIME)"#,
-        (),
-    )?;
+    conn.execute(r#"DROP INDEX IF EXISTS ALLOWED_IP_TIME"#, ())?;
 
     conn.execute(SQLITE_INTERACTIVE_CHALLENGE_1_CREATE, ())?;
 
-    conn.execute(
-        r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_1_TIME
-        ON INTERACTIVE_CHALLENGE_1 (ON_TIME)"#,
-        (),
-    )?;
+    conn.execute(r#"DROP INDEX IF EXISTS INTERACTIVE_CHALLENGE_1_TIME"#, ())?;
 
     conn.execute(
         r#"CREATE INDEX IF NOT EXISTS INTERACTIVE_CHALLENGE_1_IP_PORT ON
@@ -370,10 +361,7 @@ async fn init_sqlite_db(args: &args::Args) -> Result<(), Error> {
 
     conn.execute(SQLITE_TIMEOUT_CREATE, ())?;
 
-    conn.execute(
-        r#"CREATE INDEX IF NOT EXISTS TIMEOUT_ON_TIME ON TIMEOUT (ON_TIME)"#,
-        (),
-    )?;
+    conn.execute(r#"DROP INDEX IF EXISTS TIMEOUT_ON_TIME"#, ())?;
 
     conn.execute(SQLITE_FAILS_CREATE, ())?;
 
@@ -614,7 +602,7 @@ async fn has_challenge_factor_id_mysql(depot: &Depot, hash: &str) -> Result<bool
     let mut params = MSQLParamsWrapper::new();
     params.append_str(hash)?;
     let rows_opt = conn.query_with_params_rows(
-        "SELECT ID FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ?",
+        "SELECT ID FROM RUST_CHALLENGE_FACTORS_5 WHERE ID = ?",
         &params,
     )?;
 
@@ -636,7 +624,7 @@ async fn has_interactive_challenge_id_msql(depot: &Depot, hash: &str) -> Result<
     let mut params = MSQLParamsWrapper::new();
     params.append_str(hash)?;
     let rows_opt = conn.query_with_params_rows(
-        "SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ?",
+        "SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_2 WHERE ID = ?",
         &params,
     )?;
 
@@ -697,7 +685,7 @@ async fn set_challenge_factor_mysql(
 
     locked
         .query_with_params_drop(
-            "INSERT INTO RUST_CHALLENGE_FACTORS_4 (ID, IP, PORT, FACTORS) VALUES (?, ?, ?, ?)",
+            "INSERT INTO RUST_CHALLENGE_FACTORS_5 (ID, IP, PORT, FACTORS) VALUES (?, ?, ?, ?)",
             &params,
         )
         .ok();
@@ -727,12 +715,12 @@ async fn set_interactive_challenge_msql(
     if let Some(url) = url {
         params.append_str(url)?;
         locked.query_with_params_drop(
-            "INSERT INTO RUST_INTERACTIVE_CHALLENGE_1 (ID, IP, PORT, ANSWER, DEST_URL) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO RUST_INTERACTIVE_CHALLENGE_2 (ID, IP, PORT, ANSWER, DEST_URL) VALUES (?, ?, ?, ?, ?)",
             &params,
         )?;
     } else {
         locked.query_with_params_drop(
-            "INSERT INTO RUST_INTERACTIVE_CHALLENGE_1 (ID, IP, PORT, ANSWER) VALUES (?, ?, ?, ?)",
+            "INSERT INTO RUST_INTERACTIVE_CHALLENGE_2 (ID, IP, PORT, ANSWER) VALUES (?, ?, ?, ?)",
             &params,
         )?;
     }
@@ -991,7 +979,7 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
 
     {
         let rows_opt_ret = locked
-            .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_3 WHERE ID = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?", &params)
+            .query_with_params_rows("SELECT PORT FROM RUST_ID_TO_PORT_4 WHERE ID = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?", &params)
             .map_err(|e| e.to_owned())?;
         if let Some(rows) = rows_opt_ret {
             match rows[0][0] {
@@ -1009,7 +997,7 @@ async fn challenge_port_mysql(depot: &Depot, id: &str) -> Result<u16, Error> {
 
     if port.is_some() {
         locked
-            .query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
+            .query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_4 WHERE ID = ?", &params)
             .map_err(|e| e.to_owned())?;
     }
 
@@ -1099,7 +1087,7 @@ async fn validate_client_factors_mysql(
 
     let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
             .query_with_params_rows(
-                "SELECT IP, PORT, TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) FROM RUST_CHALLENGE_FACTORS_4 WHERE ID = ? AND FACTORS = ?",
+                "SELECT IP, PORT, TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) FROM RUST_CHALLENGE_FACTORS_5 WHERE ID = ? AND FACTORS = ?",
                 &params,
             )
             .map_err(|e| e.to_owned())?;
@@ -1152,7 +1140,7 @@ async fn validate_client_factors_mysql(
         params.append_uint64(port as u64);
 
         locked.query_with_params_drop(
-            "INSERT INTO RUST_ALLOWED_IPS (IP, PORT) VALUES (?, ?)",
+            "INSERT INTO RUST_ALLOWED_IPS_1 (IP, PORT) VALUES (?, ?)",
             &params,
         )?;
 
@@ -1184,7 +1172,7 @@ async fn validate_client_interactive_msql(
 
         let addr_port_rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
             .query_with_params_rows(
-                "SELECT IP, PORT, DEST_URL, TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ? AND ANSWER = ?",
+                "SELECT IP, PORT, DEST_URL, TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) FROM RUST_INTERACTIVE_CHALLENGE_2 WHERE ID = ? AND ANSWER = ?",
                 &params,
             )
             .map_err(|e| e.to_owned())?;
@@ -1236,7 +1224,7 @@ async fn validate_client_interactive_msql(
         params.append_str(&interactive_response.id)?;
         locked
             .query_with_params_drop(
-                "DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE ID = ?",
+                "DELETE FROM RUST_INTERACTIVE_CHALLENGE_2 WHERE ID = ?",
                 &params,
             )
             .map_err(|e| e.to_owned())?;
@@ -1250,7 +1238,7 @@ async fn validate_client_interactive_msql(
         params.append_uint64(port as u64);
 
         locked.query_with_params_drop(
-            "INSERT INTO RUST_ALLOWED_IPS (IP, PORT) VALUES (?, ?)",
+            "INSERT INTO RUST_ALLOWED_IPS_1 (IP, PORT) VALUES (?, ?)",
             &params,
         )?;
 
@@ -1364,7 +1352,7 @@ async fn client_has_interactive_challenge_msql(
 
     let rows = locked
         .query_with_params_rows(
-            r#"SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE IP = ? AND PORT = ? AND TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) < ?"#,
+            r#"SELECT ID FROM RUST_INTERACTIVE_CHALLENGE_2 WHERE IP = ? AND PORT = ? AND TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) < ?"#,
             &params,
         )
         .map_err(|e| e.to_owned())?;
@@ -1613,7 +1601,7 @@ async fn check_is_allowed_mysql(args: &args::Args, addr: &str, port: u16) -> Res
 
     let ip_entry_row_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
         .query_with_params_rows(
-            "SELECT IP FROM RUST_ALLOWED_IPS WHERE IP = ? AND PORT = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?",
+            "SELECT IP FROM RUST_ALLOWED_IPS_1 WHERE IP = ? AND PORT = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?",
             &params,
         )
         .map_err(|e| e.to_owned())?;
@@ -1654,7 +1642,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
 
     loop {
         let rows_opt: Option<Vec<Vec<MSQLValueEnum>>> = locked
-            .query_with_params_rows("SELECT ID FROM RUST_ID_TO_PORT_3 WHERE ID = ?", &params)
+            .query_with_params_rows("SELECT ID FROM RUST_ID_TO_PORT_4 WHERE ID = ?", &params)
             .map_err(|e| e.to_owned())?;
 
         if let Some(rows) = rows_opt {
@@ -1682,7 +1670,7 @@ async fn init_id_to_port_mysql(args: &args::Args, port: u16) -> Result<String, E
 
     locked
         .query_with_params_drop(
-            "INSERT INTO RUST_ID_TO_PORT_3 (ID, PORT) VALUES (?, ?)",
+            "INSERT INTO RUST_ID_TO_PORT_4 (ID, PORT) VALUES (?, ?)",
             &params,
         )
         .map_err(|e| e.to_owned())?;
@@ -1733,7 +1721,7 @@ async fn is_timeout_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
     params.append_uint64(args.timeout_time_mins);
 
     let ret = locked.query_with_params_rows(
-        "SELECT IP FROM RUST_TIMEOUT WHERE IP = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?",
+        "SELECT IP FROM RUST_TIMEOUT_1 WHERE IP = ? AND TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) < ?",
         &params,
     )?;
 
@@ -1781,7 +1769,7 @@ async fn on_failure_msql(args: &args::Args, ip: &str) -> Result<bool, Error> {
             // Put on timeout
             params = MSQLParamsWrapper::new();
             params.append_str(ip)?;
-            locked.query_with_params_drop("INSERT INTO RUST_TIMEOUT (IP) VALUES (?)", &params)?;
+            locked.query_with_params_drop("INSERT INTO RUST_TIMEOUT_1 (IP) VALUES (?)", &params)?;
             timed_out = true;
         } else {
             // Increment count
@@ -2315,7 +2303,7 @@ async fn main() {
                     let mut params = MSQLParamsWrapper::new();
                     params.append_uint64(parsed_args_clone.challenge_timeout_mins);
 
-                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_4 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned());
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_CHALLENGE_FACTORS_5 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned());
                     if let Err(e) = query_ret {
                         eprintln!("WARNING: Cleanup factors failed: {}", e);
                     }
@@ -2323,7 +2311,7 @@ async fn main() {
                     let mut params = MSQLParamsWrapper::new();
                     params.append_uint64(parsed_args_clone.interactive_challenge_timeout_mins);
 
-                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE_1 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned());
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_INTERACTIVE_CHALLENGE_2 WHERE TIMESTAMPDIFF(MINUTE, GEN_TIME, now()) >= ?", &params).map_err(|e| e.to_owned());
                     if let Err(e) = query_ret {
                         eprintln!("WARNING: Cleanup interactive challenges failed: {}", e);
                     }
@@ -2331,7 +2319,7 @@ async fn main() {
                     let mut params = MSQLParamsWrapper::new();
                     params.append_uint64(parsed_args_clone.allowed_timeout_mins);
 
-                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_ALLOWED_IPS WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params).map_err(|e| e.to_owned());
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_ALLOWED_IPS_1 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params).map_err(|e| e.to_owned());
                     if let Err(e) = query_ret {
                         eprintln!("WARNING: Cleanup allowed failed: {}", e);
                     }
@@ -2339,7 +2327,7 @@ async fn main() {
                     let mut params = MSQLParamsWrapper::new();
                     params.append_uint64(constants::ID_TO_PORT_TIMEOUT);
 
-                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_3 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params,).map_err(|e| e.to_owned());
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_ID_TO_PORT_4 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params,).map_err(|e| e.to_owned());
                     if let Err(e) = query_ret {
                         eprintln!("WARNING: Cleanup id_to_port failed: {}", e);
                     }
@@ -2347,7 +2335,7 @@ async fn main() {
                     let mut params = MSQLParamsWrapper::new();
                     params.append_uint64(parsed_args_clone.timeout_time_mins);
 
-                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_TIMEOUT WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params).map_err(|e| e.to_owned());
+                    let query_ret = locked.query_with_params_drop("DELETE FROM RUST_TIMEOUT_1 WHERE TIMESTAMPDIFF(MINUTE, ON_TIME, NOW()) >= ?", &params).map_err(|e| e.to_owned());
                     if let Err(e) = query_ret {
                         eprintln!("WARNING: Cleanup timeout failed: {}", e);
                     }

@@ -2,6 +2,13 @@
 
 ## Upcoming Changes
 
+Remove indexes from databases on timestamp-related columns as it was determined
+that they were not needed.
+
+`cxx_impl`: Minor refactorings related to periodic db cleanup function.
+
+`rust_impl`: Fix `--version`, `cargo update`.
+
 ## Version 0.5.0
 
 `rust_impl` and `cxx_impl`: Refactor how the allowed-cache is handled. Add args

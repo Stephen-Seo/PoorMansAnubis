@@ -20,8 +20,6 @@ use crate::error::Error;
 use std::{
     collections::{HashMap, LinkedList},
     env::args as args_fn,
-    fs::File,
-    io::Read,
     path::PathBuf,
     time::Duration,
 };
@@ -219,26 +217,11 @@ pub fn parse_args() -> Result<Args, Error> {
             print_args();
             return Err(Error::as_str("Printed help text").into_args_non_err());
         } else if arg == "--version" {
-            let mut version_text: PathBuf = PathBuf::from(env!("OUT_DIR"));
-            version_text = version_text.join("version.txt");
-            let mut version_text_file =
-                File::open(version_text).expect("Should be able to open OUT_DIR/version.txt");
-            let mut version = String::new();
-            version_text_file
-                .read_to_string(&mut version)
-                .expect("Should be able to read OUT_DIR/version.txt");
+            let version = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
             println!("Version {}", version);
 
-            let mut git_version_text: PathBuf = PathBuf::from(env!("OUT_DIR"));
-            git_version_text = git_version_text.join("git_version.txt");
-            let git_version_text_file = File::open(git_version_text);
-            if let Ok(mut git_version_text_file) = git_version_text_file {
-                let mut git_version = String::new();
-                let ret = git_version_text_file.read_to_string(&mut git_version);
-                if ret.is_ok() {
-                    println!("git-version {}", git_version);
-                }
-            }
+            let git_version = include_str!(concat!(env!("OUT_DIR"), "/git_version.txt"));
+            println!("git-version {}", git_version);
 
             return Err(Error::as_str("Printed version").into_args_non_err());
         } else if arg.starts_with("--factors=") {
