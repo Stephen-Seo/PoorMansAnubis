@@ -6,6 +6,10 @@
 to set the allow-cache-entry-expire-time and to set the interval at which the
 allowed-cache is cleared.
 
+`cxx_impl`: Update bundled dependencies:
+
+ - blake3 1.8.7 -> 1.8.8
+
 ## Version 0.4.0
 
 `rust_impl` and `cxx_impl`: Refactor how databases were used, should result in
