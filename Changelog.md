@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.5.0
+
 `rust_impl` and `cxx_impl`: Refactor how the allowed-cache is handled. Add args
 to set the allow-cache-entry-expire-time and to set the interval at which the
 allowed-cache is cleared.
