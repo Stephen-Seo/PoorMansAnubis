@@ -9,7 +9,7 @@ set(SQLITE_VERSION "3.54.1")
 set(SQLITE_VERSION_NUMBER "3540100")
 set(SQLITE_DOWNLOAD_URL "https://sqlite.org/2026/sqlite-autoconf-${SQLITE_VERSION_NUMBER}.tar.gz")
 
-set(BLAKE3_VERSION "1.8.7")
+set(BLAKE3_VERSION "1.8.8")
 set(BLAKE3_DOWNLOAD_URL "https://github.com/BLAKE3-team/BLAKE3/archive/refs/tags/${BLAKE3_VERSION}.tar.gz")
 
 set(NGHTTP2_VERSION "1.71.0")

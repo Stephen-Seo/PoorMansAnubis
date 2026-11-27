@@ -122,6 +122,12 @@ void pma_print_usage() {
       "  --force-i-sq-sine : When generating interactive challenge only use "
       "sq/sine curves; default random");
   PMA_Println(
+      "  --allow-cache-entry-expire-time=<minutes> : Expire time of "
+      "allowed-cache entries; default 2 minutes");
+  PMA_Println(
+      "  --allow-cache-clean-interval=<minutes> : Cleanup interval of allowed "
+      "cache; default 15 minutes");
+  PMA_Println(
       "  --enable-override-dest-url : Enable \"override-dest-url\" request "
       "header to determine where to forward;");
   PMA_Println(
@@ -159,6 +165,8 @@ PMA_ARGS::Args::Args(int argc, char **argv)
           std::format("{} minutes", INTERACTIVE_CHALLENGE_TIMEOUT_MINS)),
       sqlite_allowed_timeout_string(
           std::format("{} minutes", ALLOWED_IP_TIMEOUT_MINUTES)),
+      cached_allow_entry_expire_time(CACHED_ALLOW_ENTRY_EXPIRE_TIME),
+      cached_allow_cleanup_interval(CACHED_ALLOW_CLEAN_INTERVAL),
       factors(DEFAULT_FACTORS_QUADS),
       max_interactive_challenges(MAX_ALLOWED_INTERACTIVE_CHALLENGES),
       interactive_challenge_timeout(INTERACTIVE_CHALLENGE_TIMEOUT_MINS),
@@ -635,6 +643,48 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       }
       flags.set(15);
       PMA_EPrintln("Forcing sq/sine curves for interactive challenge...");
+    } else if (std::strncmp(argv[0], "--allow-cache-entry-expire-time=", 32) ==
+               0) {
+      std::string s(argv[0] + 32);
+      unsigned long long value;
+      try {
+        value = std::stoull(s);
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse value passed to "
+            "--allow-cache-entry-expire-time=... !");
+        flags.set(2);
+        return;
+      }
+      if (value == 0) {
+        value = 1;
+        PMA_EPrintln(
+            "WARNING: Set --allow-cache-entry-expire-time to minimum of 1");
+      }
+      uint64_t cached_allow_entry_expire_time = static_cast<uint64_t>(value);
+      this->cached_allow_entry_expire_time =
+          std::chrono::minutes(cached_allow_entry_expire_time);
+    } else if (std::strncmp(argv[0], "--allow-cache-clean-interval=", 29) ==
+               0) {
+      std::string s(argv[0] + 29);
+      unsigned long long value;
+      try {
+        value = std::stoull(s);
+      } catch (const std::exception &e) {
+        PMA_EPrintln(
+            "ERROR: Failed to parse value passed to "
+            "--allow-cache-clean-interval=... !");
+        flags.set(2);
+        return;
+      }
+      if (value == 0) {
+        value = 1;
+        PMA_EPrintln(
+            "WARNING: Set --allow-cache-clean-interval to minimum of 1");
+      }
+      uint64_t cached_allow_cleanup_interval = static_cast<uint64_t>(value);
+      this->cached_allow_cleanup_interval =
+          std::chrono::minutes(cached_allow_cleanup_interval);
     } else if (std::strcmp(argv[0], "--enable-override-dest-url") == 0) {
       if (flags.test(3)) {
         PMA_Println(

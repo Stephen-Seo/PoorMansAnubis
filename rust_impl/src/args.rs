@@ -23,6 +23,7 @@ use std::{
     fs::File,
     io::Read,
     path::PathBuf,
+    time::Duration,
 };
 
 #[derive(Clone, Debug)]
@@ -73,6 +74,8 @@ pub struct Args {
     pub sqlite_i_challenge_timeout_string: String,
     pub sqlite_allowed_timeout_string: String,
     pub periodic_cleanup_interval: u64,
+    pub allow_cache_entry_expire_time: Duration,
+    pub allow_cache_clean_interval: Duration,
 }
 
 pub fn print_args() {
@@ -136,6 +139,12 @@ pub fn print_args() {
         "  --force-i-sq-sine : When generating interactive challenge only use sq/sine curves; default random"
     );
     println!(
+        "  --allow-cache-entry-expire-time=<minutes> : Expire time of allowed-cache entries; default 2 minutes"
+    );
+    println!(
+        "  --allow-cache-clean-interval=<minutes> : Cleanup interval of allowed cache; default 15 minutes"
+    );
+    println!(
         "  --enable-override-dest-url : Enable \"override-dest-url\" request header to determine where to forward;\n    example header: \"override-dest-url: http://127.0.0.1:8888\""
     );
     println!(
@@ -190,6 +199,12 @@ pub fn parse_args() -> Result<Args, Error> {
             crate::constants::ALLOWED_IP_TIMEOUT_MINUTES
         ),
         periodic_cleanup_interval: crate::constants::PERIODIC_CLEANUP_TIME,
+        allow_cache_entry_expire_time: Duration::from_mins(
+            crate::constants::ALLOW_CACHE_ENTRY_EXPIRE_TIME,
+        ),
+        allow_cache_clean_interval: Duration::from_mins(
+            crate::constants::ALLOW_CACHE_CLEAN_INTERVAL,
+        ),
     };
 
     let p_args = args_fn();
@@ -358,6 +373,26 @@ pub fn parse_args() -> Result<Args, Error> {
             }
             args.force_sq_sine = true;
             eprintln!("Forcing sq/sine for interactive challenge...")
+        } else if arg.starts_with("--allow-cache-entry-expire-time=") {
+            let end = arg.split_off(32);
+            let mut allow_cache_entry_expire_time: u64 = end
+                .parse()
+                .expect("allow-cache-entry-expire-time should be a valid integer");
+            if allow_cache_entry_expire_time == 0 {
+                allow_cache_entry_expire_time = 1;
+                eprintln!("WARNING: Set --allow-cache-entry-expire-time to the minimum of 1");
+            }
+            args.allow_cache_entry_expire_time = Duration::from_mins(allow_cache_entry_expire_time);
+        } else if arg.starts_with("--allow-cache-clean-interval=") {
+            let end = arg.split_off(29);
+            let mut allow_cache_clean_interval: u64 = end
+                .parse()
+                .expect("allow-cache-clean-interval should be a valid integer");
+            if allow_cache_clean_interval == 0 {
+                allow_cache_clean_interval = 1;
+                eprintln!("WARNING: Set --allow-cache-clean-interval to the minimum of 1");
+            }
+            args.allow_cache_clean_interval = Duration::from_mins(allow_cache_clean_interval);
         } else if arg == "--enable-override-dest-url" {
             args.enable_override_dest_url = true;
         } else if arg == "--important-warning-has-been-read" {
