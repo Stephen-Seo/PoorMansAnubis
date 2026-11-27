@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.5.1
+
 Remove indexes from databases on timestamp-related columns as it was determined
 that they were not needed.
 
