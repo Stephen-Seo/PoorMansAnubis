@@ -221,7 +221,9 @@ pub fn parse_args() -> Result<Args, Error> {
             println!("Version {}", version);
 
             let git_version = include_str!(concat!(env!("OUT_DIR"), "/git_version.txt"));
-            println!("git-version {}", git_version);
+            if git_version != "(no version)" {
+                println!("git-version {}", git_version);
+            }
 
             return Err(Error::as_str("Printed version").into_args_non_err());
         } else if arg.starts_with("--factors=") {
