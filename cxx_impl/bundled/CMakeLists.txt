@@ -612,7 +612,7 @@ if(GIT_BINARY AND SH_BINARY AND ECHO_BINARY AND ENV_BINARY AND SED_BINARY)
     message(STATUS "git_version.h enabled")
     add_custom_target(GitVersion
         COMMAND sh -c "echo -n \"#define COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING \\\"\" > ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
-        COMMAND sh -c "env GIT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../../.git\" git describe --tags --long >> ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+        COMMAND sh -c "env GIT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../../.git\" git describe --tags --long 2>/dev/null >> ${CMAKE_CURRENT_BINARY_DIR}/git_version.h || echo \"(no version)\" >> ${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
         COMMAND sed -i -e "1s/$/\\\"/" "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
         BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
         VERBATIM

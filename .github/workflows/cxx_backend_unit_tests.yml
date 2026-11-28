@@ -12,7 +12,7 @@ jobs:
       - name: Build dependency blake3
         run: cd && cmake -S $HOME/git/BLAKE3/c -B BLAKE3_BUILD -DCMAKE_BUILD_TYPE=Release && make -C BLAKE3_BUILD
       - name: Get Sources
-        run: git clone https://github.com/Stephen-Seo/PoorMansAnubis.git PMA && cd PMA && git checkout $GITHUB_REF_NAME && git submodule update --init --recursive
+        run: git clone --depth=1 --no-single-branch https://github.com/Stephen-Seo/PoorMansAnubis.git PMA && cd PMA && git checkout $GITHUB_REF_NAME && git submodule update --init --recursive
       - name: Use Sed to depend on blake3 header/lib in alternate directories
         run: sed -i -e "/^COMMON_FLAGS/s|:=|:= -I$HOME/git/BLAKE3/c |" -e "/^LINKER_FLAGS/s|-lblake3|-L$HOME/BLAKE3_BUILD -lblake3|" PMA/cxx_impl/Makefile
       - name: Build UnitTests (CI_BUILD mode to turn off -Werror)

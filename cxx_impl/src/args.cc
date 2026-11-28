@@ -200,8 +200,11 @@ PMA_ARGS::Args::Args(int argc, char **argv)
       PMA_Println("Version {}",
                   COM_SEODISPARATE_POOR_MANS_ANUBIS_VERSION_STRING);
 #ifdef COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING
-      PMA_Println("git-version {}",
-                  COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING);
+      if (std::strcmp(COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING,
+                      "(no version)") != 0) {
+        PMA_Println("git-version {}",
+                    COM_SEODISPARATE_POOR_MANS_ANUBIS_GIT_VERSION_STRING);
+      }
 #endif
       flags.set(13);
       return;
