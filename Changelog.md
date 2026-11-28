@@ -2,6 +2,8 @@
 
 ## Upcoming Changes
 
+## Version 0.5.2
+
 `rust_impl`: Fix `--version` on case where `git describe ...` fails.
 
 `cxx_impl`: Fix build failures if project was not cloned from git repository
