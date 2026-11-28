@@ -4,6 +4,9 @@
 
 `rust_impl`: Fix `--version` on case where `git describe ...` fails.
 
+`cxx_impl`: Fix build failures if project was not cloned from git repository
+(CMake files changes, minor source changes).
+
 ## Version 0.5.1
 
 Remove indexes from databases on timestamp-related columns as it was determined
